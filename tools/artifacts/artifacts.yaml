@@ -1,0 +1,106 @@
+# Gal World 元件清单
+#
+# 每个条目描述一个需要在部署时安装的第三方组件。
+# sync-artifacts.sh 读取本文件，抓取 → 校验 → 上传到 Nexus → 生成 manifest.json。
+#
+# 字段说明：
+#   id        唯一标识，Portal 步骤表里用 ${artifact:<id>} 引用
+#   platform  windows / linux
+#   version   上游版本号，同时用作 Nexus 目录名
+#   name      元件名（目录层级）
+#   file      最终保存的文件名
+#   source    下载来源
+#     type=github : owner / repo / tag / asset
+#     type=http   : url（直链）
+#   license   许可证，写进 manifest 便于合规审查
+#   note      备注（页面提示、额外前置条件）
+
+schema: 1
+
+artifacts:
+  # ---------- Windows ----------
+  - id: windows.sunshine
+    platform: windows
+    name: sunshine
+    version: "2026.914.233613"
+    file: Sunshine-Windows-AMD64-installer.msi
+    size: 33710080
+    sha256: ""            # 首次 sync 时自动补齐；已同步过则保留
+    source:
+      type: github
+      owner: LizardByte
+      repo: Sunshine
+      tag: v2026.914.233613
+      asset: Sunshine-Windows-AMD64-installer.msi
+    license: GPL-3.0
+    note: 安装为 Windows 服务 SunshineService，Web UI 端口 47990
+
+  - id: windows.vbcable
+    platform: windows
+    name: vb-cable
+    version: "45.0"
+    file: VBCABLE_Driver_Pack45.zip
+    size: 1318877
+    sha256: b950e39f01af1d04ea623c8f6d8eb9b6ea5c477c637295fabf20631c85116bfb
+    source:
+      type: http
+      url: https://download.vb-audio.com/Download_CABLE/VBCABLE_Driver_Pack45.zip
+    license: Donationware
+    note: 驱动安装后需重启；从包内 VBCABLE_Setup_x64.exe -i -h 静默安装
+
+  - id: windows.moonlight-web
+    platform: windows
+    name: moonlight-web
+    version: "3.0.1"
+    file: moonlight-web-x86_64-pc-windows-gnu.zip
+    size: 13611995
+    sha256: 7680f8ebb547f6bf1ba7e2056794bdd10d849685d954167fecdec79f2f240b1f
+    source:
+      type: github
+      owner: MrCreativ3001
+      repo: moonlight-web-stream
+      tag: v3.0.1
+      asset: moonlight-web-x86_64-pc-windows-gnu.zip
+    license: GPL-3.0
+    note: 浏览器端串流网关，默认 8080
+
+  # ---------- Linux ----------
+  - id: linux.selkies
+    platform: linux
+    name: selkies
+    version: "2.2.0"
+    file: selkies-2.2.0-py3-none-any.whl
+    size: 0
+    # 上游 Release 自带 SHA256SUMS，此值取自 https://github.com/selkies-project/selkies/releases/download/2.2.0/SHA256SUMS
+    sha256: bf82ba10b7a9d7d69efdb7bbd0453057379b39fd8f5662b852df721eb57d9154
+    source:
+      type: github
+      owner: selkies-project
+      repo: selkies
+      tag: 2.2.0
+      asset: selkies-2.2.0-py3-none-any.whl
+    license: MPL-2.0
+    note: >-
+      纯 Python wheel，pip 安装进 venv，无需编译；比 tar.gz 更适合离线分发。
+      许可证以 wheel 内 METADATA 的 License-Expression 为准（MPL-2.0），
+      上游 README 早期写 MIT 属陈旧信息。本项目未修改其源码。
+
+  - id: linux.wine
+    platform: linux
+    name: wine
+    version: "9.0-staging-amd64"
+    file: wine-9.0-staging-amd64.tar.xz
+    size: 58605700
+    # 实测值（2026-11-03 从 Kron4ek/Wine-Builds 9.0 下载后计算）
+    sha256: 5ad9fd83c7eee08c75b892d4af9b648d59743c3c45cad44eb14903a394805651
+    source:
+      type: github
+      owner: Kron4ek
+      repo: Wine-Builds
+      tag: 9.0
+      asset: wine-9.0-staging-amd64.tar.xz
+    license: LGPL-2.1+
+    note: >-
+      Kron4ek 预编译 staging 包，解压即用，装到 ~/.local/wine 并软链。
+      版本与服务器当前 wine-9.0 (Ubuntu 包) 对齐，避免换版本导致现有游戏前缀失效；
+      Kron4ek 新发布已到 11.21，升级须单独验证。

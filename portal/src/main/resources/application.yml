@@ -1,0 +1,119 @@
+server:
+  # 服务器上 8080/8090/9080 已被其他服务占用，默认 8088
+  port: ${GALWORLD_PORTAL_PORT:8088}
+  shutdown: graceful
+  tomcat:
+    # 大视频上传（100 MB+）在慢网络下耗时长，默认 2 秒的连接超时会让 Tomcat
+    # 在上传完成前断开，浏览器侧表现为"上传失败"且拿不到状态码
+    connection-timeout: 120000
+    max-swallow-size: -1
+  # 必须走 HTTPS：内嵌的 Selkies 客户端用 WebCodecs，要求父页面处于 secure context。
+  # HTTP 门户里嵌 HTTPS 流会让 iframe 内 isSecureContext=false → 客户端直接报错。
+  ssl:
+    enabled: ${GALWORLD_TLS:false}
+    key-store: ${GALWORLD_KEYSTORE:}
+    key-store-password: ${GALWORLD_KEYSTORE_PASSWORD:changeit}
+    key-store-type: PKCS12
+    key-alias: ${GALWORLD_KEY_ALIAS:galworld}
+
+spring:
+  application:
+    name: gal-world-portal
+  datasource:
+    url: jdbc:h2:file:${galworld.root:${user.home}/galworld}/data/portal/gal-world;AUTO_SERVER=FALSE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: false
+  web:
+    resources:
+      # 前端构建产物打进 static/，SPA 路由回退见 WebConfig。
+      # 关闭 Spring 默认的 Cache-Control：它会给 index.html 也加 max-age，
+      # 导致浏览器一直用缓存的入口页、指着上一次的旧 JS。
+      # 游戏页里 Ctrl+F5 会被 Selkies 吞掉，用户没法手动硬刷新。
+      cache:
+        cachecontrol:
+          no-cache: true
+          must-revalidate: true
+
+  servlet:
+    multipart:
+      # 容器层必须比业务上限宽，具体大小 / 数量由「设置」页配置，
+      # 业务层（MediaService）按设置里的图片/视频上限再收紧。
+      max-file-size: 512MB
+      max-request-size: 520MB
+      file-size-threshold: 1MB
+
+galworld:
+  root: ${GALWORLD_ROOT:${user.home}/galworld}
+  # Maven 资源过滤：显示在「设置 → 关于」里
+  version: @project.version@
+  # 项目仓库地址的默认值；「后台管理」里改过的值优先
+  repo-url: ${GALWORLD_REPO_URL:}
+  # 远程更新：enabled 控制是否允许更新；allow-override 允许指定 tag/版本覆盖安装（含降级）
+  update:
+    enabled: ${GALWORLD_UPDATE_ENABLED:true}
+    allow-override: ${GALWORLD_UPDATE_ALLOW_OVERRIDE:false}
+    # 上游发布仓库（owner/repo）。fork 或换托管平台时用环境变量覆盖，不必改源码。
+    repo: ${GALWORLD_UPDATE_REPO:sander-o/gal-world}
+    # 仓库网页根地址，用于拼接 Release 页面链接
+    web-base: ${GALWORLD_UPDATE_WEB_BASE:https://gitee.com}
+    # Release API 根地址
+    api-base: ${GALWORLD_UPDATE_API_BASE:https://gitee.com/api/v5/repos}
+    # 只读令牌：私有仓库或镜像需要认证时填；与更新器共用 GALWORLD_UPDATE_TOKEN
+    token: ${GALWORLD_UPDATE_TOKEN:}
+  # Windows 下没有每游戏独立端口，play 页统一指向 Moonlight Web；
+  # Linux 留空即可，端口由 game.port 决定
+  stream-url: ${GALWORLD_STREAM_URL:}
+
+  # 元件下载：Nexus 优先，镜像链回退，全程 SHA256 校验
+  # 仓库地址与镜像也能在「设置 → 环境信息」里改（设置优先，这里只是默认值）
+  # 元件仓库账号：留空则匿名读取；私有仓库用环境变量注入凭据
+  artifacts:
+    nexus-base: ${GALWORLD_ARTIFACT_NEXUS:http://127.0.0.1:8081/repository/galworld-artifacts}
+    username: ${GALWORLD_ARTIFACT_USER:}
+    password: ${GALWORLD_ARTIFACT_PASS:}
+    timeout: 30s
+    mirrors:
+      - https://gh-proxy.com
+      - https://ghfast.top
+
+  # 一键部署执行引擎
+  deploy:
+    # 执行接口令牌；留空则启动时随机生成并打印到日志
+    token: ${GALWORLD_DEPLOY_TOKEN:}
+    # 只接受这些网段的请求（CIDR）
+    allowed-cidrs: ${GALWORLD_DEPLOY_CIDRS:127.0.0.1/32,192.168.0.0/16,10.0.0.0/8}
+    # 是否允许页面输入 sudo 密码（安全要求见内部部署文档）
+    allow-sudo-password: ${GALWORLD_DEPLOY_ALLOW_SUDO_PASSWORD:false}
+
+  # 写接口保护：留空表示不校验（升级上来的实例行为不变）
+  # 配置后，所有非 GET 的 /api/** 需要请求头 X-GalWorld-Write-Token
+  # /api/deploy/** 与 /api/admin/** 自带部署令牌，不受此开关影响
+  write:
+    token: ${GALWORLD_WRITE_TOKEN:}
+
+  # 浏览器上传游戏（分片协议）。服务端以本处为准，前端只读取展示值。
+  import:
+    upload:
+      max-upload-bytes: 21474836480      # 20 GB
+      max-extracted-bytes: 64424509440   # 60 GB
+      max-file-bytes: 8589934592         # 8 GB
+      max-files: 100000
+      max-depth: 12
+      max-ratio: 200
+      chunk-size: 8388608                # 8 MiB
+      max-chunk-bytes: 16777216          # 16 MiB
+      temp-ttl: 24h
+      disk-reserve-bytes: 5368709120     # 5 GB
+      zip-charset: GBK
+
+logging:
+  level:
+    com.galworld: INFO

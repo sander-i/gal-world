@@ -1,0 +1,14 @@
+[Unit]
+Description=Gal World PulseAudio (audio capture sources for game sessions)
+After=sound.target
+
+[Service]
+Type=simple
+Environment=GALWORLD_ROOT=%h/galworld
+Environment=XDG_RUNTIME_DIR=/run/user/%U
+ExecStart=%h/galworld/bin/pulse-daemon.sh
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=default.target

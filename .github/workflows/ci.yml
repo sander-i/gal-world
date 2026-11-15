@@ -1,0 +1,44 @@
+# 与 tools/ci.sh 跑同一套命令。
+# 主仓库在 Gitee，那里没有免费的 Actions，此文件在 GitHub 镜像 / fork 上生效；
+# 其它环境直接 `bash tools/ci.sh`。
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  frontend:
+    name: 前端（单测 + 主题门禁 + 构建）
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: portal/frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: portal/frontend/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - run: npm run check:theme
+      - run: npm run build
+
+  backend:
+    name: 后端（Maven 测试）
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+      - name: 让 wrapper 可执行
+        run: chmod +x ./mvnw
+      - name: mvnw test
+        run: ./mvnw -B -f portal/pom.xml test

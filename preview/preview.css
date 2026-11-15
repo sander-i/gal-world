@@ -1,0 +1,391 @@
+/* 静态原型专用样式：真实页面没有这些类，只在 preview/ 下生效 */
+
+/* ===== 原型导航条 ===== */
+.pv-nav {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 24px;
+  background: #0a0c10;
+  border-bottom: 1px solid var(--line);
+  font-size: 12.5px;
+}
+.pv-nav .pv-brand {
+  color: var(--accent-hi);
+  font-weight: 600;
+  letter-spacing: .08em;
+  margin-right: 10px;
+  white-space: nowrap;
+}
+.pv-nav a {
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  padding: 0 11px;
+  border-radius: 999px;
+  color: var(--muted);
+  border: 1px solid transparent;
+}
+.pv-nav a:hover { color: var(--text); border-color: var(--line); }
+.pv-nav a.on {
+  color: var(--accent-ink);
+  background: linear-gradient(180deg, var(--accent-hi), var(--accent-lo));
+  border-color: var(--accent-hi);
+  font-weight: 600;
+}
+.pv-nav .pv-spacer { flex: 1; }
+.pv-nav .pv-tip { color: #6b7480; font-size: 11.5px; }
+
+/* ===== 悬停小窗 ===== */
+.pv-anchor { cursor: zoom-in; }
+
+.pv-pop {
+  position: fixed;
+  z-index: 120;
+  width: 320px;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #0a0c10;
+  border: 1px solid #39424f;
+  box-shadow: 0 14px 38px rgba(0, 0, 0, .62);
+  opacity: 0;
+  transform: translateY(5px);
+  transition: opacity .12s ease, transform .12s ease;
+  pointer-events: none;
+}
+.pv-pop.show { opacity: 1; transform: none; }
+.pv-pop .pv-pop-media {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: #000;
+  display: block;
+  object-fit: cover;
+}
+.pv-pop .pv-pop-cap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 9px;
+  background: #11141a;
+  font-size: 11.5px;
+  color: #cfd8e6;
+}
+.pv-pop .pv-pop-cap .pv-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pv-pop .pv-pop-cap .pv-type {
+  flex: none;
+  color: var(--muted);
+  font-size: 10.5px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 0 5px;
+}
+
+/* 缩略图 / 悬停小窗 / 大屏里的视频只做展示：不接收指针事件，
+   避免 Chrome 在悬停时浮出画中画、下载等原生控件 */
+.pv-thumb-wrap video,
+.pv-pop video,
+.pv-media-stage video { pointer-events: none; }
+
+.pv-thumb-wrap video::-webkit-media-controls,
+.pv-pop video::-webkit-media-controls,
+.pv-media-stage video::-webkit-media-controls,
+.pv-thumb-wrap video::-webkit-media-controls-enclosure,
+.pv-pop video::-webkit-media-controls-enclosure,
+.pv-media-stage video::-webkit-media-controls-enclosure,
+.pv-thumb-wrap video::-webkit-media-controls-picture-in-picture-button,
+.pv-pop video::-webkit-media-controls-picture-in-picture-button,
+.pv-media-stage video::-webkit-media-controls-picture-in-picture-button,
+.pv-thumb-wrap video::-webkit-media-controls-overlay-picture-in-picture-button,
+.pv-pop video::-webkit-media-controls-overlay-picture-in-picture-button,
+.pv-media-stage video::-webkit-media-controls-overlay-picture-in-picture-button {
+  display: none !important;
+}
+
+/* ===== 灯箱 ===== */
+.pv-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 140;
+  background: rgba(6, 7, 9, .94);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+.pv-lb-head {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 20px;
+  color: #cfd8e6;
+  font-size: 13px;
+  background: linear-gradient(180deg, rgba(0, 0, 0, .55), transparent);
+}
+.pv-lb-head .pv-idx { color: var(--muted); }
+.pv-lb-close {
+  margin-left: auto;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #cfd8e6;
+  background: rgba(255, 255, 255, .08);
+  font-size: 18px;
+}
+.pv-lb-close:hover { background: rgba(255, 255, 255, .16); }
+.pv-lb-body { max-width: 92vw; max-height: 82vh; display: flex; align-items: center; justify-content: center; }
+.pv-lb-body img,
+.pv-lb-body video {
+  max-width: 92vw;
+  max-height: 82vh;
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  background: #000;
+}
+.pv-lb-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, .08);
+  color: #dfe5ee;
+  font-size: 20px;
+}
+.pv-lb-nav:hover { background: rgba(255, 255, 255, .18); }
+.pv-lb-prev { left: 22px; }
+.pv-lb-next { right: 22px; }
+.pv-lb-foot { position: absolute; bottom: 16px; color: var(--muted); font-size: 12px; }
+
+/* ===== 编辑页上传队列 ===== */
+.media-item .pv-thumb-wrap {
+  position: relative;
+  flex: none;
+  width: 76px;
+  height: 44px;
+  border-radius: 4px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background: #0c0e12;
+}
+.media-item .pv-thumb-wrap img,
+.media-item .pv-thumb-wrap video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.media-item .pv-thumb-play {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, .28);
+  color: #fff;
+  font-size: 16px;
+  pointer-events: none;
+}
+.media-item .pv-zoom {
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  font-size: 10px;
+  line-height: 1;
+  padding: 2px 4px;
+  border-radius: 3px;
+  background: rgba(0, 0, 0, .6);
+  color: #dfe5ee;
+  opacity: 0;
+  transition: opacity .15s;
+}
+.media-item .pv-thumb-wrap:hover .pv-zoom { opacity: 1; }
+
+.media-item.removed { opacity: .55; }
+.media-item.removed .name { text-decoration: line-through; }
+.media-item.dragging { opacity: .4; }
+.media-item.drag-over { border-color: var(--accent-dim); background: #1b2029; }
+
+.pv-badge {
+  flex: none;
+  font-size: 10.5px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+}
+.pv-badge.fresh { color: var(--ok); border-color: rgba(111, 191, 139, .35); background: rgba(111, 191, 139, .08); }
+.pv-badge.staged { color: var(--warn); border-color: rgba(217, 138, 92, .35); background: rgba(217, 138, 92, .08); }
+.pv-badge.failed { color: var(--err); border-color: rgba(217, 108, 108, .35); background: rgba(217, 108, 108, .08); }
+.pv-badge.uploading { color: var(--accent-hi); border-color: rgba(216, 160, 92, .35); background: rgba(216, 160, 92, .08); }
+
+.pv-row-progress { flex: 1; min-width: 80px; max-width: 220px; }
+.pv-track { height: 6px; border-radius: 3px; background: #1e232b; overflow: hidden; }
+.pv-fill { height: 100%; background: linear-gradient(90deg, var(--accent-lo), var(--accent-hi)); transition: width .15s linear; }
+.pv-row-status { flex: none; width: 118px; color: var(--muted); font-size: 11.5px; text-align: right; }
+
+.pv-dropzone { border-radius: var(--radius); transition: background .15s, outline-color .15s; }
+.pv-dropzone.dragover {
+  background: rgba(216, 160, 92, .08);
+  outline: 2px dashed var(--accent-dim);
+  outline-offset: 4px;
+}
+
+/* ===== 对话框 ===== */
+.pv-mask {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, .62);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 110;
+  padding: 24px;
+}
+.pv-dialog {
+  width: min(560px, 100%);
+  max-height: 80vh;
+  overflow: auto;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+  padding: 20px 22px;
+}
+.pv-dialog h3 { margin: 0 0 6px; font-size: 15.5px; }
+.pv-dialog .pv-sub { color: var(--muted); font-size: 12.5px; margin: 0 0 14px; }
+.pv-list { margin: 10px 0 0; padding: 0; list-style: none; }
+.pv-list li {
+  display: flex;
+  gap: 10px;
+  padding: 7px 10px;
+  margin-bottom: 6px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  font-size: 12.5px;
+}
+.pv-list .pv-fname {
+  color: #b6bfcc;
+  max-width: 46%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pv-list .pv-reason { color: var(--err); }
+.pv-list .pv-ok { color: var(--ok); }
+.pv-dialog-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
+
+/* ===== 轻提示 ===== */
+.pv-toasts {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 150;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.pv-toast {
+  min-width: 220px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: #1b2029;
+  border: 1px solid var(--line);
+  color: var(--text);
+  font-size: 12.5px;
+  box-shadow: var(--shadow);
+}
+.pv-toast.ok { border-color: rgba(111, 191, 139, .4); }
+.pv-toast.warn { border-color: rgba(217, 138, 92, .45); }
+.pv-toast.err { border-color: rgba(217, 108, 108, .45); }
+
+/* ===== 首页卡片：预览悬停 ===== */
+.pv-card-cover { position: relative; height: 100%; }
+.pv-card-hint {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  z-index: 3;
+  font-size: 10.5px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(10, 12, 16, .72);
+  border: 1px solid rgba(255, 255, 255, .18);
+  color: #cfd8e6;
+  opacity: 0;
+  transition: opacity .15s;
+}
+.card:hover .pv-card-hint { opacity: 1; }
+
+/* ===== 详情页媒体层 ===== */
+.pv-media-stage {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+.pv-media-stage img,
+.pv-media-stage video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.pv-media-caption {
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11.5px;
+  color: rgba(255, 255, 255, .78);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, .8);
+}
+.pv-media-caption .pv-file {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pv-stage-tip {
+  position: absolute;
+  left: 10px;
+  top: 10px;
+  z-index: 2;
+  font-size: 10.5px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(10, 12, 16, .72);
+  border: 1px solid rgba(255, 255, 255, .18);
+  color: #cfd8e6;
+}
+
+/* 编辑页行内预览按钮与面板间距 */
+.media-item .pv-actions { display: flex; align-items: center; gap: 2px; flex: none; }
+
+@media (max-width: 720px) {
+  .pv-row-status { display: none; }
+  .pv-pop { width: 260px; }
+}

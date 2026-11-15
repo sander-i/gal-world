@@ -1,0 +1,436 @@
+/*
+ * SPDX-License-Identifier: MIT
+ * Copyright (c) 2026 sander
+ */
+
+package com.galworld.service;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.galworld.config.PathConfig;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Service;
+
+import java.io.IOException;
+import java.nio.file.AtomicMoveNotSupportedException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Locale;
+import java.util.stream.Stream;
+
+/**
+ * 存档备份 / 切换（恢复）。
+ *
+ * 设计原则（防把游戏搞坏）:
+ *  1. 备份只读源目录，绝不改动游戏存档本身
+ *  2. 切换（恢复）前自动对**当前**存档再做一次 pre-restore 快照，恢复错了能回退
+ *  3. 恢复前必须确认会话已停止 —— 游戏在跑时写盘会与解压冲突
+ *  4. 解压前校验归档成员，拒绝绝对路径与 ".."，防止写到游戏目录外
+ *  5. 恢复采用「先解到临时目录 → 校验 → 覆盖」，解压失败不会留下半截存档
+ *
+ * 每份备份的标签、描述、类型写在同名 sidecar（`<archive>.tar.gz.json`）里。
+ * 老备份没有 sidecar，仍从文件名解析，不影响列表与切换。
+ */
+@Service
+public class SaveService {
+
+    private static final Logger log = LoggerFactory.getLogger(SaveService.class);
+    private static final DateTimeFormatter TS =
+            DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss").withZone(ZoneId.systemDefault());
+
+    /** 手动备份 */
+    public static final String KIND_MANUAL = "MANUAL";
+    /** 导入游戏时自动留存的原始存档 */
+    public static final String KIND_ORIGINAL = "ORIGINAL";
+    /** 切换 / 恢复前自动快照 */
+    public static final String KIND_PRE_RESTORE = "PRE_RESTORE";
+
+    private static final List<String> KINDS =
+            List.of(KIND_MANUAL, KIND_ORIGINAL, KIND_PRE_RESTORE);
+
+    /** 约定的存档目录名，存在几个就备份几个 */
+    private static final List<String> SAVE_DIR_NAMES =
+            List.of("savedata_cn", "savedata_jp", "savedata", "save");
+
+    private final PathConfig paths;
+    private final ObjectMapper mapper = new ObjectMapper();
+
+    public SaveService(PathConfig paths) {
+        this.paths = paths;
+    }
+
+    public record SaveArchive(String name, String label, String description, String kind,
+                              long sizeBytes, Instant createdAt) {
+    }
+
+    /** sidecar 内容；字段直接对应 JSON，不用 Map 是为了类型稳定 */
+    public static class ArchiveMeta {
+        public String label = "";
+        public String description = "";
+        public String kind = KIND_MANUAL;
+        public String createdAt = "";
+    }
+
+    /** 游戏里实际存在的存档目录 */
+    public List<Path> saveDirs(String gameId) {
+        Path work = paths.gameDir(gameId);
+        List<Path> dirs = new ArrayList<>();
+        for (String name : SAVE_DIR_NAMES) {
+            Path p = work.resolve(name);
+            if (Files.isDirectory(p)) {
+                dirs.add(p);
+            }
+        }
+        return dirs;
+    }
+
+    public Path backupRoot(String gameId) {
+        return paths.dataDir().resolve("backups").resolve("saves").resolve(gameId);
+    }
+
+    /** 创建备份，返回归档路径。label 会做文件名净化。 */
+    public Path backup(String gameId, String label) throws IOException {
+        return backup(gameId, label, "", KIND_MANUAL);
+    }
+
+    /** 创建备份并写入标签 / 描述 / 类型。 */
+    public synchronized Path backup(String gameId, String label, String description, String kind)
+            throws IOException {
+        List<Path> dirs = saveDirs(gameId);
+        if (dirs.isEmpty()) {
+            throw new IllegalStateException("游戏目录下没有找到存档目录（" + String.join("/", SAVE_DIR_NAMES) + "）");
+        }
+        Path root = backupRoot(gameId);
+        Files.createDirectories(root);
+
+        String safeKind = normalizeKind(kind);
+        String safeLabel = sanitizeLabel(label);
+        String base = TS.format(Instant.now());
+        if (!safeLabel.isEmpty()) {
+            base = base + "_" + safeLabel;
+        }
+        Path archive = root.resolve(base + ".tar.gz");
+        // 同一秒内多次备份会重名，追加序号避免覆盖已有归档
+        int n = 1;
+        while (Files.exists(archive)) {
+            archive = root.resolve(base + "-" + n + ".tar.gz");
+            n++;
+        }
+
+        // tar -czf <archive> -C <gameDir> <dir1> <dir2> ...
+        List<String> cmd = new ArrayList<>();
+        cmd.add("tar");
+        cmd.add("-czf");
+        cmd.add(archive.toString());
+        cmd.add("-C");
+        cmd.add(paths.gameDir(gameId).toString());
+        for (Path d : dirs) {
+            cmd.add(d.getFileName().toString());
+        }
+        runTar(cmd, "备份失败");
+
+        ArchiveMeta meta = new ArchiveMeta();
+        meta.label = displayLabel(label);
+        meta.description = sanitizeDescription(description);
+        meta.kind = safeKind;
+        meta.createdAt = Instant.now().toString();
+        try {
+            writeMeta(archive, meta);
+        } catch (IOException e) {
+            // 元数据写失败不影响备份本身，列表会退回从文件名解析
+            log.warn("写入存档元数据失败 {}: {}", archive, e.toString());
+        }
+        log.info("存档已备份 {} -> {}", gameId, archive);
+        return archive;
+    }
+
+    /** 修改备份的标签 / 描述；类型与创建时间保持不变 */
+    public SaveArchive updateMeta(String gameId, String archiveName,
+                                  String label, String description) throws IOException {
+        Path archive = resolveArchive(backupRoot(gameId), archiveName);
+        if (!Files.isRegularFile(archive)) {
+            throw new IllegalArgumentException("备份不存在: " + archiveName);
+        }
+        ArchiveMeta meta = readMeta(archive);
+        if (meta == null) {
+            // 老备份：从文件名补齐，保证写入后列表字段稳定
+            SaveArchive old = describe(archive);
+            meta = new ArchiveMeta();
+            meta.kind = old.kind();
+            meta.createdAt = old.createdAt().toString();
+        }
+        meta.label = displayLabel(label);
+        meta.description = sanitizeDescription(description);
+        writeMeta(archive, meta);
+        return describe(archive);
+    }
+
+    public List<SaveArchive> list(String gameId) throws IOException {
+        Path root = backupRoot(gameId);
+        if (!Files.isDirectory(root)) {
+            return List.of();
+        }
+        try (Stream<Path> s = Files.list(root)) {
+            return s.filter(p -> p.getFileName().toString().endsWith(".tar.gz"))
+                    .map(this::describe)
+                    .sorted(Comparator.comparing(SaveArchive::createdAt).reversed())
+                    .toList();
+        }
+    }
+
+    /** 是否已有导入时留存的原始存档（重复接入不重复留底） */
+    public boolean hasOriginal(String gameId) throws IOException {
+        return list(gameId).stream().anyMatch(a -> KIND_ORIGINAL.equals(a.kind()));
+    }
+
+    /**
+     * 恢复 / 切换到指定存档。调用方必须先确认会话已停止。
+     *
+     * 顺序（任何一步失败都不会留下半截存档）:
+     *  1. 先对当前存档做 pre-restore 快照
+     *  2. 解压到**游戏目录内**的临时目录（同分区，重命名才是原子的；
+     *     用系统临时目录会在跨分区 move 目录时失败）
+     *  3. 校验归档成员无越界路径
+     *  4. 逐个顶层目录：现有目录改名为 *.galworld-old → 新目录改名就位 →
+     *     成功后删掉 .old；失败则把 .old 改回来
+     */
+    public SaveArchive restore(String gameId, String archiveName) throws IOException {
+        Path root = backupRoot(gameId);
+        Path archive = resolveArchive(root, archiveName);
+        if (!Files.isRegularFile(archive)) {
+            throw new IllegalArgumentException("备份不存在: " + archiveName);
+        }
+
+        // 1) 保护性快照：先保住当前状态
+        try {
+            backup(gameId, "pre-restore", "切换存档前自动快照", KIND_PRE_RESTORE);
+        } catch (IllegalStateException e) {
+            log.warn("恢复前快照跳过: {}", e.getMessage());
+        }
+
+        Path gameDir = paths.gameDir(gameId);
+        cleanupStale(gameDir);
+        Path tmp = Files.createTempDirectory(gameDir, ".galworld-restore-");
+        try {
+            // 2) 解压并校验
+            runTar(List.of("tar", "-xzf", archive.toString(), "-C", tmp.toString()), "解压失败");
+            validateExtracted(tmp);
+
+            // 3) 原子替换
+            try (Stream<Path> s = Files.list(tmp)) {
+                for (Path src : s.toList()) {
+                    swapIn(src, gameDir.resolve(src.getFileName().toString()));
+                }
+            }
+            log.info("存档已切换 {} <- {}", gameId, archive.getFileName());
+            return describe(archive);
+        } finally {
+            deleteRecursively(tmp);
+        }
+    }
+
+    /** 把 src 目录换到 dst。同分区下 rename 是原子的，失败可回滚。 */
+    private void swapIn(Path src, Path dst) throws IOException {
+        Path old = dst.resolveSibling(dst.getFileName() + ".galworld-old");
+        deleteRecursively(old);
+        boolean hadOld = Files.exists(dst);
+        if (hadOld) {
+            Files.move(dst, old);
+        }
+        try {
+            Files.move(src, dst);
+        } catch (IOException e) {
+            if (hadOld && !Files.exists(dst)) {
+                Files.move(old, dst);
+            }
+            throw e;
+        }
+        deleteRecursively(old);
+    }
+
+    public void delete(String gameId, String archiveName) throws IOException {
+        Path archive = resolveArchive(backupRoot(gameId), archiveName);
+        Files.deleteIfExists(archive);
+        Files.deleteIfExists(metaPath(archive));
+    }
+
+    // ---- helpers ----
+
+    private Path resolveArchive(Path root, String name) {
+        // 只允许备份目录下的普通文件名，挡住路径穿越
+        String base = Path.of(name).getFileName().toString();
+        if (!base.equals(name) || base.contains("..")) {
+            throw new IllegalArgumentException("非法的备份名: " + name);
+        }
+        return root.resolve(base);
+    }
+
+    /** 清理上次异常中断留下的临时目录与 .old 残留 */
+    private void cleanupStale(Path gameDir) {
+        if (!Files.isDirectory(gameDir)) {
+            return;
+        }
+        try (Stream<Path> s = Files.list(gameDir)) {
+            for (Path p : s.toList()) {
+                String n = p.getFileName().toString();
+                if (n.startsWith(".galworld-restore-") || n.endsWith(".galworld-old")) {
+                    log.warn("清理残留: {}", p);
+                    deleteRecursively(p);
+                }
+            }
+        } catch (IOException e) {
+            log.warn("清理残留失败: {}", e.getMessage());
+        }
+    }
+
+    private void validateExtracted(Path tmp) throws IOException {
+        try (Stream<Path> s = Files.walk(tmp)) {
+            for (Path p : s.toList()) {
+                if (!p.normalize().startsWith(tmp.normalize())) {
+                    throw new IOException("归档包含越界路径: " + p);
+                }
+            }
+        }
+    }
+
+    private SaveArchive describe(Path archive) {
+        String fn = archive.getFileName().toString().replace(".tar.gz", "");
+        String label = "";
+        int us = fn.indexOf('_');
+        if (us > 0) {
+            label = fn.substring(us + 1);
+        }
+        Instant created;
+        try {
+            created = Instant.from(TS.parse(fn.substring(0, 15)));
+        } catch (Exception e) {
+            created = Instant.EPOCH;
+        }
+
+        ArchiveMeta meta = readMeta(archive);
+        String description = "";
+        String kind = label.startsWith("pre-restore") ? KIND_PRE_RESTORE : KIND_MANUAL;
+        if (meta != null) {
+            if (meta.label != null && !meta.label.isBlank()) {
+                label = meta.label;
+            }
+            description = meta.description == null ? "" : meta.description;
+            kind = normalizeKind(meta.kind);
+            if (meta.createdAt != null && !meta.createdAt.isBlank()) {
+                try {
+                    created = Instant.parse(meta.createdAt);
+                } catch (RuntimeException ignored) {
+                    // 元数据时间非法时沿用文件名里的时间
+                }
+            }
+        }
+        long size = 0;
+        try {
+            size = Files.size(archive);
+        } catch (IOException ignored) {
+            // 列表展示不因单文件读取失败而整体失败
+        }
+        return new SaveArchive(archive.getFileName().toString(), label, description, kind, size, created);
+    }
+
+    private Path metaPath(Path archive) {
+        return archive.resolveSibling(archive.getFileName().toString() + ".json");
+    }
+
+    private ArchiveMeta readMeta(Path archive) {
+        Path p = metaPath(archive);
+        if (!Files.isRegularFile(p)) {
+            return null;
+        }
+        try {
+            return mapper.readValue(p.toFile(), ArchiveMeta.class);
+        } catch (IOException e) {
+            log.warn("读取存档元数据失败 {}: {}", p, e.toString());
+            return null;
+        }
+    }
+
+    private void writeMeta(Path archive, ArchiveMeta meta) throws IOException {
+        Path target = metaPath(archive);
+        Path tmp = target.resolveSibling(target.getFileName() + ".tmp");
+        mapper.writeValue(tmp.toFile(), meta);
+        try {
+            Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING,
+                    StandardCopyOption.ATOMIC_MOVE);
+        } catch (AtomicMoveNotSupportedException e) {
+            Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING);
+        }
+    }
+
+    private static String normalizeKind(String kind) {
+        if (kind == null) {
+            return KIND_MANUAL;
+        }
+        String k = kind.strip().toUpperCase(Locale.ROOT);
+        return KINDS.contains(k) ? k : KIND_MANUAL;
+    }
+
+    private String sanitizeLabel(String label) {
+        if (label == null) {
+            return "";
+        }
+        String cleaned = label.strip()
+                .replaceAll("[^\\p{L}\\p{N}_-]+", "-")
+                .replaceAll("^-+|-+$", "");
+        // 用净化后的长度截断，否则原始 label 较长时 substring 会越界
+        return cleaned.length() > 40 ? cleaned.substring(0, 40) : cleaned;
+    }
+
+    private static String sanitizeDescription(String description) {
+        if (description == null) {
+            return "";
+        }
+        String cleaned = description.strip();
+        return cleaned.length() > 500 ? cleaned.substring(0, 500) : cleaned;
+    }
+
+    /** 展示用标签保留空格与原文，只做长度限制；文件名另用 sanitizeLabel */
+    private static String displayLabel(String label) {
+        if (label == null) {
+            return "";
+        }
+        String cleaned = label.strip();
+        return cleaned.length() > 40 ? cleaned.substring(0, 40) : cleaned;
+    }
+
+    private void runTar(List<String> cmd, String errMsg) throws IOException {
+        ProcessBuilder pb = new ProcessBuilder(cmd).redirectErrorStream(true);
+        Process p = pb.start();
+        String out = new String(p.getInputStream().readAllBytes());
+        try {
+            if (!p.waitFor(120, java.util.concurrent.TimeUnit.SECONDS)) {
+                p.destroyForcibly();
+                throw new IOException(errMsg + ": 超时");
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IOException(errMsg + ": 被中断", e);
+        }
+        if (p.exitValue() != 0) {
+            throw new IOException(errMsg + ": " + out.strip().toLowerCase(Locale.ROOT));
+        }
+    }
+
+    private void deleteRecursively(Path p) throws IOException {
+        if (p == null || !Files.exists(p)) {
+            return;
+        }
+        try (Stream<Path> s = Files.walk(p)) {
+            for (Path x : s.sorted(Comparator.reverseOrder()).toList()) {
+                Files.deleteIfExists(x);
+            }
+        }
+    }
+}

@@ -1,0 +1,70 @@
+/*
+ * SPDX-License-Identifier: MIT
+ * Copyright (c) 2026 sander
+ */
+
+package com.galworld.web;
+
+import com.galworld.deploy.DeploySecurity;
+import com.galworld.security.WriteSecurity;
+import com.galworld.service.SettingsService;
+import org.junit.jupiter.api.Test;
+
+import java.util.Map;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
+class HealthControllerTest {
+
+    private static HealthController controller(String deployToken, String writeToken) {
+        return controller(deployToken, writeToken, true);
+    }
+
+    private static HealthController controller(String deployToken, String writeToken,
+                                               boolean repoUrlPublic) {
+        SettingsService settings = mock(SettingsService.class);
+        when(settings.repoUrl()).thenReturn("https://example.com/owner/gal-world");
+        when(settings.repoUrlPublic()).thenReturn(repoUrlPublic);
+        return new HealthController("0.1.4", settings,
+                new DeploySecurity(deployToken, "127.0.0.1/32"),
+                new WriteSecurity(writeToken));
+    }
+
+    @Test
+    void reportsConfiguredTokens() {
+        Map<String, Object> body = controller("fixed", "write").health();
+        assertEquals(Boolean.TRUE, body.get("deployTokenConfigured"));
+        assertEquals(Boolean.TRUE, body.get("writeTokenConfigured"));
+    }
+
+    @Test
+    void randomDeployTokenCountsAsUnconfigured() {
+        // 未配置时 DeploySecurity 会生成随机令牌，但对外必须报「未配置」，
+        // 否则页面会提示“向部署者索取”，而实际只能从启动日志里找
+        Map<String, Object> body = controller("", "").health();
+        assertEquals(Boolean.FALSE, body.get("deployTokenConfigured"));
+        assertEquals(Boolean.FALSE, body.get("writeTokenConfigured"));
+    }
+
+    @Test
+    void keepsExistingHealthFields() {
+        Map<String, Object> body = controller("", "").health();
+        assertEquals("UP", body.get("status"));
+        assertEquals("gal-world-portal", body.get("app"));
+        assertEquals("0.1.4", body.get("version"));
+    }
+
+    @Test
+    void exposesRepoUrlWhenPublic() {
+        Map<String, Object> body = controller("", "", true).health();
+        assertEquals("https://example.com/owner/gal-world", body.get("repoUrl"));
+    }
+
+    @Test
+    void hidesRepoUrlWhenSwitchIsOff() {
+        Map<String, Object> body = controller("", "", false).health();
+        assertEquals(false, body.containsKey("repoUrl"));
+    }
+}

@@ -1,0 +1,116 @@
+package com.galworld.service;
+
+import com.galworld.config.PathConfig;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.List;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+class SaveServiceTest {
+
+    @TempDir Path root;
+    SaveService saves;
+
+    @BeforeEach
+    void setUp() throws Exception {
+        saves = new SaveService(new PathConfig(root.toString()));
+        Path savedata = root.resolve("games/g1/savedata");
+        Files.createDirectories(savedata);
+        Files.writeString(savedata.resolve("global.sav"), "slot-1");
+    }
+
+    @Test
+    void backupStoresLabelDescriptionAndKind() throws Exception {
+        saves.backup("g1", "第一章 结束", "全 CG 收集", SaveService.KIND_MANUAL);
+
+        List<SaveService.SaveArchive> list = saves.list("g1");
+        assertEquals(1, list.size());
+        SaveService.SaveArchive a = list.get(0);
+        assertEquals("第一章 结束", a.label());
+        assertEquals("全 CG 收集", a.description());
+        assertEquals(SaveService.KIND_MANUAL, a.kind());
+        assertTrue(a.sizeBytes() > 0);
+        // 文件名仍然只保留净化后的标签，磁盘上可读
+        assertTrue(a.name().contains("_第一章-结束.tar.gz"), a.name());
+    }
+
+    @Test
+    void originalArchiveIsRecognizedAndNotDuplicated() throws Exception {
+        saves.backup("g1", "原始存档", "导入时留存", SaveService.KIND_ORIGINAL);
+
+        assertTrue(saves.hasOriginal("g1"));
+        assertEquals(SaveService.KIND_ORIGINAL, saves.list("g1").get(0).kind());
+    }
+
+    @Test
+    void legacyArchiveWithoutMetadataFallsBackToFilename() throws Exception {
+        Path dir = saves.backupRoot("g1");
+        Files.createDirectories(dir);
+        Files.write(dir.resolve("20260101-010101_旧备份.tar.gz"), new byte[]{1, 2, 3});
+
+        SaveService.SaveArchive a = saves.list("g1").get(0);
+        assertEquals("旧备份", a.label());
+        assertEquals("", a.description());
+        assertEquals(SaveService.KIND_MANUAL, a.kind());
+        assertEquals(3, a.sizeBytes());
+    }
+
+    @Test
+    void updateMetaKeepsKindAndCreatedAt() throws Exception {
+        Path archive = saves.backup("g1", "旧标签", "旧描述", SaveService.KIND_MANUAL);
+        SaveService.SaveArchive before = saves.list("g1").get(0);
+
+        SaveService.SaveArchive updated = saves.updateMeta("g1", archive.getFileName().toString(),
+                "新标签", "新描述");
+
+        assertEquals("新标签", updated.label());
+        assertEquals("新描述", updated.description());
+        assertEquals(before.kind(), updated.kind());
+        assertEquals(before.createdAt(), updated.createdAt());
+        assertEquals("新标签", saves.list("g1").get(0).label());
+    }
+
+    @Test
+    void deleteRemovesArchiveAndMetadata() throws Exception {
+        Path archive = saves.backup("g1", "t", "d", SaveService.KIND_MANUAL);
+        Path meta = archive.resolveSibling(archive.getFileName() + ".json");
+        assertTrue(Files.exists(archive));
+        assertTrue(Files.exists(meta));
+
+        saves.delete("g1", archive.getFileName().toString());
+
+        assertFalse(Files.exists(archive));
+        assertFalse(Files.exists(meta));
+        assertTrue(saves.list("g1").isEmpty());
+    }
+
+    @Test
+    void backupWithoutSaveDirsFails() {
+        assertThrows(IllegalStateException.class,
+                () -> saves.backup("no-save", "x", "y", SaveService.KIND_MANUAL));
+    }
+
+    @Test
+    void restoreSwitchesSaveContentAndKeepsPreRestoreSnapshot() throws Exception {
+        Path archive = saves.backup("g1", "old", "", SaveService.KIND_MANUAL);
+        Path savedata = root.resolve("games/g1/savedata");
+        Files.writeString(savedata.resolve("global.sav"), "slot-2");
+
+        saves.restore("g1", archive.getFileName().toString());
+
+        assertEquals("slot-1", Files.readString(savedata.resolve("global.sav")));
+        assertTrue(saves.list("g1").stream()
+                .anyMatch(a -> SaveService.KIND_PRE_RESTORE.equals(a.kind())));
+    }
+
+    @Test
+    void rejectsPathTraversalNames() {
+        assertThrows(IllegalArgumentException.class,
+                () -> saves.delete("g1", "../escape.tar.gz"));
+    }
+}

@@ -1,0 +1,20 @@
+[Unit]
+Description=Gal World game session %i
+After=galworld-pulse.service
+Wants=galworld-pulse.service
+
+[Service]
+Type=simple
+Environment=GALWORLD_ROOT=%h/galworld
+Environment=XDG_RUNTIME_DIR=/run/user/%U
+# 不要用 SupplementaryGroups=audio：systemd --user 的 manager 自身不在 audio 组，
+# 无权 setgroups，会以 status=216/GROUP 直接启动失败。
+# 音频设备访问权改由 udev ACL 规则授予（见 deploy/udev/99-galworld-audio.rules）。
+ExecStart=%h/galworld/bin/run-game.sh %i
+KillMode=mixed
+KillSignal=SIGTERM
+TimeoutStopSec=25
+Restart=no
+
+[Install]
+WantedBy=default.target

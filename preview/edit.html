@@ -1,0 +1,810 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gal World · 游戏编辑页（静态预览）</title>
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="preview.css">
+</head>
+<body>
+<nav class="pv-nav">
+  <span class="pv-brand">GAL WORLD 原型</span>
+  <a href="index.html" data-page="index.html">首页</a>
+  <a href="game.html" data-page="game.html">游戏页</a>
+  <a href="edit.html" data-page="edit.html">游戏编辑页</a>
+  <a href="settings.html" data-page="settings.html">全局设置</a>
+  <span class="pv-spacer"></span>
+  <span class="pv-tip">悬停文件看小窗 · 点「预览」开灯箱</span>
+</nav>
+
+<div class="shell">
+  <header class="topbar">
+    <a class="ghost-btn" href="game.html">← 返回详情</a>
+    <span id="stagedHint" class="muted-sm"></span>
+    <div class="spacer"></div>
+    <button class="btn primary sm" id="saveBtn">保存</button>
+  </header>
+
+  <div class="edit-grid">
+    <div>
+      <div class="field">
+        <label>游戏名称</label>
+        <input class="input" value="示例游戏" maxlength="200">
+      </div>
+
+      <div class="field">
+        <label class="res-label">
+          <span>分辨率</span>
+          <span class="res-note">修改分辨率后需要重启会话才生效。游戏正在运行时会提供「立即重启」按钮。</span>
+        </label>
+        <div class="res-row">
+          <select class="input">
+            <option>1280×720</option>
+            <option>1920×1080</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>公司（可多个，名称 + 网址）</label>
+        <div class="res-row">
+          <input class="input" value="示例会社">
+          <input class="input" value="https://example.com">
+          <button class="btn sm">添加</button>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>标签</label>
+        <div class="res-row" style="margin-bottom:8px">
+          <span class="mini-tag removable">恋爱</span>
+          <span class="mini-tag removable">校园</span>
+          <span class="mini-tag removable">喜剧</span>
+        </div>
+        <div class="res-row">
+          <input class="input" placeholder="输入标签后回车">
+          <select class="input" style="width:170px"><option>选择已有…</option></select>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>简介</label>
+        <textarea>在夏日学园的屋顶，主角遇见了自称「灵感之神」的少女。</textarea>
+      </div>
+
+      <!-- 封面 -->
+      <div class="section-title">封面（多图轮换）</div>
+      <div class="pv-dropzone" id="coverZone">
+        <div class="media-list" id="coverList"></div>
+        <div class="add-row" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:10px">
+          <label class="file-btn">添加封面
+            <input type="file" id="coverInput" multiple hidden accept="image/png,image/jpeg,image/webp,image/gif">
+          </label>
+          <button class="btn sm" id="coverDemo">模拟一批文件</button>
+          <span class="muted-sm" id="coverLimitHint">最多 8 张，单张 8 MB</span>
+        </div>
+        <div class="upload-progress" id="coverProgress" hidden>
+          <div class="upload-progress-head"><span id="coverProgressLabel"></span><span id="coverProgressPct"></span></div>
+          <div class="upload-progress-track"><div class="upload-progress-fill" id="coverProgressFill" style="width:0%"></div></div>
+        </div>
+      </div>
+
+      <!-- 图标 -->
+      <div class="section-title">图标</div>
+      <div class="media-list">
+        <div class="media-item">
+          <div class="pv-thumb-wrap" id="iconThumb"></div>
+          <span class="name">icon.png</span>
+          <div class="pv-actions">
+            <button class="link-btn" id="iconPreview" data-pv-group="e-icon" data-pv-index="0" data-pv-open="">预览</button>
+            <button class="link-btn danger">删除</button>
+          </div>
+        </div>
+      </div>
+      <div style="margin-top:10px">
+        <label class="file-btn">上传图标
+          <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden>
+        </label>
+      </div>
+
+      <!-- 宣传 CG -->
+      <div class="section-title">宣传 CG（多 CG 轮换）</div>
+      <div class="pv-dropzone" id="cgZone">
+        <div class="media-list" id="cgList"></div>
+        <div class="add-row" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:10px">
+          <label class="file-btn">添加 CG
+            <input type="file" id="cgInput" multiple hidden accept="image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm">
+          </label>
+          <button class="btn sm" id="cgDemo">模拟一批文件</button>
+          <span class="muted-sm" id="cgLimitHint">最多 5 个，图片 8 MB / 视频 120 MB</span>
+        </div>
+        <div class="upload-progress" id="cgProgress" hidden>
+          <div class="upload-progress-head"><span id="cgProgressLabel"></span><span id="cgProgressPct"></span></div>
+          <div class="upload-progress-track"><div class="upload-progress-fill" id="cgProgressFill" style="width:0%"></div></div>
+        </div>
+      </div>
+
+      <!-- 轮换规则 -->
+      <div class="section-title">轮换规则</div>
+      <div class="field">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+          <input type="checkbox" checked id="followGlobal">
+          <span>应用全局轮换规则（封面：顺序 6 秒 · CG：播完自动下一条 · 顺序）</span>
+        </label>
+        <span class="muted-sm">取消勾选后可为此游戏分别定制封面与 CG 规则；全局默认在「设置」页配置。</span>
+      </div>
+      <div class="field" id="customRotation" hidden>
+        <label>封面轮换</label>
+        <div class="res-row">
+          <select class="input" style="width:120px"><option>顺序</option><option>随机</option></select>
+          <input class="input" type="number" min="1" value="6" style="width:90px">
+          <select class="input" style="width:90px"><option>秒</option><option>分</option><option>时</option></select>
+        </div>
+        <span class="muted-sm">范围 1 秒 – 24 小时</span>
+      </div>
+      <div class="field" id="customCgRotation" hidden>
+        <label>宣传 CG 轮换</label>
+        <div class="res-row">
+          <select class="input" style="width:170px">
+            <option>播完自动下一条</option>
+            <option>重复播放当前 CG</option>
+            <option>播放结束自动停</option>
+          </select>
+          <select class="input" style="width:110px"><option>顺序</option><option>随机</option></select>
+        </div>
+        <span class="muted-sm">播完自动下一条：视频按播放结束切下一项，图片 CG 使用固定展示时长。</span>
+      </div>
+
+      <div class="actions" style="margin-top:26px;flex-direction:row">
+        <button class="btn primary" id="saveBtn2">保存</button>
+        <a class="btn" href="game.html">取消</a>
+      </div>
+    </div>
+
+    <div>
+      <div class="panel" style="margin-top:0">
+        <div class="panel-head"><h2>服务器路径</h2></div>
+        <div class="path-box" id="pathBox"></div>
+        <p class="muted-sm" style="margin-top:12px">只读展示已保存的文件，便于在服务器上定位。</p>
+      </div>
+
+      <div class="panel danger-zone" style="margin-top:18px">
+        <div class="panel-head"><h2>删除游戏</h2></div>
+        <p class="muted-sm" style="margin-bottom:14px">
+          移除注册信息、媒体与游玩记录，保留游戏本体目录。正在运行的会话会先被停止。
+        </p>
+        <button class="btn danger-solid" onclick="window.PV.toast('删除游戏需要二次确认（原型不执行）', 'warn')">删除这个游戏</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="media.js"></script>
+<script src="demo-data.js"></script>
+<script>
+'use strict'
+const MB = 1024 * 1024
+const LIMITS = { cover: { max: 8, imageMb: 8 }, cg: { max: 5, imageMb: 8, videoMb: 120 } }
+const CONCURRENCY = 2
+const IMAGE_RE = /\.(png|jpe?g|webp|gif)$/i
+const VIDEO_RE = /\.(mp4|webm)$/i
+let uid = 0
+const nextKey = (p) => `${p}-${++uid}`
+
+function el(tag, cls, text) {
+  const n = document.createElement(tag)
+  if (cls) n.className = cls
+  if (text != null) n.textContent = text
+  return n
+}
+
+/** 状态：封面 / CG 各一份，与方案中的「选完即传、删除与排序按保存」一致 */
+const states = {
+  cover: {
+    kind: 'cover',
+    items: window.DEMO.g1covers.map((it) => ({
+      key: nextKey('seed'), filename: it.label, url: it.src, video: false, fresh: false, removed: false,
+    })),
+    queue: [], running: 0, deleted: 0, orderChanged: false,
+  },
+  cg: {
+    kind: 'cg',
+    items: [
+      { key: nextKey('seed'), filename: 'cg-1.png', url: window.DEMO.g1cg[0].src, video: false, fresh: false, removed: false },
+      { key: nextKey('seed'), filename: 'cg-2.mp4', url: '', poster: window.DEMO.g1cg[1].poster, video: true, fresh: false, removed: false },
+    ],
+    queue: [], running: 0, deleted: 0, orderChanged: false,
+  },
+}
+// 示例视频生成后补进 CG
+window.onDemoVideoReady = (url) => {
+  const item = states.cg.items.find((x) => x.video)
+  if (item) { item.url = url; render('cg') }
+}
+
+const dom = {}
+for (const kind of ['cover', 'cg']) {
+  dom[kind] = {
+    list: document.getElementById(kind + 'List'),
+    zone: document.getElementById(kind + 'Zone'),
+    input: document.getElementById(kind + 'Input'),
+    demo: document.getElementById(kind + 'Demo'),
+    progress: document.getElementById(kind + 'Progress'),
+    progressLabel: document.getElementById(kind + 'ProgressLabel'),
+    progressPct: document.getElementById(kind + 'ProgressPct'),
+    progressFill: document.getElementById(kind + 'ProgressFill'),
+  }
+}
+
+function visible(st) { return st.items.filter((x) => !x.removed) }
+
+/** 每次渲染把当前列表登记为灯箱分组，悬停小窗和「预览」按钮共用 */
+function syncGroup(st) {
+  window.PV.register('e-' + st.kind, visible(st).map((x) => ({
+    src: x.video ? x.url : x.url,
+    poster: x.poster || '',
+    type: x.video ? 'video' : 'image',
+    label: x.filename,
+  })))
+}
+
+function render(kind) {
+  const st = states[kind]
+  const d = dom[kind]
+  d.list.textContent = ''
+  syncGroup(st)
+
+  visible(st).forEach((item, index) => d.list.appendChild(renderItem(st, item, index)))
+  st.items.filter((x) => x.removed).forEach((item) => d.list.appendChild(renderItem(st, item, -1)))
+  st.queue.forEach((task) => d.list.appendChild(renderTask(st, task)))
+
+  renderProgress(kind)
+  renderStaged()
+  updatePathBox()
+  updateSaveBtn()
+}
+
+function renderItem(st, item, index) {
+  const row = el('div', 'media-item')
+  if (item.removed) row.classList.add('removed')
+
+  const handle = el('span', 'drag-handle', '⠿')
+  handle.title = '拖动排序'
+  if (!item.removed) {
+    row.draggable = true
+    row.addEventListener('dragstart', (e) => {
+      drag = { kind: st.kind, key: item.key }
+      row.classList.add('dragging')
+      try { e.dataTransfer.setData('text/plain', item.key) } catch {}
+    })
+    row.addEventListener('dragend', () => { row.classList.remove('dragging'); clearDragOver(st.kind) })
+    row.addEventListener('dragover', (e) => {
+      if (!drag || drag.kind !== st.kind) return
+      e.preventDefault()
+      clearDragOver(st.kind)
+      row.classList.add('drag-over')
+    })
+    row.addEventListener('drop', (e) => {
+      if (!drag || drag.kind !== st.kind) return
+      e.preventDefault()
+      const from = st.items.findIndex((x) => x.key === drag.key)
+      const to = st.items.findIndex((x) => x.key === item.key)
+      if (from >= 0 && to >= 0 && from !== to) {
+        const [moved] = st.items.splice(from, 1)
+        st.items.splice(to, 0, moved)
+        st.orderChanged = true
+        render(st.kind)
+      }
+      drag = null
+    })
+  }
+  row.appendChild(handle)
+
+  // 缩略图：只负责灯箱，不挂悬停小窗（悬停预览在右侧「预览」按钮上）
+  const thumb = el('div', 'pv-thumb-wrap')
+  if (item.video) {
+    if (item.url) {
+      const v = document.createElement('video')
+      v.src = item.url
+      v.muted = true
+      v.playsInline = true
+      v.preload = 'metadata'
+      v.className = ''
+      thumb.appendChild(v)
+    } else {
+      const img = document.createElement('img')
+      img.src = item.poster || ''
+      img.alt = item.filename
+      thumb.appendChild(img)
+    }
+    thumb.appendChild(el('span', 'pv-thumb-play', '▶'))
+  } else {
+    const img = document.createElement('img')
+    img.src = item.url
+    img.alt = item.filename
+    img.loading = 'lazy'
+    thumb.appendChild(img)
+  }
+  thumb.appendChild(el('span', 'pv-zoom', '预览'))
+  if (index >= 0) {
+    thumb.addEventListener('click', () => window.PV.openLightbox('e-' + st.kind, index))
+  }
+  row.appendChild(thumb)
+
+  row.appendChild(el('span', 'kind', item.video ? '视频' : '图片'))
+  row.appendChild(el('span', 'name', item.filename))
+
+  if (item.removed) {
+    row.appendChild(el('span', 'pv-badge staged', '待保存删除'))
+    const undo = el('button', 'link-btn', '撤销')
+    undo.addEventListener('click', () => {
+      item.removed = false
+      st.deleted = Math.max(0, st.deleted - 1)
+      render(st.kind)
+    })
+    row.appendChild(undo)
+    return row
+  }
+
+  if (item.fresh) row.appendChild(el('span', 'pv-badge fresh', '已上传'))
+
+  const actions = el('div', 'pv-actions')
+  const preview = el('button', 'link-btn', '预览')
+  preview.setAttribute('data-pv-group', 'e-' + st.kind)
+  preview.setAttribute('data-pv-index', String(index))
+  preview.setAttribute('data-pv-open', '')
+  actions.appendChild(preview)
+
+  const del = el('button', 'link-btn danger', '删除')
+  del.addEventListener('click', () => {
+    if (item.fresh) {
+      st.items = st.items.filter((x) => x.key !== item.key)
+      window.PV.toast('已移除刚上传的 ' + item.filename + '（原型不会删除服务器文件）', 'warn')
+      render(st.kind)
+      return
+    }
+    item.removed = true
+    st.deleted++
+    render(st.kind)
+  })
+  actions.appendChild(del)
+  row.appendChild(actions)
+  return row
+}
+
+function renderTask(st, task) {
+  const row = el('div', 'media-item')
+  const thumb = el('div', 'pv-thumb-wrap')
+  if (task.video) {
+    if (task.previewUrl) {
+      const v = document.createElement('video')
+      v.src = task.previewUrl
+      v.muted = true
+      v.playsInline = true
+      v.preload = 'metadata'
+      thumb.appendChild(v)
+    } else {
+      const img = el('img')
+      img.src = task.poster || ''
+      thumb.appendChild(img)
+    }
+    thumb.appendChild(el('span', 'pv-thumb-play', '▶'))
+  } else {
+    const img = el('img')
+    img.src = task.previewUrl
+    img.alt = task.file.name
+    thumb.appendChild(img)
+  }
+  row.appendChild(thumb)
+  row.appendChild(el('span', 'kind', task.video ? '视频' : '图片'))
+  row.appendChild(el('span', 'name', task.file.name))
+
+  if (task.status === 'failed') {
+    row.appendChild(el('span', 'pv-badge failed', '失败'))
+    const status = el('span', 'pv-row-status', task.error || '上传失败')
+    status.title = status.textContent
+    row.appendChild(status)
+    const retry = el('button', 'link-btn', '重试')
+    retry.addEventListener('click', () => {
+      task.status = 'waiting'
+      task.progress = 0
+      task.error = ''
+      task.retried = true
+      render(st.kind)
+      pump(st.kind)
+    })
+    row.appendChild(retry)
+    const remove = el('button', 'link-btn danger', '移除')
+    remove.addEventListener('click', () => {
+      st.queue = st.queue.filter((t) => t !== task)
+      render(st.kind)
+    })
+    row.appendChild(remove)
+    return row
+  }
+
+  row.appendChild(el('span', 'pv-badge uploading', task.status === 'waiting' ? '等待' : '上传中'))
+  const wrap = el('div', 'pv-row-progress')
+  const track = el('div', 'pv-track')
+  const fill = el('div', 'pv-fill')
+  fill.style.width = Math.round(task.progress * 100) + '%'
+  track.appendChild(fill)
+  wrap.appendChild(track)
+  row.appendChild(wrap)
+
+  row.appendChild(el('span', 'pv-row-status',
+    task.status === 'waiting' ? '等待中' : Math.round(task.progress * 100) + '%'))
+
+  const cancel = el('button', 'link-btn danger', '取消')
+  cancel.addEventListener('click', () => cancelTask(st.kind, task))
+  row.appendChild(cancel)
+  return row
+}
+
+function renderProgress(kind) {
+  const st = states[kind]
+  const d = dom[kind]
+  const active = st.queue.filter((t) => t.status === 'waiting' || t.status === 'uploading')
+  if (!active.length) { d.progress.hidden = true; return }
+  d.progress.hidden = false
+  const done = st.queue.filter((t) => t.status === 'done').length
+  const total = done + active.length + st.queue.filter((t) => t.status === 'failed').length
+  const sum = st.queue.reduce((n, t) => n + (t.status === 'done' ? 1 : t.progress), 0)
+  d.progressLabel.textContent = `上传中 ${Math.min(done + 1, total)}/${total}`
+  const pct = Math.round((sum / Math.max(total, 1)) * 100)
+  d.progressPct.textContent = pct + '%'
+  d.progressFill.style.width = pct + '%'
+}
+
+function renderStaged() {
+  const total = states.cover.deleted + states.cg.deleted
+  const order = states.cover.orderChanged || states.cg.orderChanged
+  const hint = document.getElementById('stagedHint')
+  hint.textContent = total || order
+    ? `${total ? total + ' 项删除' : ''}${total && order ? '，' : ''}${order ? '排序已调整' : ''} 待保存`
+    : ''
+}
+
+function updatePathBox() {
+  const box = document.getElementById('pathBox')
+  const dir = '~/galworld/games/sample-game.meta/media'
+  const names = (kind) => visible(states[kind]).map((x) => x.filename)
+  const lines = [
+    ['游戏实体', ['~/galworld/games/sample-game/game.exe']],
+    ['媒体目录', [dir]],
+    ['封面', names('cover').length ? names('cover').map((n) => dir + '/' + n) : ['（无）']],
+    ['图标', [dir + '/icon.png']],
+    ['宣传 CG', names('cg').length ? names('cg').map((n) => dir + '/' + n) : ['（无）']],
+  ]
+  box.textContent = ''
+  for (const [label, arr] of lines) {
+    const b = el('b', '', label)
+    box.appendChild(b)
+    box.appendChild(document.createElement('br'))
+    for (const line of arr) {
+      box.appendChild(document.createTextNode(line))
+      box.appendChild(document.createElement('br'))
+    }
+    box.appendChild(document.createElement('br'))
+  }
+}
+
+function updateSaveBtn() {
+  const busy = ['cover', 'cg'].some((k) =>
+    states[k].queue.some((t) => t.status === 'uploading' || t.status === 'waiting'))
+  for (const id of ['saveBtn', 'saveBtn2']) {
+    const b = document.getElementById(id)
+    b.textContent = busy ? '上传中…' : '保存'
+    b.title = busy ? '上传仍在进行，保存会等待队列完成' : '保存删除与排序'
+  }
+}
+
+/* ---------------- 预检 ---------------- */
+function precheck(st, files) {
+  const limit = LIMITS[st.kind]
+  const accepted = []
+  const rejected = []
+  let slots = limit.max - visible(st).length
+    - st.queue.filter((t) => t.status !== 'failed').length
+  slots = Math.max(0, slots)
+
+  for (const file of files) {
+    const video = (file.type || '').startsWith('video/') || VIDEO_RE.test(file.name)
+    if (st.kind === 'cover' && video) { rejected.push({ file, reason: '封面只支持图片' }); continue }
+    if (video && !VIDEO_RE.test(file.name)) { rejected.push({ file, reason: '只支持 mp4 / webm' }); continue }
+    if (!video && !IMAGE_RE.test(file.name)) { rejected.push({ file, reason: '不支持的格式' }); continue }
+    const maxMb = video ? limit.videoMb : limit.imageMb
+    if (file.size > maxMb * MB) { rejected.push({ file, reason: `超过 ${maxMb} MB` }); continue }
+    if (slots <= 0) {
+      rejected.push({
+        file,
+        reason: `超出数量上限（${st.kind === 'cover' ? '封面' : 'CG'}最多 ${limit.max} 个）`,
+      })
+      continue
+    }
+    slots--
+    accepted.push({ file, video })
+  }
+  return { accepted, rejected }
+}
+
+function askPrecheck(st, files) {
+  const { accepted, rejected } = precheck(st, files)
+  if (!accepted.length && !rejected.length) return
+
+  const mask = el('div', 'pv-mask')
+  const dialog = el('div', 'pv-dialog')
+  dialog.appendChild(el('h3', '', '上传前检查'))
+  dialog.appendChild(el('p', 'pv-sub',
+    `可上传 ${accepted.length} 个${rejected.length ? `，被拒绝 ${rejected.length} 个` : ''}`))
+
+  if (accepted.length) {
+    const ul = el('ul', 'pv-list')
+    accepted.slice(0, 6).forEach(({ file, video }) => {
+      const li = el('li')
+      li.appendChild(el('span', 'pv-fname', file.name))
+      li.appendChild(el('span', 'pv-ok', `可上传 · ${video ? '视频' : '图片'} · ${window.PV.fmtSize(file.size)}`))
+      ul.appendChild(li)
+    })
+    if (accepted.length > 6) {
+      const li = el('li')
+      li.appendChild(el('span', 'pv-fname', `…另有 ${accepted.length - 6} 个`))
+      ul.appendChild(li)
+    }
+    dialog.appendChild(ul)
+  }
+  if (rejected.length) {
+    const ul = el('ul', 'pv-list')
+    rejected.forEach(({ file, reason }) => {
+      const li = el('li')
+      li.appendChild(el('span', 'pv-fname', file.name))
+      li.appendChild(el('span', 'pv-reason', reason))
+      ul.appendChild(li)
+    })
+    dialog.appendChild(ul)
+  }
+
+  const actions = el('div', 'pv-dialog-actions')
+  const cancel = el('button', 'btn sm', '取消')
+  cancel.addEventListener('click', close)
+  const go = el('button', 'btn primary sm', accepted.length ? `继续上传 ${accepted.length} 个` : '知道了')
+  go.disabled = !accepted.length
+  go.addEventListener('click', () => { close(); if (accepted.length) enqueue(st, accepted) })
+  actions.appendChild(cancel)
+  actions.appendChild(go)
+  dialog.appendChild(actions)
+  mask.appendChild(dialog)
+  document.body.appendChild(mask)
+  mask.addEventListener('click', (e) => { if (e.target === mask) close() })
+
+  function close() {
+    mask.remove()
+    document.removeEventListener('keydown', onKey)
+  }
+  function onKey(e) { if (e.key === 'Escape') close() }
+  document.addEventListener('keydown', onKey)
+  go.focus()
+}
+
+/* ---------------- 上传队列（模拟） ---------------- */
+function enqueue(st, accepted) {
+  for (const { file, video } of accepted) {
+    st.queue.push({
+      key: nextKey('task'),
+      file,
+      video,
+      status: 'waiting',
+      progress: 0,
+      error: '',
+      retried: false,
+      previewUrl: URL.createObjectURL(file),
+      poster: video ? window.PV.poster(file.name, 300, 200) : '',
+    })
+  }
+  pump(st.kind)
+  render(st.kind)
+}
+
+function pump(kind) {
+  const st = states[kind]
+  while (st.running < CONCURRENCY) {
+    const task = st.queue.find((t) => t.status === 'waiting')
+    if (!task) break
+    startTask(st, task)
+  }
+}
+
+function startTask(st, task) {
+  task.status = 'uploading'
+  task.progress = 0
+  st.running++
+  render(st.kind)
+
+  const willFail = /net-fail/i.test(task.file.name) && !task.retried
+  const totalMs = 1400 + Math.random() * 1600
+  const t0 = performance.now()
+
+  task.timer = setInterval(() => {
+    const pct = Math.min(1, (performance.now() - t0) / totalMs)
+    task.progress = pct
+    if (willFail && pct >= 0.62) {
+      clearInterval(task.timer)
+      task.status = 'failed'
+      task.error = '网络中断，上传未完成'
+      task.progress = 0.62
+      st.running--
+      render(st.kind)
+      window.PV.toast('上传失败：' + task.file.name, 'err')
+      pump(st.kind)
+      return
+    }
+    if (pct >= 1) { clearInterval(task.timer); finishTask(st, task); return }
+    render(st.kind)
+  }, 120)
+}
+
+function finishTask(st, task) {
+  st.running--
+  st.queue = st.queue.filter((t) => t !== task)
+  st.items.push({
+    key: nextKey('up'),
+    filename: task.file.name,
+    url: task.previewUrl,
+    poster: task.poster || '',
+    video: task.video,
+    fresh: true,
+    removed: false,
+  })
+  window.PV.toast('已上传：' + task.file.name, 'ok')
+  render(st.kind)
+  pump(st.kind)
+}
+
+function cancelTask(kind, task) {
+  const st = states[kind]
+  if (task.timer) clearInterval(task.timer)
+  if (task.status === 'uploading') st.running = Math.max(0, st.running - 1)
+  st.queue = st.queue.filter((t) => t !== task)
+  render(st.kind)
+  window.PV.toast('已取消：' + task.file.name + '（原型不会产生服务端数据）', 'warn')
+  pump(st.kind)
+}
+
+/* ---------------- 拖放 ---------------- */
+function hasFiles(e) {
+  const t = e.dataTransfer && e.dataTransfer.types
+  return !!t && Array.prototype.indexOf.call(t, 'Files') >= 0
+}
+let drag = null
+function clearDragOver(kind) {
+  dom[kind].list.querySelectorAll('.drag-over').forEach((n) => n.classList.remove('drag-over'))
+}
+
+function bindDropzone(st) {
+  const zone = dom[st.kind].zone
+  let depth = 0
+  zone.addEventListener('dragenter', (e) => {
+    if (!hasFiles(e)) return
+    e.preventDefault(); depth++; zone.classList.add('dragover')
+  })
+  zone.addEventListener('dragover', (e) => {
+    if (!hasFiles(e)) return
+    e.preventDefault(); e.dataTransfer.dropEffect = 'copy'
+  })
+  zone.addEventListener('dragleave', (e) => {
+    if (!hasFiles(e)) return
+    depth = Math.max(0, depth - 1)
+    if (!depth) zone.classList.remove('dragover')
+  })
+  zone.addEventListener('drop', (e) => {
+    if (!hasFiles(e)) return
+    e.preventDefault(); depth = 0; zone.classList.remove('dragover')
+    const files = Array.from(e.dataTransfer.files || [])
+    if (files.length) askPrecheck(st, files)
+  })
+}
+
+/* ---------------- 示例文件 ---------------- */
+async function demoFiles(kind) {
+  const poster = window.PV.poster
+  const toFile = (name, dataUrl) => {
+    const [head, body] = dataUrl.split(',')
+    const mime = /:(.*?);/.exec(head)[1]
+    const bin = atob(body)
+    const arr = new Uint8Array(bin.length)
+    for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i)
+    return new File([new Blob([arr], { type: mime })], name, { type: mime })
+  }
+  const batch = []
+  if (kind === 'cover') {
+    batch.push(toFile('cover-new-1.png', poster('新封面 A', 250, 200, 480, 270)))
+    batch.push(toFile('cover-new-2.png', poster('新封面 B', 160, 300, 480, 270)))
+    batch.push(toFile('cover-new-3.png', poster('新封面 C', 30, 210, 480, 270)))
+    batch.push(new File([new Blob(['not an image'])], 'notes.txt', { type: 'text/plain' }))
+    batch.push(new File([new Blob([new Uint8Array(9 * MB)])], 'over-limit-9mb.png', { type: 'image/png' }))
+  } else {
+    batch.push(toFile('cg-new-1.png', poster('新 CG · 01', 280, 340, 480, 270)))
+    batch.push(toFile('cg-net-fail.png', poster('网络失败示例', 0, 20, 480, 270)))
+    const v = window.DEMO.g1cg[1]
+    if (v.src) {
+      const res = await fetch(v.src)
+      const blob = await res.blob()
+      batch.push(new File([blob], 'clip-new.webm', { type: 'video/webm' }))
+    } else {
+      batch.push(toFile('clip-new.png', poster('新 CG · 视频占位', 60, 120, 480, 270)))
+    }
+    batch.push(toFile('cg-new-2.png', poster('新 CG · 02', 200, 260, 480, 270)))
+  }
+  return batch
+}
+
+/* ---------------- 绑定 ---------------- */
+function bind() {
+  for (const kind of ['cover', 'cg']) {
+    const st = states[kind]
+    const d = dom[kind]
+    bindDropzone(st)
+    d.input.addEventListener('change', (e) => {
+      const files = Array.from(e.target.files || [])
+      e.target.value = ''
+      if (files.length) askPrecheck(st, files)
+    })
+    d.demo.addEventListener('click', async () => {
+      d.demo.disabled = true
+      const back = d.demo.textContent
+      d.demo.textContent = '准备示例…'
+      const files = await demoFiles(kind)
+      d.demo.disabled = false
+      d.demo.textContent = back
+      askPrecheck(st, files)
+    })
+  }
+
+  const save = () => {
+    const busy = ['cover', 'cg'].some((k) =>
+      states[k].queue.some((t) => t.status === 'uploading' || t.status === 'waiting'))
+    if (busy) { window.PV.toast('上传队列仍在进行，完成后再保存更稳妥', 'warn'); return }
+    for (const kind of ['cover', 'cg']) {
+      const st = states[kind]
+      st.items = st.items.filter((x) => !x.removed)
+      st.items.forEach((x) => { x.fresh = false })
+      st.deleted = 0
+      st.orderChanged = false
+      render(kind)
+    }
+    window.PV.toast('已保存（原型模拟：真实页面会提交删除与排序）', 'ok')
+  }
+  document.getElementById('saveBtn').addEventListener('click', save)
+  document.getElementById('saveBtn2').addEventListener('click', save)
+
+  document.getElementById('followGlobal').addEventListener('change', (e) => {
+    document.getElementById('customRotation').hidden = e.target.checked
+    document.getElementById('customCgRotation').hidden = e.target.checked
+  })
+
+  // 图标：与封面 / CG 一致，悬停预览挂在右侧「预览」按钮上，缩略图只负责点开灯箱
+  const icon = document.getElementById('iconThumb')
+  const img = document.createElement('img')
+  img.src = window.PV.poster('灵', 210, 268, 256, 256)
+  img.alt = '图标'
+  icon.appendChild(img)
+  window.PV.register('e-icon', [{ src: img.src, type: 'image', label: 'icon.png' }])
+  icon.addEventListener('click', () => window.PV.openLightbox('e-icon', 0))
+
+  window.addEventListener('beforeunload', (e) => {
+    const busy = states.cover.queue.length || states.cg.queue.length
+    const staged = states.cover.deleted || states.cg.deleted
+      || states.cover.orderChanged || states.cg.orderChanged
+    if (!busy && !staged) return
+    e.preventDefault()
+    e.returnValue = ''
+  })
+}
+
+bind()
+render('cover')
+render('cg')
+</script>
+</body>
+</html>

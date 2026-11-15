@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gal World · 首页（静态预览）</title>
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="preview.css">
+</head>
+<body>
+<nav class="pv-nav">
+  <span class="pv-brand">GAL WORLD 原型</span>
+  <a href="index.html" data-page="index.html">首页</a>
+  <a href="game.html" data-page="game.html">游戏页</a>
+  <a href="edit.html" data-page="edit.html">游戏编辑页</a>
+  <a href="settings.html" data-page="settings.html">全局设置</a>
+  <span class="pv-spacer"></span>
+  <span class="pv-tip">静态原型 · 悬停封面可看小窗预览</span>
+</nav>
+
+<div class="shell">
+  <header class="topbar">
+    <div class="brand">GAL <em>WORLD</em></div>
+    <div class="spacer"></div>
+    <input class="search" placeholder="搜索游戏名 / 简介">
+    <a class="ghost-btn" href="settings.html">公司维护</a>
+    <a class="ghost-btn" href="settings.html">设置</a>
+  </header>
+
+  <!-- Hero 横幅 -->
+  <section class="hero" id="hero">
+    <div class="hero-bg">
+      <img id="heroCover" data-pv-group="g1-cover" data-pv-index="0" alt="示例游戏">
+    </div>
+    <div class="hero-body">
+      <span class="hero-reason">最近在玩 · 3 天前</span>
+      <h2 class="hero-title">示例游戏</h2>
+      <div class="hero-meta">累计 42 小时 <span class="dot-sep">·</span> 上次 11月1日</div>
+      <a class="btn primary hero-cta" href="game.html">继续游玩</a>
+    </div>
+  </section>
+
+  <div class="filter-panel">
+    <div class="filter-row">
+      <span class="filter-label">公司</span>
+      <button class="tag-chip company active">全部</button>
+      <button class="tag-chip company">示例会社<span class="chip-count">1</span></button>
+      <button class="tag-chip company">示例会社<span class="chip-count">1</span></button>
+      <button class="tag-chip company">示例会社<span class="chip-count">1</span></button>
+      <button class="tag-chip company">示例会社<span class="chip-count">1</span></button>
+    </div>
+    <div class="filter-row">
+      <span class="filter-label">标签</span>
+      <button class="tag-chip active">全部</button>
+      <button class="tag-chip">恋爱</button>
+      <button class="tag-chip">校园</button>
+      <button class="tag-chip">治愈</button>
+      <button class="tag-chip">剧情</button>
+      <button class="tag-chip">夏日</button>
+    </div>
+  </div>
+
+  <div class="grid" id="grid"></div>
+</div>
+
+<script src="media.js"></script>
+<script src="demo-data.js"></script>
+<script>
+  document.getElementById('heroCover').src = window.DEMO.g1covers[0].src
+  window.onDemoVideoReady = () => {}
+
+  const grid = document.getElementById('grid')
+  for (const g of window.DEMO.games) {
+    const card = document.createElement('article')
+    card.className = 'card'
+    card.addEventListener('click', () => { location.href = 'game.html' })
+
+    const cover = document.createElement('div')
+    cover.className = 'cover'
+    const img = document.createElement('img')
+    img.src = g.covers[0].src
+    img.alt = g.name
+    img.setAttribute('data-pv-group', g.group)
+    img.setAttribute('data-pv-index', '0')
+    cover.appendChild(img)
+    const badge = document.createElement('span')
+    badge.className = 'badge ' + g.state
+    badge.textContent = g.state === 'RUNNING' ? '运行中' : '已停止'
+    cover.appendChild(badge)
+    card.appendChild(cover)
+
+    const body = document.createElement('div')
+    body.className = 'card-body'
+
+    const title = document.createElement('div')
+    title.className = 'card-title'
+    const icon = document.createElement('span')
+    icon.className = 'card-icon'
+    icon.style.cssText = 'display:inline-flex;align-items:center;justify-content:center;font-size:12px;color:#8a9099;background:#1c2028;border:1px solid #262b33;border-radius:6px'
+    icon.textContent = g.icon
+    title.appendChild(icon)
+    title.appendChild(document.createTextNode(g.name))
+    body.appendChild(title)
+
+    const company = document.createElement('div')
+    company.className = 'card-company'
+    company.textContent = g.companies.join(' × ')
+    body.appendChild(company)
+
+    const tags = document.createElement('div')
+    tags.className = 'card-tags'
+    for (const t of g.tags) {
+      const tag = document.createElement('span')
+      tag.className = 'mini-tag'
+      tag.textContent = t
+      tags.appendChild(tag)
+    }
+    body.appendChild(tags)
+
+    const meta = document.createElement('div')
+    meta.className = 'card-meta'
+    meta.textContent = g.meta
+    body.appendChild(meta)
+
+    const actions = document.createElement('div')
+    actions.className = 'card-actions'
+    const btn = document.createElement('button')
+    btn.className = 'mini-btn' + (g.state === 'RUNNING' ? ' danger' : '')
+    btn.textContent = g.state === 'RUNNING' ? '停止' : '启动'
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation()
+      window.PV.toast((g.state === 'RUNNING' ? '已发送停止请求：' : '已发送启动请求：') + g.name, 'ok')
+    })
+    actions.appendChild(btn)
+    if (g.state === 'RUNNING') {
+      const enter = document.createElement('button')
+      enter.className = 'mini-btn primary'
+      enter.textContent = '进入'
+      enter.addEventListener('click', (e) => { e.stopPropagation(); location.href = 'game.html' })
+      actions.appendChild(enter)
+    }
+    body.appendChild(actions)
+    card.appendChild(body)
+    grid.appendChild(card)
+  }
+</script>
+</body>
+</html>

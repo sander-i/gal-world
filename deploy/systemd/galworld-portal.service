@@ -1,0 +1,23 @@
+[Unit]
+Description=Gal World Portal (game library + session control)
+After=network.target galworld-pulse.service
+Wants=galworld-pulse.service
+
+[Service]
+Type=simple
+Environment=GALWORLD_ROOT=%h/galworld
+Environment=XDG_RUNTIME_DIR=/run/user/%U
+# 必须 HTTPS：内嵌的 Selkies 用 WebCodecs，要求 secure context
+Environment=GALWORLD_TLS=true
+Environment=GALWORLD_KEYSTORE=%h/galworld/data/certs/galworld.p12
+# 密钥库密码从 0600 权限的独立文件读取；若不存在则回退到 application.yml 默认值
+EnvironmentFile=-%h/.config/galworld/creds.env
+Environment=GALWORLD_KEY_ALIAS=galworld
+ExecStart=/usr/bin/java -Xms128m -Xmx512m -Dfile.encoding=UTF-8 \
+  -jar %h/galworld/lib/gal-world-portal.jar
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=20
+
+[Install]
+WantedBy=default.target
