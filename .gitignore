@@ -60,6 +60,9 @@ docs/internal/
 .git.old/
 oss-preflight-terms.txt
 
+# 本机 MCP 配置（含本机绝对路径）
+.mcp.json
+
 # 例外：README 与文档的配图需要入库（上面的 *.png / *.jpg 会拦住它们）
 !docs/images/
 !docs/images/**
