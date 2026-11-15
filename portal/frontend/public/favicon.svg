@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Gal 世界">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1c2028" />
+      <stop offset="1" stop-color="#0c0e12" />
+    </linearGradient>
+    <radialGradient id="planet" cx="36%" cy="30%" r="78%">
+      <stop offset="0" stop-color="#f6d9aa" />
+      <stop offset="55%" stop-color="#d8a05c" />
+      <stop offset="1" stop-color="#9c6828" />
+    </radialGradient>
+    <linearGradient id="orbit" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#e8b878" stop-opacity=".15" />
+      <stop offset=".5" stop-color="#e8b878" stop-opacity=".85" />
+      <stop offset="1" stop-color="#e8b878" stop-opacity=".15" />
+    </linearGradient>
+  </defs>
+
+  <rect width="64" height="64" rx="14" fill="url(#bg)" />
+  <rect x="1" y="1" width="62" height="62" rx="13" fill="none"
+        stroke="#ffffff" stroke-opacity=".06" />
+
+  <ellipse cx="32" cy="33" rx="24" ry="8.5" fill="none" stroke="url(#orbit)"
+           stroke-width="2.5" transform="rotate(-24 32 33)" />
+  <circle cx="32" cy="32" r="13.5" fill="url(#planet)" />
+  <circle cx="32" cy="32" r="13.5" fill="none" stroke="#fff3df" stroke-opacity=".18" />
+
+  <path d="M47 15.5l1.25 3.25L51.5 20l-3.25 1.25L47 24.5l-1.25-3.25L42.5 20l3.25-1.25z"
+        fill="#fff6e8" opacity=".92" />
+  <circle cx="16" cy="45" r="1.6" fill="#e8b878" opacity=".7" />
+</svg>

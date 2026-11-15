@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gal World · 游戏页（静态预览）</title>
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="preview.css">
+</head>
+<body>
+<nav class="pv-nav">
+  <span class="pv-brand">GAL WORLD 原型</span>
+  <a href="index.html" data-page="index.html">首页</a>
+  <a href="game.html" data-page="game.html">游戏页</a>
+  <a href="edit.html" data-page="edit.html">游戏编辑页</a>
+  <a href="settings.html" data-page="settings.html">全局设置</a>
+  <span class="pv-spacer"></span>
+  <span class="pv-tip">静态原型 · 大屏区自动轮换</span>
+</nav>
+
+<div class="shell">
+  <header class="topbar">
+    <a class="ghost-btn" href="index.html">← 游戏库</a>
+    <div class="spacer"></div>
+    <a class="ghost-btn gear-btn" href="edit.html" title="编辑此游戏">⚙ 编辑</a>
+  </header>
+
+  <div class="detail-hero">
+    <div class="hero-left">
+      <h1>示例游戏</h1>
+      <div class="sub">1280×720 · 状态 运行中</div>
+
+      <div class="game-meta-card">
+        <div class="meta-line">
+          <span class="meta-label">公司</span>
+          <span class="meta-values"><a class="meta-link" href="#" onclick="return false">示例会社</a></span>
+        </div>
+        <div class="meta-line">
+          <span class="meta-label">标签</span>
+          <span class="meta-values">
+            <span class="mini-tag">恋爱</span>
+            <span class="mini-tag">校园</span>
+            <span class="mini-tag">喜剧</span>
+          </span>
+        </div>
+      </div>
+
+      <div class="stats">
+        <div class="stat"><span class="stat-label">累计游玩</span><span class="stat-value">42 小时 18 分</span></div>
+        <div class="stat"><span class="stat-label">今日</span><span class="stat-value">1 小时 06 分</span></div>
+        <div class="stat"><span class="stat-label">游玩次数</span><span class="stat-value">17</span></div>
+      </div>
+
+      <div class="actions">
+        <a class="btn primary" href="#" onclick="window.PV.toast('已进入游玩页（原型演示）', 'ok');return false">进入游戏</a>
+        <button class="btn danger" onclick="window.PV.toast('已发送停止请求（原型演示）', 'warn')">停止会话</button>
+      </div>
+
+      <p style="color:var(--muted);font-size:12.5px;margin-top:22px">
+        离开页面不会中断游戏，随时回来都能继续。
+      </p>
+    </div>
+
+    <div class="hero-media">
+      <div class="seg" id="mediaSeg" style="align-self:flex-end">
+        <button data-mode="cover">封面</button>
+        <button data-mode="cg" class="on">CG</button>
+      </div>
+      <div class="hero-center" id="stage"></div>
+    </div>
+  </div>
+
+  <section class="panel">
+    <div class="panel-head"><h2>简介</h2></div>
+    <div class="desc">
+      在夏日学园的屋顶，主角遇见了自称「灵感之神」的少女。
+      一个关于创作、恋爱与一点点奇迹的故事。
+      <br><br>
+      <span class="muted-sm">（原型示例文本）</span>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head"><h2>存档备份</h2></div>
+    <div class="backup-bar">
+      <input class="input" placeholder="标签（可选，如 第一章结束）" maxlength="40">
+      <button class="btn" onclick="window.PV.toast('已创建存档备份（原型演示）', 'ok')">立即备份</button>
+    </div>
+    <table class="saves">
+      <thead><tr><th>时间</th><th>标签</th><th>大小</th><th style="text-align:right">操作</th></tr></thead>
+      <tbody>
+        <tr>
+          <td class="mono">2026-11-01 21:40</td>
+          <td><span class="tag">第一章结束</span></td>
+          <td class="mono">2.41 MB</td>
+          <td style="text-align:right"><button class="link-btn" onclick="window.PV.toast('恢复存档（原型演示）', 'ok')">恢复</button><button class="link-btn danger" onclick="window.PV.toast('删除备份（原型演示）', 'warn')">删除</button></td>
+        </tr>
+        <tr>
+          <td class="mono">2026-10-28 23:12</td>
+          <td><span class="muted-sm">—</span></td>
+          <td class="mono">2.38 MB</td>
+          <td style="text-align:right"><button class="link-btn" onclick="window.PV.toast('恢复存档（原型演示）', 'ok')">恢复</button><button class="link-btn danger" onclick="window.PV.toast('删除备份（原型演示）', 'warn')">删除</button></td>
+        </tr>
+      </tbody>
+    </table>
+    <p class="muted-sm" style="margin-top:14px">
+      恢复前会自动对当前存档做一份 <code>pre-restore</code> 快照；游戏运行中会拒绝恢复（先停止会话）。
+    </p>
+  </section>
+</div>
+
+<script src="media.js"></script>
+<script src="demo-data.js"></script>
+<script>
+  const stage = document.getElementById('stage')
+  const seg = document.getElementById('mediaSeg')
+  let mode = 'cg'
+  let index = 0
+
+  function items() {
+    return mode === 'cover' ? window.DEMO.g1covers : window.DEMO.g1cg
+  }
+
+  function renderStage() {
+    const list = items()
+    index = index % list.length
+    const item = list[index]
+    stage.textContent = ''
+
+    const holder = document.createElement('div')
+    holder.className = 'pv-media-stage'
+
+    if (item.type === 'video' && item.src) {
+      const v = document.createElement('video')
+      v.src = item.src
+      v.muted = true
+      v.loop = true
+      v.autoplay = true
+      v.playsInline = true
+      holder.appendChild(v)
+    } else {
+      const img = document.createElement('img')
+      img.src = item.src || item.poster || ''
+      img.alt = item.label
+      holder.appendChild(img)
+    }
+
+    const tip = document.createElement('span')
+    tip.className = 'pv-stage-tip'
+    tip.textContent = item.type === 'video' ? '视频 · 自动轮换' : '图片 · 自动轮换'
+    holder.appendChild(tip)
+
+    const cap = document.createElement('div')
+    cap.className = 'pv-media-caption'
+    const file = document.createElement('span')
+    file.className = 'pv-file'
+    file.textContent = item.label + (list.length > 1 ? `　${index + 1} / ${list.length}` : '')
+    const dots = document.createElement('span')
+    cap.appendChild(file)
+    for (let i = 0; i < list.length; i++) {
+      const d = document.createElement('i')
+      d.style.cssText = 'width:6px;height:6px;border-radius:50%;display:inline-block;margin-left:4px;background:' +
+        (i === index ? 'var(--accent-hi)' : 'rgba(255,255,255,.28)')
+      cap.appendChild(d)
+    }
+    holder.appendChild(cap)
+    stage.appendChild(holder)
+
+    seg.querySelectorAll('button').forEach((b) => {
+      b.classList.toggle('on', b.getAttribute('data-mode') === mode)
+    })
+  }
+
+  seg.addEventListener('click', (e) => {
+    const b = e.target.closest('button')
+    if (!b) return
+    mode = b.getAttribute('data-mode')
+    index = 0
+    renderStage()
+  })
+
+  // 大屏自动轮换，和真实页面一致（图片按固定时长切换）
+  setInterval(() => {
+    if (document.hidden) return
+    const list = items()
+    if (list.length > 1) {
+      index = (index + 1) % list.length
+      renderStage()
+    }
+  }, 6000)
+
+  renderStage()
+  window.onDemoVideoReady = renderStage
+</script>
+</body>
+</html>

@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Gal 世界</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="theme-color" content="#0e1013" />
+    <script>
+      // 首屏防闪：在样式/脚本加载前把已存主题写到 <html> 上
+      (function () {
+        try {
+          var t = JSON.parse(localStorage.getItem('galworld.theme') || 'null')
+          var root = document.documentElement
+          if (t && t.vars) {
+            for (var k in t.vars) if (k.indexOf('--') === 0) root.style.setProperty(k, t.vars[k])
+            root.dataset.theme = t.id || 'custom'
+            root.dataset.themeBase = t.base || 'dark'
+            if ((t.base || 'dark') === 'light') {
+              root.classList.remove('dark')
+              root.style.colorScheme = 'light'
+            }
+          }
+        } catch (e) {}
+      })()
+    </script>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

@@ -1,0 +1,898 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="obsidian" data-theme-base="dark">
+<head>
+<meta charset="utf-8">
+<title>Gal World · 门户界面优化预览</title>
+<style>
+:root{
+  --bg:#0e1013; --surface:#16191f; --surface-2:#1c2028; --surface-3:#12151a;
+  --surface-deep:#0c0e12; --line:#262b33; --line-strong:#333a45;
+  --text:#e9e6e0; --text-dim:#cfd8e6; --muted:#8a9099; --muted-soft:#5f6a7c;
+  --accent:#d8a05c; --accent-hi:#e8b878; --accent-lo:#c08a45; --accent-dim:#8a6a3d;
+  --accent-ink:#1a1206; --on-accent:var(--accent-ink);
+  --ok:#6fbf8b; --warn:#d98a5c; --err:#d96c6c;
+  --ok-soft:color-mix(in srgb,var(--ok) 16%,transparent);
+  --ok-line:color-mix(in srgb,var(--ok) 35%,transparent);
+  --warn-soft:color-mix(in srgb,var(--warn) 14%,transparent);
+  --warn-line:color-mix(in srgb,var(--warn) 30%,transparent);
+  --err-soft:color-mix(in srgb,var(--err) 16%,transparent);
+  --err-line:color-mix(in srgb,var(--err) 35%,transparent);
+  --muted-soft-bg:color-mix(in srgb,var(--muted) 14%,transparent);
+  --muted-soft-line:color-mix(in srgb,var(--muted) 28%,transparent);
+  --cover-gradient:linear-gradient(135deg,var(--surface-2),var(--surface-3));
+  --hero-body-gradient:linear-gradient(100deg,var(--surface),var(--surface-3));
+  --glass-bg:color-mix(in srgb,var(--surface) 72%,transparent);
+  --overlay:color-mix(in srgb,#000 58%,transparent);
+  --radius:10px; --r-ctl:8px;
+  --ctl-h-sm:28px; --ctl-h-md:34px; --ctl-h-lg:40px;
+  --ctl-fs-sm:12.5px; --ctl-fs-md:13.5px; --ctl-fs-lg:14px;
+  --shadow:0 10px 30px color-mix(in srgb,var(--bg) 70%,#000);
+  --card-min:250px;
+}
+*{box-sizing:border-box}
+html{color-scheme:dark}
+html[data-theme-base="light"]{color-scheme:light}
+body{margin:0;background:var(--bg);color:var(--text);font-size:15px;line-height:1.6;
+  font-family:"PingFang SC","Microsoft YaHei","Noto Sans CJK SC",system-ui,sans-serif;
+  -webkit-font-smoothing:antialiased}
+a{color:inherit;text-decoration:none}
+button{font:inherit;color:inherit;border:0;background:none;cursor:pointer}
+.shell{max-width:1416px;margin:0 auto;padding:0 24px 64px}
+.muted-sm{font-size:12.5px;color:var(--muted)}
+.mono{font-family:ui-monospace,Menlo,Consolas,monospace}
+
+/* 顶栏 */
+.topbar{display:flex;align-items:center;gap:14px;padding:22px 0 16px;
+  border-bottom:1px solid var(--line);margin-bottom:22px;position:sticky;top:0;
+  background:var(--glass-bg);backdrop-filter:blur(12px);z-index:20}
+.brand{font-size:18px;letter-spacing:.16em;font-weight:600}
+.brand em{font-style:normal;color:var(--accent)}
+.topbar .spacer{flex:1}
+.search{width:200px;padding:6px 12px;border-radius:999px;border:1px solid var(--line);
+  background:var(--surface);color:var(--text);font:inherit;font-size:13px}
+.search:focus{outline:none;border-color:var(--accent-dim)}
+.ghost-btn{padding:6px 14px;border:1px solid var(--line);border-radius:999px;
+  color:var(--muted);font-size:13px;transition:border-color .15s,color .15s}
+.ghost-btn:hover{border-color:var(--accent-dim);color:var(--text)}
+.ghost-btn.on{border-color:var(--accent);color:var(--accent)}
+.theme-quick{height:var(--ctl-h-sm);padding:0 8px;font-size:var(--ctl-fs-sm);cursor:pointer}
+.topbar .seg{flex:0 0 auto}
+
+/* seg */
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:var(--r-ctl);overflow:hidden}
+.seg button{height:var(--ctl-h-sm);padding:0 11px;font-size:var(--ctl-fs-sm);color:var(--muted);
+  border-right:1px solid var(--line);transition:background .15s,color .15s}
+.seg button:last-child{border-right:0}
+.seg button:hover{color:var(--text)}
+.seg button.on{background:var(--accent);color:var(--on-accent);font-weight:600}
+.seg.wrap{flex-wrap:wrap}
+
+/* Hero */
+.hero{position:relative;display:grid;grid-template-columns:minmax(0,420px) minmax(0,1fr);
+  border-radius:12px;overflow:hidden;border:1px solid var(--line);
+  background:var(--surface);cursor:pointer;margin-bottom:22px;
+  transition:border-color .18s}
+.hero:hover{border-color:var(--accent-dim)}
+.hero-bg{position:relative;aspect-ratio:16/9;display:grid;place-items:center;
+  overflow:hidden;background:var(--cover-gradient)}
+.hero-body{padding:22px 28px;display:flex;flex-direction:column;justify-content:center;
+  gap:8px;background:var(--hero-body-gradient)}
+.hero-reason{font-size:11.5px;color:var(--accent);border:1px solid var(--accent-dim);
+  align-self:flex-start;padding:1px 9px;border-radius:999px}
+.hero-title{margin:0;font-size:22px;letter-spacing:.02em}
+.hero-meta{color:var(--muted);font-size:12.5px}
+.hero[data-size="medium"]{grid-template-columns:minmax(0,300px) minmax(0,1fr)}
+.hero[data-size="medium"] .hero-bg{aspect-ratio:auto;height:190px}
+.hero[data-size="small"]{display:block;margin-bottom:18px}
+.hero-strip{display:flex;align-items:center;gap:14px;padding:13px 18px}
+.hero-strip-label{font-size:11.5px;color:var(--accent);border:1px solid var(--accent-dim);
+  padding:1px 8px;border-radius:999px}
+.hero-strip-meta{color:var(--muted);font-size:12.5px;margin-left:auto}
+
+/* 筛选 */
+.filter-panel{position:sticky;top:66px;z-index:10;backdrop-filter:blur(10px);
+  background:var(--glass-bg);border:1px solid var(--line);border-radius:var(--radius);
+  padding:12px 16px 2px;margin-bottom:20px}
+.filter-row{display:flex;align-items:center;gap:9px;margin-bottom:11px;flex-wrap:wrap}
+.filter-label{font-size:12px;color:var(--muted);min-width:32px;letter-spacing:.06em}
+.chip{padding:3px 12px;border-radius:999px;font-size:12.5px;color:var(--muted);
+  background:var(--surface);border:1px solid var(--line);transition:all .15s}
+.chip:hover{color:var(--text);border-color:var(--line-strong)}
+.chip.active{background:var(--accent);border-color:var(--accent);
+  color:var(--on-accent);font-weight:600}
+.filter-toggle{display:flex;align-items:center;gap:6px;height:var(--ctl-h-sm);
+  font-size:var(--ctl-fs-sm);color:var(--muted)}
+.filter-toggle:hover{color:var(--text)}
+
+/* 网格 */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(var(--card-min),1fr));gap:22px}
+/* 首页推荐位：固定 5 列 × 2 行，不随视口漂移 */
+.grid-fixed-5{grid-template-columns:repeat(5,minmax(0,1fr));gap:16px}
+@media (max-width:1100px){.grid-fixed-5{grid-template-columns:repeat(4,minmax(0,1fr))}}
+@media (max-width:860px){.grid-fixed-5{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media (max-width:640px){.grid-fixed-5{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+.section-head{display:flex;align-items:baseline;gap:12px;margin:26px 0 14px}
+.section-head h2{margin:0;font-size:17px;letter-spacing:.02em}
+.section-head .spacer{flex:1}
+.section-head .ghost-btn{margin-left:auto;font-size:12.5px;padding:4px 12px}
+.load-more{text-align:center;color:var(--muted);font-size:12.5px;padding:26px 0 10px}
+.load-more.done{color:var(--muted-soft)}
+.grid[data-density="compact"]{--card-min:168px;gap:14px}
+.grid[data-density="compact"] .card-body{padding:10px 12px 12px;gap:2px}
+.grid[data-density="compact"] .card-meta,
+.grid[data-density="compact"] .card-tags,
+.grid[data-density="compact"] .card-company{display:none}
+.grid[data-density="compact"] .card-title{font-size:13.5px}
+.grid[data-density="compact"] .card-actions{margin-top:6px}
+.grid[data-density="list"]{grid-template-columns:1fr;gap:8px}
+.grid[data-density="list"] .card{flex-direction:row;align-items:stretch;height:86px}
+.grid[data-density="list"] .cover{width:150px;flex:0 0 150px;aspect-ratio:auto;height:100%}
+.grid[data-density="list"] .cover .art{font-size:22px}
+.grid[data-density="list"] .card-body{flex-direction:row;align-items:center;gap:14px;
+  padding:0 14px;overflow:hidden}
+.grid[data-density="list"] .card-title{flex:1 1 auto;min-width:0;white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis}
+.grid[data-density="list"] .card-tags,.grid[data-density="list"] .card-meta{flex:0 0 auto;white-space:nowrap}
+.grid[data-density="list"] .card-actions{flex:0 0 auto;margin:0}
+
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
+  overflow:hidden;display:flex;flex-direction:column;transition:all .18s;cursor:pointer}
+.card:hover{transform:translateY(-3px);border-color:var(--accent-dim);box-shadow:var(--shadow)}
+.cover{aspect-ratio:16/9;display:grid;place-items:center;position:relative;overflow:hidden;
+  background:var(--cover-gradient)}
+.cover .art{width:100%;height:100%;display:grid;place-items:center;font-size:34px;
+  font-weight:600;letter-spacing:.1em;color:rgba(255,255,255,.82)}
+.grid[data-density="compact"] .cover .art{font-size:26px}
+.badge{position:absolute;top:8px;left:8px;padding:1px 8px;border-radius:999px;font-size:11px;
+  backdrop-filter:blur(6px);border:1px solid transparent}
+.badge.RUNNING{background:var(--ok-soft);color:var(--ok);border-color:var(--ok-line)}
+.badge.STOPPED{background:var(--muted-soft-bg);color:var(--muted);border-color:var(--muted-soft-line)}
+.badge.FAILED{background:var(--err-soft);color:var(--err);border-color:var(--err-line)}
+.card-body{padding:13px 15px 15px;display:flex;flex-direction:column;gap:4px;flex:1}
+.card-title{font-size:15px;font-weight:600;letter-spacing:.02em;display:flex;align-items:center;gap:7px}
+.card-icon{width:20px;height:20px;border-radius:4px;flex:0 0 auto;display:grid;place-items:center;
+  font-size:12px;color:#fff;font-weight:600}
+.card-company{font-size:12px;color:var(--muted)}
+.card-tags{display:flex;gap:5px;flex-wrap:wrap}
+.mini-tag{font-size:10.5px;padding:0 6px;border-radius:4px;color:var(--muted);
+  background:var(--surface-2);border:1px solid var(--line)}
+.card-meta{color:var(--muted);font-size:12px}
+.card-actions{display:flex;gap:6px;margin-top:6px}
+.mini-btn{height:26px;padding:0 12px;border-radius:6px;font-size:12px;
+  border:1px solid var(--line);color:var(--text);background:var(--surface-2)}
+.mini-btn:hover{border-color:var(--accent-dim)}
+.mini-btn.primary{background:var(--accent);border-color:var(--accent);color:var(--on-accent);font-weight:600}
+.mini-btn.danger{border-color:var(--err-line);color:var(--err)}
+
+/* panel */
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
+  padding:18px 20px;margin-bottom:16px}
+.panel-head{display:flex;align-items:baseline;gap:10px;margin-bottom:12px}
+.panel-head h2{margin:0;font-size:16px}
+.panel-head .muted-sm{margin-left:auto}
+.setting-row{display:flex;align-items:center;gap:10px;margin-bottom:10px;font-size:13.5px}
+.setting-row > span:first-child{min-width:120px;color:var(--muted)}
+.input{height:var(--ctl-h-md);padding:0 10px;border-radius:var(--r-ctl);
+  border:1px solid var(--line);background:var(--bg);color:var(--text);font:inherit;font-size:13px}
+.input:focus{outline:none;border-color:var(--accent-dim)}
+.btn{height:var(--ctl-h-md);padding:0 16px;border-radius:var(--r-ctl);font-size:var(--ctl-fs-md);
+  border:1px solid var(--line);color:var(--text);background:var(--surface-2)}
+.btn:hover{border-color:var(--accent-dim)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--on-accent);font-weight:600}
+.btn.danger{border-color:var(--err-line);color:var(--err)}
+.btn.sm{height:var(--ctl-h-sm);padding:0 11px;font-size:var(--ctl-fs-sm)}
+.section-title{font-size:12px;letter-spacing:.1em;color:var(--muted);margin:18px 0 8px;
+  text-transform:uppercase}
+.warn-box{padding:10px 14px;border-radius:var(--r-ctl);border:1px solid var(--warn-line);
+  background:var(--warn-soft);color:var(--warn);font-size:13px;margin-bottom:16px}
+.link-btn{color:var(--accent);font-size:12.5px}
+.link-btn.danger{color:var(--err)}
+
+/* settings layout */
+.settings-layout{display:grid;grid-template-columns:180px minmax(0,1fr);gap:22px;align-items:start}
+.settings-nav{position:sticky;top:88px;display:flex;flex-direction:column;gap:3px;padding:9px;
+  background:var(--surface);border:1px solid var(--line);border-radius:var(--radius)}
+.settings-nav button{text-align:left;height:var(--ctl-h-md);padding:0 12px;border-radius:var(--r-ctl);
+  color:var(--muted);font-size:var(--ctl-fs-md)}
+.settings-nav button:hover{color:var(--text);background:var(--surface-2)}
+.settings-nav button.active{color:var(--on-accent);background:var(--accent);font-weight:600}
+
+/* 主题选择 */
+.theme-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(132px,1fr));gap:10px}
+.theme-card{display:flex;flex-direction:column;gap:6px;padding:10px;align-items:flex-start;
+  text-align:left;border:1px solid var(--line);border-radius:var(--r-ctl);background:var(--surface);
+  transition:border-color .15s}
+.theme-card:hover{border-color:var(--accent-dim)}
+.theme-card.active{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset}
+.theme-swatch{width:100%;height:54px;border-radius:6px;border:1px solid var(--line);
+  position:relative;display:block;overflow:hidden}
+.theme-swatch-surface{position:absolute;left:8px;top:10px;width:52px;height:34px;border-radius:4px;
+  display:grid;place-items:center;font-size:13px}
+.theme-swatch-accent{position:absolute;right:10px;bottom:9px;width:26px;height:8px;border-radius:4px}
+.theme-name{font-size:13px}
+.theme-tag{font-size:11px;color:var(--muted)}
+.theme-fields{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px;margin:12px 0}
+.theme-field{display:flex;align-items:center;gap:8px;font-size:13px}
+.theme-field span{min-width:64px;color:var(--muted)}
+.theme-field input[type=color]{width:36px;height:26px;border:1px solid var(--line);
+  border-radius:6px;background:none;padding:2px;cursor:pointer}
+.theme-field code{color:var(--muted);font-size:11.5px}
+.theme-preview{margin:14px 0;padding:18px;border-radius:var(--radius);
+  border:1px solid var(--p-line);background:var(--p-bg)}
+.theme-preview-card{display:flex;flex-direction:column;gap:6px;max-width:230px;padding:14px;
+  border-radius:8px;background:var(--p-surface);color:var(--p-text);border:1px solid var(--p-line)}
+.theme-preview-card span{color:var(--p-muted);font-size:12.5px}
+.theme-preview-card button{margin-top:6px;height:32px;border-radius:8px;
+  background:var(--p-accent);color:#fff;font-weight:600}
+.theme-editor{border-top:1px solid var(--line);margin-top:16px;padding-top:4px}
+
+/* admin */
+.admin-warn{padding:10px 14px;margin-bottom:16px;border:1px solid var(--warn-line);
+  border-radius:var(--r-ctl);background:var(--warn-soft);color:var(--warn);font-size:13px}
+.deploy-token-row{display:flex;gap:10px}
+.deploy-token-row .input{flex:1}
+.deploy-step{border:1px solid var(--line);border-radius:var(--r-ctl);padding:10px 12px;
+  margin-bottom:8px;background:var(--surface-2)}
+.deploy-step-title{display:flex;align-items:center;gap:8px;font-size:13.5px}
+.deploy-badge{font-size:10.5px;padding:0 7px;border-radius:999px;border:1px solid var(--line);
+  color:var(--muted)}
+.deploy-badge.ok{border-color:var(--ok-line);color:var(--ok);background:var(--ok-soft)}
+.deploy-badge.run{border-color:var(--accent-dim);color:var(--accent)}
+.deploy-badge.warn{border-color:var(--warn-line);color:var(--warn);background:var(--warn-soft)}
+.deploy-badge.bad{border-color:var(--err-line);color:var(--err);background:var(--err-soft)}
+.deploy-log{margin-top:10px;border:1px solid var(--line);border-radius:var(--r-ctl);
+  background:var(--surface-deep);padding:10px 12px;font-family:ui-monospace,Menlo,Consolas,monospace;
+  font-size:11.5px;color:var(--text-dim);max-height:150px;overflow:auto;white-space:pre-wrap}
+.env-os{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px;
+  font-size:12.5px;color:var(--muted)}
+.env-os-badge{padding:1px 9px;border-radius:999px;border:1px solid var(--accent-dim);color:var(--accent)}
+.variant-row{display:flex;gap:10px;font-size:11.5px;padding:4px 0;border-bottom:1px dashed var(--line)}
+.variant-row code{flex:1;color:var(--muted)}
+
+/* 说明条 */
+.note{border:1px dashed var(--line);border-radius:var(--r-ctl);padding:10px 14px;
+  font-size:12.5px;color:var(--muted);margin-bottom:18px}
+.note b{color:var(--text)}
+.tag-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+</style>
+</head>
+<body>
+<div class="shell">
+  <header class="topbar">
+    <div class="brand">GAL <em>WORLD</em></div>
+    <div class="seg" id="nav">
+      <button class="on" data-view="library">首页</button>
+      <button data-view="list">全部游戏</button>
+      <button data-view="settings">设置</button>
+      <button data-view="admin">后台管理</button>
+    </div>
+    <div class="spacer"></div>
+    <input class="search" placeholder="搜索游戏名 / 简介">
+    <select class="input theme-quick" id="themeQuick" title="主题"></select>
+    <button class="ghost-btn" id="btnAdminEntry">管理</button>
+  </header>
+
+  <!-- ============ 首页（Hero + 推荐 10 款） ============ -->
+  <div id="view-library">
+    <div class="note">
+      <b>预览说明</b>：首页只展示 <b>Hero + 10 款推荐</b>，2 行 × 5 列固定排布，不滚动。
+      完整浏览走「全部游戏」列表页（支持筛选、密度切换、无限滚动）。
+      推荐顺序现在是「最近游玩 &gt; 时长最长 &gt; 新加入」，后续可替换为你自己的推荐算法。
+    </div>
+
+    <section class="hero" id="hero" data-size="medium">
+      <div class="hero-bg">
+        <div class="art" style="background:linear-gradient(135deg,#2b4a6f,#4b7fa8)">灵</div>
+      </div>
+      <div class="hero-body">
+        <span class="hero-reason">最近在玩</span>
+        <h2 class="hero-title">示例游戏</h2>
+        <div class="hero-meta">累计 12 小时 40 分 · 上次 今天 20:14</div>
+        <button class="btn primary" style="align-self:flex-start;margin-top:6px">继续游玩</button>
+      </div>
+    </section>
+
+    <div class="section-head">
+      <h2>为你推荐</h2>
+      <span class="muted-sm">按推荐算法排序的前 10 款</span>
+      <a class="ghost-btn" href="#" id="gotoAll">全部游戏 →</a>
+    </div>
+    <div class="grid grid-fixed-5" id="homeGrid"></div>
+  </div>
+
+  <!-- ============ 全部游戏列表 ============ -->
+  <div id="view-list" style="display:none">
+    <div class="note">
+      <b>列表页</b>：左侧筛选（公司 / 标签），右侧密度切换。滚动到底自动加载下一批（每批 12，
+      演示用；实际计划 40）。24 款演示数据，先渲染 12 款。
+    </div>
+
+    <div class="filter-panel">
+      <div class="filter-row">
+        <span class="filter-label">公司</span>
+        <button class="chip active">全部</button>
+        <button class="chip">示例会社 A <span style="opacity:.7">8</span></button>
+        <button class="chip">示例会社 B <span style="opacity:.7">4</span></button>
+        <button class="chip">ゆずソフト <span style="opacity:.7">6</span></button>
+        <button class="chip">Navel <span style="opacity:.7">3</span></button>
+        <button class="chip">minori <span style="opacity:.7">3</span></button>
+      </div>
+      <button class="filter-toggle" id="tagsToggle">
+        标签 ▾ <span class="muted-sm" id="tagsHint">(6)</span>
+      </button>
+      <div class="filter-row" id="tagsRow" style="display:none">
+        <span class="filter-label">标签</span>
+        <button class="chip active">全部</button>
+        <button class="chip">校园</button>
+        <button class="chip">恋爱</button>
+        <button class="chip">奇幻</button>
+        <button class="chip">悬疑</button>
+        <button class="chip">日常</button>
+        <button class="chip">汉化</button>
+      </div>
+    </div>
+
+    <div class="section-head">
+      <h2>全部游戏</h2>
+      <span class="muted-sm" id="listCount">共 24 款</span>
+      <div class="spacer"></div>
+      <div class="seg" id="densitySeg">
+        <button class="on" data-density="cozy">标准</button>
+        <button data-density="compact">紧凑</button>
+        <button data-density="list">列表</button>
+      </div>
+    </div>
+    <div class="grid" id="grid" data-density="cozy"></div>
+    <div class="load-more" id="loadMore">加载中…</div>
+  </div>
+
+  <!-- ============ 设置 ============ -->
+  <div id="view-settings" style="display:none">
+    <div class="note">
+      <b>设置页瘦身</b>：上传限制、图片预加载、环境信息、一键部署、下载源、版本更新
+      全部移到「后台管理」。这里只剩影响本机观感的项。
+    </div>
+    <div class="settings-layout">
+      <aside class="settings-nav" id="settingsNav">
+        <button class="active">外观主题</button>
+        <button>切换方式</button>
+        <button>空闲停止</button>
+        <button>CG 声音</button>
+        <button>轮换功能</button>
+        <button>游戏页展示</button>
+        <button>关于</button>
+      </aside>
+      <div>
+        <section class="panel">
+          <div class="panel-head"><h2>外观主题</h2><span class="muted-sm">仅影响本机浏览器</span></div>
+          <div class="theme-grid" id="themeGrid"></div>
+          <div style="display:flex;gap:8px;margin-top:12px">
+            <button class="btn" id="dupBtn">基于当前主题新建</button>
+            <button class="btn danger" id="delBtn" style="display:none">删除当前自定义主题</button>
+          </div>
+          <div class="theme-editor" id="editor" style="display:none">
+            <div class="section-title">编辑主题</div>
+            <div class="setting-row"><span>名称</span><input class="input" id="edName" maxlength="20"></div>
+            <div class="setting-row">
+              <span>明暗</span>
+              <div class="seg" id="edBase">
+                <button data-base="dark" class="on">深色</button>
+                <button data-base="light">浅色</button>
+              </div>
+            </div>
+            <div class="theme-fields" id="edFields"></div>
+            <div class="theme-preview" id="edPreview">
+              <div class="theme-preview-card">
+                <b>示例游戏</b><span>1280×720 · 已停止</span><button>启动</button>
+              </div>
+            </div>
+            <div style="display:flex;gap:8px">
+              <button class="btn primary" id="edSave">保存并使用</button>
+              <button class="btn" id="edCancel">取消</button>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head"><h2>切换游戏的方式</h2></div>
+          <div class="seg"><button class="on">当前页跳转</button><button>新标签页</button></div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head"><h2>空闲自动停止</h2></div>
+          <p class="muted-sm" style="margin:0 0 12px">
+            离开游玩页超过设定时长后自动停止会话。<b style="color:var(--warn)">会结束游戏进程，未存档进度可能丢失。</b>
+          </p>
+          <div class="seg"><button class="on">不停止</button><button>3 分钟</button><button>5 分钟</button><button>10 分钟</button></div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head"><h2>游戏页展示</h2></div>
+          <div class="seg"><button>封面</button><button class="on">CG</button></div>
+          <div class="section-title">首页推荐位高度</div>
+          <div class="seg" id="heroSetting">
+            <button class="on" data-size="auto">自动</button><button data-size="large">大</button>
+            <button data-size="medium">中</button><button data-size="small">小</button>
+            <button data-size="off">关闭</button>
+          </div>
+          <p class="muted-sm" style="margin-top:10px">自动：≤6 款用大，7–23 款用中，≥24 款用小。</p>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head"><h2>关于</h2></div>
+          <div class="setting-row"><span>版本</span><span class="mono">0.1.0-SNAPSHOT</span></div>
+          <div class="setting-row"><span>仓库</span><a class="link-btn" href="#">gitee.com/sander-o/gal-world</a></div>
+          <p class="muted-sm">检查更新已移至后台管理。</p>
+        </section>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 后台管理 ============ -->
+  <div id="view-admin" style="display:none">
+    <div class="admin-warn">
+      此页面的修改会影响所有用户与服务器状态：上传上限、磁盘占用、下载源、系统部署。
+    </div>
+
+    <section class="panel" id="adminLock">
+      <div class="panel-head"><h2>需要部署令牌</h2></div>
+      <p class="muted-sm" style="margin:0 0 12px">
+        令牌在服务启动日志里（<code>galworld.deploy.token</code> 未配置时每次启动随机生成）。
+        存在 <code>sessionStorage</code>，关浏览器即失效。
+      </p>
+      <div class="deploy-token-row">
+        <input class="input" type="password" id="adminToken" placeholder="部署令牌">
+        <button class="btn primary" id="adminUnlock">解锁</button>
+      </div>
+      <p class="muted-sm" style="margin-top:10px">预览用：任意非空内容即可解锁。</p>
+    </section>
+
+    <div id="adminBody" style="display:none">
+      <div style="display:flex;justify-content:flex-end;margin-bottom:10px">
+        <button class="ghost-btn" id="adminLockBtn">锁定</button>
+      </div>
+
+      <section class="panel">
+        <div class="panel-head"><h2>上传限制</h2><span class="muted-sm">改变上传校验，影响磁盘</span></div>
+        <div class="setting-row"><span>图片单张上限</span><input class="input" type="number" value="8" style="width:90px"><span class="muted-sm">MB</span></div>
+        <div class="setting-row"><span>视频单张上限</span><input class="input" type="number" value="120" style="width:90px"><span class="muted-sm">MB</span></div>
+        <div class="setting-row"><span>封面数量上限</span><input class="input" type="number" value="8" style="width:90px"><span class="muted-sm">张</span></div>
+        <div class="setting-row"><span>宣传 CG 上限</span><input class="input" type="number" value="5" style="width:90px"><span class="muted-sm">个</span></div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head"><h2>图片预加载优化</h2><span class="muted-sm">全库派生图回填 / 清理</span></div>
+        <div class="seg"><button class="on">开启</button><button>关闭</button></div>
+        <p class="muted-sm" style="margin-top:10px">代价：磁盘多占用约 10%；关闭后已生成的派生图不删除。</p>
+        <div style="margin-top:14px;border-top:1px dashed var(--line);padding-top:12px">
+          <div class="setting-row"><span>派生图占用</span><span class="mono">238 个文件 · 412 MB</span></div>
+          <div class="variant-row"><code>games/demo-game.meta/media/cover-0.s640.webp</code><span>1.2 MB</span></div>
+          <div class="variant-row"><code>games/demo-game.meta/media/cover-0.s1280.webp</code><span>2.8 MB</span></div>
+          <button class="btn danger sm" style="margin-top:10px">清理全部派生图</button>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head"><h2>环境信息</h2><span class="muted-sm">按当前操作系统返回</span></div>
+        <div class="env-os">
+          <span class="env-os-badge">Linux</span>
+          <span>Ubuntu 24.04.1 LTS</span><span>x86_64</span><span>&lt;host&gt;</span>
+        </div>
+        <div class="section-title">元件下载源</div>
+        <div class="setting-row"><span>Nexus 仓库根地址</span>
+          <input class="input" style="flex:1" value="http://127.0.0.1:8081/repository/galworld-artifacts"></div>
+        <div class="setting-row"><span>镜像前缀</span>
+          <input class="input" style="flex:1" value="https://gh-proxy.com, https://ghfast.top"></div>
+        <div class="setting-row"><span></span><button class="btn">保存下载源</button></div>
+
+        <div class="section-title">一键部署</div>
+        <div class="deploy-step">
+          <div class="deploy-step-title"><b>安装 Sunshine</b>
+            <span class="deploy-badge ok">已就绪</span><span class="deploy-badge">system</span></div>
+          <p class="muted-sm" style="margin:4px 0 0">从 Nexus 拉取 MSI，校验 SHA256 后静默安装</p>
+        </div>
+        <div class="deploy-step">
+          <div class="deploy-step-title"><b>配置 VB-Cable 音频</b>
+            <span class="deploy-badge warn">需提权</span><span class="deploy-badge">driver</span>
+            <span class="deploy-badge bad">破坏性</span></div>
+          <p class="muted-sm" style="margin:4px 0 0">安装虚拟声卡并切换默认输出</p>
+          <div class="deploy-log">[11:02:13] checking artifact sha256… OK
+[11:02:14] waiting for elevation</div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head"><h2>版本更新</h2></div>
+        <div class="setting-row"><span>当前版本</span><span class="mono">0.1.0-SNAPSHOT</span></div>
+        <button class="btn">检查更新</button>
+      </section>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ---------- 主题引擎（与 src/theme.js 同逻辑） ---------- */
+const BASE_VARS = { '--radius': '10px', '--r-ctl': '8px' }
+function deriveVars(s) {
+  return {
+    ...BASE_VARS,
+    '--bg': s.bg,
+    '--surface': s.surface,
+    '--surface-2': `color-mix(in srgb, ${s.surface} 88%, ${s.text})`,
+    '--surface-3': `color-mix(in srgb, ${s.surface} 70%, ${s.bg})`,
+    '--surface-deep': `color-mix(in srgb, ${s.bg} 80%, #000)`,
+    '--line': s.line,
+    '--line-strong': `color-mix(in srgb, ${s.line} 70%, ${s.text})`,
+    '--text': s.text,
+    '--text-dim': `color-mix(in srgb, ${s.text} 78%, ${s.surface})`,
+    '--muted': s.muted,
+    '--muted-soft': `color-mix(in srgb, ${s.muted} 70%, ${s.surface})`,
+    '--accent': s.accent,
+    '--accent-hi': `color-mix(in srgb, ${s.accent} 80%, ${s.text})`,
+    '--accent-lo': `color-mix(in srgb, ${s.accent} 80%, #000)`,
+    '--accent-dim': `color-mix(in srgb, ${s.accent} 55%, ${s.surface})`,
+    '--accent-ink': `color-mix(in srgb, ${s.accent} 12%, #000)`,
+    '--on-accent': s.base === 'light' ? '#fff' : `color-mix(in srgb, ${s.accent} 12%, #000)`,
+    '--ok': s.ok, '--warn': s.warn, '--err': s.err,
+    '--ok-soft': `color-mix(in srgb, ${s.ok} 16%, transparent)`,
+    '--ok-line': `color-mix(in srgb, ${s.ok} 35%, transparent)`,
+    '--warn-soft': `color-mix(in srgb, ${s.warn} 14%, transparent)`,
+    '--warn-line': `color-mix(in srgb, ${s.warn} 30%, transparent)`,
+    '--err-soft': `color-mix(in srgb, ${s.err} 16%, transparent)`,
+    '--err-line': `color-mix(in srgb, ${s.err} 35%, transparent)`,
+    '--muted-soft-bg': `color-mix(in srgb, ${s.muted} 14%, transparent)`,
+    '--muted-soft-line': `color-mix(in srgb, ${s.muted} 28%, transparent)`,
+    '--cover-gradient': 'linear-gradient(135deg, var(--surface-2), var(--surface-3))',
+    '--hero-body-gradient': 'linear-gradient(100deg, var(--surface), var(--surface-3))',
+    '--glass-bg': `color-mix(in srgb, ${s.surface} 72%, transparent)`,
+    '--overlay': 'color-mix(in srgb, #000 58%, transparent)',
+    '--shadow': `0 10px 30px color-mix(in srgb, ${s.bg} 70%, #000)`,
+  }
+}
+const SEEDS = {
+  obsidian: { bg:'#0e1013', surface:'#16191f', line:'#262b33', text:'#e9e6e0', muted:'#8a9099',
+    accent:'#d8a05c', ok:'#6fbf8b', warn:'#d98a5c', err:'#d96c6c', base:'dark' },
+  midnight: { bg:'#0b1119', surface:'#121a24', line:'#1e2a38', text:'#e2ecf5', muted:'#7d8fa3',
+    accent:'#4fa8c8', ok:'#5ec49a', warn:'#d99a5c', err:'#d96c7c', base:'dark' },
+  sakura: { bg:'#140f14', surface:'#1d1620', line:'#2d2232', text:'#f0e6ee', muted:'#9b8aa0',
+    accent:'#e08aa8', ok:'#8fc79a', warn:'#d9a05c', err:'#e07a8a', base:'dark' },
+  paper: { bg:'#f6f2ea', surface:'#fffdf8', line:'#ddd5c8', text:'#2b2620', muted:'#7a7166',
+    accent:'#a0682c', ok:'#3f8a5c', warn:'#b5713c', err:'#b04646', base:'light' },
+}
+const THEMES = [
+  { id:'obsidian', name:'黑曜石', builtin:true },
+  { id:'midnight', name:'深海', builtin:true },
+  { id:'sakura', name:'樱', builtin:true },
+  { id:'paper', name:'素纸', builtin:true },
+]
+let customThemes = []
+let currentId = 'obsidian'
+let appliedKeys = []
+
+function resolveTheme(id) {
+  return [...THEMES, ...customThemes].find(t => t.id === id) || THEMES[0]
+}
+function themeVars(t) {
+  if (t.builtin && t.id === 'obsidian') return {}   // 用 :root 默认
+  if (t.builtin) return deriveVars(SEEDS[t.id])
+  return t.vars
+}
+function applyTheme(id) {
+  const t = resolveTheme(id)
+  const base = t.builtin ? SEEDS[t.id].base : t.base
+  const root = document.documentElement
+  for (const k of appliedKeys) root.style.removeProperty(k)
+  appliedKeys = []
+  const vars = themeVars(t)
+  for (const [k, v] of Object.entries(vars)) {
+    if (k.startsWith('--')) { root.style.setProperty(k, v); appliedKeys.push(k) }
+  }
+  root.dataset.theme = t.id
+  root.dataset.themeBase = base
+  currentId = id
+  renderThemeGrid()
+}
+
+/* ---------- 页面切换 ---------- */
+function showView(v, sync) {
+  document.querySelectorAll('#nav button').forEach(x =>
+    x.classList.toggle('on', x.dataset.view === v))
+  for (const name of ['library', 'list', 'settings', 'admin']) {
+    document.getElementById('view-' + name).style.display = name === v ? '' : 'none'
+  }
+  if (v === 'list') initListOnce(sync)
+  // 必须等新视图布局完成再回顶：否则滚动位置会按旧页面高度被钳制到新页面底部
+  requestAnimationFrame(() => requestAnimationFrame(() => window.scrollTo(0, 0)))
+}
+
+document.getElementById('nav').addEventListener('click', (e) => {
+  const b = e.target.closest('button'); if (!b) return
+  showView(b.dataset.view)
+})
+document.getElementById('gotoAll').addEventListener('click', (e) => {
+  e.preventDefault()
+  showView('list')
+})
+document.getElementById('btnAdminEntry').addEventListener('click', () => {
+  document.querySelector('#nav button[data-view="admin"]').click()
+})
+
+/* ---------- 游戏数据 ---------- */
+const NAMES = [
+  ['示例游戏 A','示例会社',['校园','恋爱'],'STOPPED','灵','#2b4a6f,#4b7fa8'],
+  ['示例游戏 B','示例会社',['奇幻','悬疑'],'RUNNING','注','#3a7bd5,#00d2ff'],
+  ['夏空彼方','ゆずソフト',['日常','恋爱'],'STOPPED','夏','#e07a5f,#f2cc8f'],
+  ['星辰的低语','Navel',['奇幻'],'STOPPED','星','#5f4b8b,#9b7bd4'],
+  ['雨声与咖啡','minori',['日常','汉化'],'FAILED','雨','#3a4a5a,#6b8299'],
+  ['白色的季节','示例会社',['校园'],'STOPPED','白','#b8c4cc,#eef2f5'],
+  ['记忆的碎片','示例会社',['悬疑'],'STOPPED','记','#2f4858,#7f9eae'],
+  ['黄昏电车','ゆずソフト',['日常'],'STOPPED','电','#8b5a2b,#d9a05c'],
+  ['花与剑','Navel',['奇幻','恋爱'],'STOPPED','花','#a8326a,#e08aa8'],
+  ['深海回响','minori',['悬疑'],'STOPPED','深','#0f3b52,#1e6f8c'],
+  ['午后的天台','示例会社',['校园','日常'],'STOPPED','午','#8a9a5b,#c3cf8a'],
+  ['第七封信','示例会社',['悬疑','汉化'],'STOPPED','信','#6b4a2b,#b98a5c'],
+  ['星屑咖啡厅','ゆずソフト',['日常','恋爱'],'STOPPED','咖','#7a5c8a,#b58ac0'],
+  ['无声的雪','Navel',['奇幻'],'STOPPED','雪','#4a5a6b,#8a9aab'],
+  ['旧书店的猫','minori',['日常'],'STOPPED','猫','#5b4a3a,#a08a6b'],
+  ['樱色约定','示例会社',['校园','恋爱'],'STOPPED','约','#c46b8a,#f0b8cc'],
+  ['地下室','示例会社',['悬疑'],'STOPPED','地','#2a2a2a,#5a5a5a'],
+  ['夏日的终点','ゆずソフト',['日常'],'STOPPED','终','#3a7a8a,#7ac0cc'],
+  ['幻想图书馆','Navel',['奇幻','汉化'],'STOPPED','书','#5a3a7a,#9a6ac0'],
+  ['雨后的彩虹','minori',['校园'],'STOPPED','虹','#4a6a8a,#8ac0d9'],
+  ['明日之诗','示例会社',['恋爱'],'STOPPED','诗','#8a4a4a,#c08a8a'],
+  ['星海旅人','示例会社',['奇幻'],'STOPPED','海','#1a3a6a,#4a7ac0'],
+  ['雪融之时','ゆずソフト',['日常','汉化'],'STOPPED','融','#6a8a9a,#aac0cc'],
+  ['终章的钟','Navel',['悬疑'],'STOPPED','钟','#4a3a2a,#8a7a5a'],
+]
+const STATE = { RUNNING:'运行中', STOPPED:'已停止', FAILED:'异常' }
+
+/** 卡片模板：首页推荐与列表页共用 */
+function cardHtml([name, co, tags, state, ch, grad]) {
+  return `
+    <article class="card">
+      <div class="cover">
+        <div class="art" style="background:linear-gradient(135deg,${grad})">${ch}</div>
+        <span class="badge ${state}">${STATE[state]}</span>
+      </div>
+      <div class="card-body">
+        <div class="card-title">
+          <span class="card-icon" style="background:linear-gradient(135deg,${grad})">${ch}</span>
+          ${name}
+        </div>
+        <div class="card-company">${co}</div>
+        <div class="card-tags">${tags.map(t => `<span class="mini-tag">${t}</span>`).join('')}</div>
+        <div class="card-meta">1280×720 · 累计 ${Math.floor(Math.random()*40)} 小时</div>
+        <div class="card-actions">
+          <button class="mini-btn ${state === 'RUNNING' ? 'danger' : ''}">${state === 'RUNNING' ? '停止' : '启动'}</button>
+          ${state === 'RUNNING' ? '<button class="mini-btn primary">进入</button>' : ''}
+        </div>
+      </div>
+    </article>`
+}
+
+/* ---------- 首页：推荐 10 款 ---------- */
+/* 预览里按「最近游玩 > 时长最长 > 新加入」的现有 HeroService 顺序取前 10，
+   接后端后应由 /api/recommend 返回，数组顺序即展示顺序 */
+const RECOMMEND_COUNT = 10
+function renderHome() {
+  document.getElementById('homeGrid').innerHTML =
+    NAMES.slice(0, RECOMMEND_COUNT).map(cardHtml).join('')
+}
+renderHome()
+
+/* ---------- 列表页：分批加载 ---------- */
+const PAGE_SIZE = 12
+let loaded = 0
+let loading = false
+
+function appendPage() {
+  if (loading || loaded >= NAMES.length) return
+  loading = true
+  const more = document.getElementById('loadMore')
+  more.textContent = '加载中…'
+  // 模拟网络延迟，便于观察加载态
+  setTimeout(renderNextBatch, 220)
+}
+
+/** 真正插入下一批；拆出来便于预览截图时同步调用 */
+function renderNextBatch() {
+  if (loaded >= NAMES.length) { loading = false; return }
+  const batch = NAMES.slice(loaded, loaded + PAGE_SIZE)
+  document.getElementById('grid').insertAdjacentHTML('beforeend', batch.map(cardHtml).join(''))
+  loaded += batch.length
+  loading = false
+  document.getElementById('listCount').textContent = `共 ${NAMES.length} 款 · 已显示 ${loaded}`
+  const more = document.getElementById('loadMore')
+  more.textContent = loaded >= NAMES.length ? '已经到底了' : '继续滚动加载…'
+  more.classList.toggle('done', loaded >= NAMES.length)
+}
+
+/* 列表页进入时才加载第一批；离开时保留已加载内容 */
+let listInited = false
+function initListOnce(sync) {
+  if (listInited) return
+  listInited = true
+  if (sync) {
+    renderNextBatch()
+  } else {
+    appendPage()
+  }
+  const sentinel = document.getElementById('loadMore')
+  new IntersectionObserver((entries) => {
+    if (entries.some((e) => e.isIntersecting)) appendPage()
+  }, { rootMargin: '200px' }).observe(sentinel)
+}
+
+/* ---------- 密度 ---------- */
+document.getElementById('densitySeg').addEventListener('click', (e) => {
+  const b = e.target.closest('button'); if (!b) return
+  document.querySelectorAll('#densitySeg button').forEach(x => x.classList.toggle('on', x === b))
+  document.getElementById('grid').dataset.density = b.dataset.density
+})
+
+/* ---------- Hero 档位（首页） ---------- */
+let heroMode = 'medium'
+function effectiveHero() {
+  if (heroMode !== 'auto') return heroMode
+  // 首页固定展示 10 款推荐，'auto' 一律落在「中」档
+  return 'medium'
+}
+function renderHero() {
+  const size = effectiveHero()
+  const big = document.getElementById('hero')
+  big.style.display = size === 'off' ? 'none' : 'grid'
+  big.dataset.size = size
+}
+function bindSeg(id, onPick) {
+  document.getElementById(id).addEventListener('click', (e) => {
+    const b = e.target.closest('button'); if (!b) return
+    document.querySelectorAll(`#${id} button`).forEach(x => x.classList.toggle('on', x === b))
+    onPick(b)
+  })
+}
+bindSeg('heroSetting', (b) => { heroMode = b.dataset.size; renderHero() })
+renderHero()
+
+/* ---------- 标签折叠 ---------- */
+document.getElementById('tagsToggle').addEventListener('click', () => {
+  const row = document.getElementById('tagsRow')
+  const open = row.style.display !== 'none'
+  row.style.display = open ? 'none' : 'flex'
+  document.getElementById('tagsToggle').firstChild.textContent = open ? '标签 ▾ ' : '标签 ▴ '
+})
+
+/* ---------- 主题 ---------- */
+function renderThemeGrid() {
+  const grid = document.getElementById('themeGrid')
+  const all = [...THEMES, ...customThemes]
+  grid.innerHTML = all.map(t => {
+    const v = themeVars(t)
+    const bg = v['--bg'] || '#0e1013'
+    const sf = v['--surface'] || '#16191f'
+    const ln = v['--line'] || '#262b33'
+    const tx = v['--text'] || '#e9e6e0'
+    const ac = v['--accent'] || '#d8a05c'
+    return `<button class="theme-card ${t.id === currentId ? 'active' : ''}" data-id="${t.id}">
+      <span class="theme-swatch" style="background:${bg};border-color:${ln}">
+        <span class="theme-swatch-surface" style="background:${sf};color:${tx}">Aa</span>
+        <span class="theme-swatch-accent" style="background:${ac}"></span>
+      </span>
+      <span class="theme-name">${t.name}</span>
+      <span class="theme-tag">${t.builtin ? '内置' : '自定义'}</span>
+    </button>`
+  }).join('')
+  document.getElementById('themeGrid').querySelectorAll('.theme-card').forEach(el => {
+    el.addEventListener('click', () => applyTheme(el.dataset.id))
+  })
+  const cur = resolveTheme(currentId)
+  document.getElementById('delBtn').style.display =
+    (!cur.builtin) ? '' : 'none'
+  // 顶部主题快捷键：用原生 select，避免顶栏被四套主题名撑破换行
+  const sel = document.getElementById('themeQuick')
+  sel.innerHTML = all.map(t =>
+    `<option value="${t.id}" ${t.id === currentId ? 'selected' : ''}>${t.name}</option>`).join('')
+  sel.onchange = () => applyTheme(sel.value)
+}
+
+const FIELDS = [['bg','背景'],['surface','表面'],['line','边框'],['text','正文'],
+  ['muted','次要文字'],['accent','强调色'],['ok','成功'],['warn','警告'],['err','错误']]
+let editing = null
+
+document.getElementById('dupBtn').addEventListener('click', () => {
+  const cur = resolveTheme(currentId)
+  const seed = cur.builtin ? { ...SEEDS[cur.id] } : { ...cur.seed }
+  delete seed.base
+  editing = { id: 'custom-' + Date.now().toString(36), name: cur.name + '（副本）',
+    base: cur.builtin ? SEEDS[cur.id].base : cur.base, seed }
+  openEditor()
+})
+
+function openEditor() {
+  document.getElementById('editor').style.display = ''
+  document.getElementById('edName').value = editing.name
+  document.querySelectorAll('#edBase button').forEach(b =>
+    b.classList.toggle('on', b.dataset.base === editing.base))
+  document.getElementById('edFields').innerHTML = FIELDS.map(([k, label]) => `
+    <label class="theme-field">
+      <span>${label}</span>
+      <input type="color" data-k="${k}" value="${editing.seed[k]}">
+      <code data-c="${k}">${editing.seed[k]}</code>
+    </label>`).join('')
+  document.getElementById('edFields').addEventListener('input', onFieldInput)
+  updatePreview()
+}
+function onFieldInput(e) {
+  const k = e.target.dataset.k; if (!k) return
+  editing.seed[k] = e.target.value
+  document.querySelector(`[data-c="${k}"]`).textContent = e.target.value
+  updatePreview()
+}
+function updatePreview() {
+  const v = deriveVars(editing.seed)
+  const p = document.getElementById('edPreview')
+  p.style.setProperty('--p-bg', v['--bg'])
+  p.style.setProperty('--p-surface', v['--surface'])
+  p.style.setProperty('--p-line', v['--line'])
+  p.style.setProperty('--p-text', v['--text'])
+  p.style.setProperty('--p-muted', v['--muted'])
+  p.style.setProperty('--p-accent', v['--accent'])
+}
+document.getElementById('edBase').addEventListener('click', (e) => {
+  const b = e.target.closest('button'); if (!b) return
+  editing.base = b.dataset.base
+  document.querySelectorAll('#edBase button').forEach(x => x.classList.toggle('on', x === b))
+})
+document.getElementById('edCancel').addEventListener('click', () => {
+  document.getElementById('editor').style.display = 'none'
+})
+document.getElementById('edSave').addEventListener('click', () => {
+  const name = document.getElementById('edName').value.trim() || '未命名主题'
+  const theme = { id: editing.id, name, builtin: false, base: editing.base,
+    seed: { ...editing.seed }, vars: deriveVars({ ...editing.seed }) }
+  const i = customThemes.findIndex(t => t.id === theme.id)
+  if (i >= 0) customThemes.splice(i, 1, theme); else customThemes.push(theme)
+  document.getElementById('editor').style.display = 'none'
+  applyTheme(theme.id)
+})
+document.getElementById('delBtn').addEventListener('click', () => {
+  customThemes = customThemes.filter(t => t.id !== currentId)
+  applyTheme('obsidian')
+})
+
+applyTheme('obsidian')
+
+/* ---------- 后台解锁 ---------- */
+document.getElementById('adminUnlock').addEventListener('click', () => {
+  const v = document.getElementById('adminToken').value.trim()
+  if (!v) return
+  document.getElementById('adminLock').style.display = 'none'
+  document.getElementById('adminBody').style.display = ''
+})
+document.getElementById('adminLockBtn').addEventListener('click', () => {
+  document.getElementById('adminLock').style.display = ''
+  document.getElementById('adminBody').style.display = 'none'
+  document.getElementById('adminToken').value = ''
+})
+
+/* ---------- 预览用：URL 参数直接进入某个状态 ---------- */
+/* 例：?v=list&theme=paper&density=compact&hero=medium&admin=1&edit=1 */
+;(function initFromQuery() {
+  const q = new URLSearchParams(location.search)
+  const theme = q.get('theme')
+  if (theme && resolveTheme(theme).id === theme) applyTheme(theme)
+  const v = q.get('v')
+  if (v) showView(v, true)
+  const density = q.get('density')
+  if (density) document.querySelector(`#densitySeg button[data-density="${density}"]`)?.click()
+  const hero = q.get('hero')
+  if (hero) document.querySelector(`#heroSetting button[data-size="${hero}"]`)?.click()
+  if (q.get('admin')) {
+    document.getElementById('adminToken').value = 'preview'
+    document.getElementById('adminUnlock').click()
+  }
+  if (q.get('edit')) document.getElementById('dupBtn').click()
+})()
+</script>
+</body>
+</html>

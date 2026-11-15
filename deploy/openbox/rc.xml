@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<openbox_config xmlns="http://openbox.org/3.4/rc">
+  <theme>
+    <name>Clearlooks</name>
+    <titleLayout></titleLayout>
+    <keepBorder>no</keepBorder>
+    <animateIconify>no</animateIconify>
+  </theme>
+  <desktops>
+    <number>1</number>
+    <firstdesk>1</firstdesk>
+    <names><name>gal</name></names>
+    <popupTime>0</popupTime>
+  </desktops>
+  <resize>
+    <drawContents>no</drawContents>
+    <popupShow>Never</popupShow>
+  </resize>
+  <keyboard>
+    <chainQuitKey>C-g</chainQuitKey>
+  </keyboard>
+  <mouse>
+    <dragThreshold>8</dragThreshold>
+  </mouse>
+  <applications>
+    <application class="*">
+      <decor>no</decor>
+      <focus>yes</focus>
+    </application>
+  </applications>
+</openbox_config>

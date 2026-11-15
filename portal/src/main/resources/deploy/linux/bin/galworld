@@ -1,0 +1,196 @@
+#!/usr/bin/env bash
+# Gal World - 游戏注册 CLI
+# 用法:
+#   galworld list
+#   galworld add <id> --name "显示名" --exe <绝对路径> [--width 1280] [--height 720] [--lang zh_CN.UTF-8]
+#   galworld remove <id>
+#   galworld start <id>
+#   galworld stop <id>
+#   galworld status [<id>]
+#   galworld slots            查看 loopback 通道占用
+
+set -euo pipefail
+
+GALROOT="${GALWORLD_ROOT:-$HOME/galworld}"
+BIN="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+GAMES="$GALROOT/games"
+
+mkdir -p "$GAMES"
+
+port_for_display() { echo $((9000 + $1)); }
+
+next_free_display() {
+  local n=2
+  while [[ -d "$GAMES" ]] && grep -qs "^DISPLAY_NUM=$n$" "$GAMES"/*/game.env; do
+    n=$((n + 1))
+  done
+  echo "$n"
+}
+
+# 每张 snd-aloop 卡有 8 个通道（pcm_substreams 上限就是 8）。
+# 超过 8 个游戏要靠多装几张卡扩容，部署脚本默认加载 index=0,1 两张。
+SLOTS_PER_CARD=8
+LOOPBACK_CARDS=2
+
+# 输出 "card slot"；通道用满时返回非零
+next_free_channel() {
+  local card slot env c s taken
+  for (( card = 0; card < LOOPBACK_CARDS; card++ )); do
+    for (( slot = 0; slot < SLOTS_PER_CARD; slot++ )); do
+      taken=0
+      for env in "$GAMES"/*/game.env; do
+        [[ -r "$env" ]] || continue
+        c=$(grep -m1 "^LOOPBACK_CARD=" "$env" 2>/dev/null | cut -d= -f2)
+        s=$(grep -m1 "^LOOPBACK_SLOT=" "$env" 2>/dev/null | cut -d= -f2)
+        # 老 game.env 没有 LOOPBACK_CARD：按 card 0 处理，与 run-game.sh 默认一致
+        [[ -z "$c" ]] && c=0
+        if [[ "$c" == "$card" && "$s" == "$slot" ]]; then
+          taken=1
+          break
+        fi
+      done
+      if [[ "$taken" -eq 0 ]]; then
+        echo "$card $slot"
+        return 0
+      fi
+    done
+  done
+  return 1
+}
+
+cmd_list() {
+  [[ -d "$GAMES" ]] || return 0
+  printf "%-14s %-24s %-8s %-6s %-6s %s\n" ID NAME PORT DISP SLOT STATE
+  for env in "$GAMES"/*/game.env; do
+    [[ -r "$env" ]] || continue
+    ( set -a; . "$env"; set +a
+      state="stopped"
+      if systemctl --user is-active --quiet "galworld-game@$GAME_ID.service"; then state="running"; fi
+      printf "%-14s %-24s %-8s %-6s %-6s %s\n" \
+        "$GAME_ID" "$GAME_NAME" "$PORT" "$DISPLAY_NUM" "$LOOPBACK_SLOT" "$state"
+    )
+  done
+}
+
+cmd_add() {
+  local id="${1:?usage: galworld add <id> --name N --exe P}"; shift
+  local name="" exe="" width=1280 height=720 lang=""
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --name) name="$2"; shift 2 ;;
+      --exe) exe="$2"; shift 2 ;;
+      --width) width="$2"; shift 2 ;;
+      --height) height="$2"; shift 2 ;;
+      --lang) lang="$2"; shift 2 ;;
+      *) echo "unknown option $1" >&2; exit 1 ;;
+    esac
+  done
+  [[ -n "$name" && -n "$exe" ]] || { echo "--name and --exe required" >&2; exit 1; }
+  [[ -f "$exe" ]] || { echo "exe not found: $exe" >&2; exit 1; }
+  # 中文汉化补丁走 ANSI/CP936 时需要 zh_CN.UTF-8；日文原版保持空（默认 C.UTF-8）
+  case "$lang" in
+    ""|zh_CN.UTF-8) ;;
+    *) echo "--lang 只支持 zh_CN.UTF-8" >&2; exit 1 ;;
+  esac
+
+  local dir="$GAMES/$id"
+  [[ -d "$dir" ]] && { echo "game $id already exists" >&2; exit 1; }
+  mkdir -p "$dir"
+
+  local disp channel
+  disp="$(next_free_display)"
+  if ! channel="$(next_free_channel)"; then
+    echo "loopback 通道已用满（${LOOPBACK_CARDS} 张卡 × ${SLOTS_PER_CARD} 个），无法再接新游戏" >&2
+    rmdir "$dir" 2>/dev/null || true
+    exit 1
+  fi
+  local slot card
+  read -r card slot <<<"$channel"
+
+  cat > "$dir/game.env" <<EOF
+GAME_ID=$id
+GAME_NAME=$name
+EXE=$exe
+WORKDIR=$(dirname "$exe")
+WINEPREFIX=$dir/wineprefix
+WIDTH=$width
+HEIGHT=$height
+DISPLAY_NUM=$disp
+PORT=$(port_for_display "$disp")
+LOOPBACK_SLOT=$slot
+LOOPBACK_CARD=$card
+FRAMERATE=30
+GAME_LANG=$lang
+EXTRA_ENV=
+EOF
+  echo "registered $id (display :$disp, port $(port_for_display "$disp"), card $card slot $slot)"
+}
+
+cmd_remove() {
+  local id="${1:?usage: galworld remove <id>}"
+  local dir="$GAMES/$id"
+  [[ -d "$dir" ]] || { echo "no such game: $id" >&2; exit 1; }
+  "$BIN/stop-game.sh" "$id" 2>/dev/null || true
+  rm -rf "$dir"
+  echo "removed $id"
+}
+
+cmd_start() {
+  local id="${1:?usage: galworld start <id>}"
+  systemctl --user start "galworld-game@$id.service"
+}
+
+cmd_stop() {
+  local id="${1:?usage: galworld stop <id>}"
+  systemctl --user stop "galworld-game@$id.service"
+}
+
+cmd_status() {
+  local id="${1:-}"
+  if [[ -n "$id" ]]; then
+    ( set -a; . "$GAMES/$id/game.env"; set +a
+      echo "game      : $GAME_ID"
+      echo "display   : :$DISPLAY_NUM"
+      echo "port      : $PORT"
+      echo "slot      : $LOOPBACK_SLOT"
+      echo "wineprefix: $WINEPREFIX"
+      if systemctl --user is-active --quiet "galworld-game@$GAME_ID.service"; then echo "state     : running"
+      else echo "state     : stopped"; fi
+      ss -lnt 2>/dev/null | grep ":$PORT " || echo "port      : not listening"
+    )
+  else
+    cmd_list
+  fi
+}
+
+cmd_slots() {
+  local card slot u
+  printf "%-12s %s\n" "CHANNEL" "GAME"
+  for (( card = 0; card < LOOPBACK_CARDS; card++ )); do
+    for (( slot = 0; slot < SLOTS_PER_CARD; slot++ )); do
+      u=$(for env in "$GAMES"/*/game.env; do
+            [[ -r "$env" ]] || continue
+            local c s
+            c=$(grep -m1 "^LOOPBACK_CARD=" "$env" 2>/dev/null | cut -d= -f2)
+            s=$(grep -m1 "^LOOPBACK_SLOT=" "$env" 2>/dev/null | cut -d= -f2)
+            [[ -z "$c" ]] && c=0
+            if [[ "$c" == "$card" && "$s" == "$slot" ]]; then
+              basename "$(dirname "$env")"
+              break
+            fi
+          done | head -1)
+      printf "%-12s %s\n" "hw:${card},0,${slot}" "${u:--}"
+    done
+  done
+}
+
+case "${1:-}" in
+  list) shift; cmd_list ;;
+  add) shift; cmd_add "$@" ;;
+  remove|rm) shift; cmd_remove "$@" ;;
+  start) shift; cmd_start "$@" ;;
+  stop) shift; cmd_stop "$@" ;;
+  status) shift; cmd_status "$@" ;;
+  slots) shift; cmd_slots ;;
+  *) sed -n '2,20p' "${BASH_SOURCE[0]}"; exit 1 ;;
+esac

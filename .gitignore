@@ -1,0 +1,65 @@
+# 游戏本体与资源（体积大，不进版本库）
+/games/
+*.pfs
+*.pfs.*
+*.xp3
+*.dat
+*.ksd
+*.exe
+*.dll
+*.7z
+*.rar
+
+# 运行时产物
+tmp/
+*.log
+*.png
+*.jpg
+*.xwd
+*.wav
+*.raw
+
+# 凭据
+*.key
+*.crt
+*.p12
+*.pfx
+*.jks
+*.keystore
+.env
+game.env
+# 每个游戏的 game.env 是实例状态（显示号/端口/slot/绝对路径），由接入向导生成，不入库
+# 仅保留模板，供本地 dev 首次生成
+!portal/devdata/games/**/game.env.example
+
+# 编辑器
+.vscode/
+.idea/
+*.iml
+.DS_Store
+Thumbs.db
+
+# 构建产物与开发期运行时数据
+/dist/
+portal/target/
+portal/frontend/node_modules/
+portal/frontend/dist/
+portal/src/main/resources/static/
+portal/devdata/data/
+
+# 排查用临时产物（截图、抓包片段、一次性脚本）
+.diag/
+
+# 本地验证用的临时根目录（Windows 验证时的门户快照、日志）
+/.tmp/
+
+# 内部运维文档：保留在本地，不随仓库分发
+docs/internal/
+
+# 开源前自检产物
+.git.old/
+oss-preflight-terms.txt
+
+# 例外：README 与文档的配图需要入库（上面的 *.png / *.jpg 会拦住它们）
+!docs/images/
+!docs/images/**
