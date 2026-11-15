@@ -1,80 +1,92 @@
-# 参与贡献（Contributing）
+# Contributing
 
-先说明这个项目的定位，能省掉后面很多误会：
+English | [简体中文](CONTRIBUTING.zh-CN.md)
 
-Gal World 是按个人需求长出来的自建方案，**不是通用产品**，不承诺开箱即用、不承诺向后兼容、
-也不保证每个平台组合都有人验证过。欢迎 issue 与 PR，但维护者优先处理自己用得上的场景。
+A note on what this project is, to save misunderstandings later:
 
-## 可以提什么
+Gal World is a self-built solution grown out of personal needs. It is **not a general-purpose
+product**: it does not promise out-of-the-box operation or backward compatibility, and not every
+platform combination has been verified by anyone. Issues and PRs are welcome, but the maintainer
+prioritizes scenarios they actually use.
 
-- 在**你自己跑通的环境**上遇到的 bug，附复现步骤、日志与版本号；
-- 文档错误、命令跑不通、链接失效；
-- 平台适配（发行版差异、显卡/声卡组合、Wine 版本行为）；
-- 让部署更稳、更可回滚的改动。
+## What to report
 
-## 提之前做两件事
+- Bugs on **an environment you got running yourself**, with reproduction steps, logs and version;
+- Documentation errors, broken commands, dead links;
+- Platform adaptations (distribution differences, GPU / sound card combinations, Wine behavior);
+- Changes that make deployment more robust and rollback-friendly.
 
-1. 先搜现有 issue，这类自建项目重复问题很多；
-2. 确认不是「已知限制」。`README.md` 的「已知限制」表里列了画质、并发、HTTPS 等已经写明的边界；
-   安全相关的设计取舍见 [`SECURITY.md`](SECURITY.md)。
+## Before you open an issue
 
-## 开发环境
+1. Search existing issues — self-hosted projects get many duplicates;
+2. Check the known limitations in [`docs/OPERATIONS.md`](docs/OPERATIONS.md) (image quality,
+   concurrency, HTTPS, and other stated boundaries); security design trade-offs are in
+   [`SECURITY.md`](SECURITY.md).
 
-| 项 | 要求 |
+## Development environment
+
+| Item | Requirement |
 |---|---|
-| JDK | 17+（后端编译目标 17） |
-| Maven | 可选，仓库带 Maven Wrapper（`./mvnw`），首次运行会自动下载 |
-| Node | 20+（只构建前端时需要） |
+| JDK | 17+ (backend compiles to 17) |
+| Maven | Optional; the repository ships a Maven Wrapper (`./mvnw`) that downloads on first run |
+| Node | 20+ (needed only to build the frontend) |
 
-跑测试**不需要**游戏本体、不需要 Wine、不需要图形环境：后端测试用 mock，
-前端测试是纯 Node 单测。
+Running tests **does not** need game files, Wine or a graphical environment: backend tests use mocks,
+frontend tests are plain Node unit tests.
 
-## 构建与测试
+## Build and test
 
 ```bash
-# 一次跑完：后端测试 + 前端测试 + 主题门禁（推荐，CI 用的也是这套）
+# Everything at once: backend tests + frontend tests + theme gate (recommended; CI uses this)
 bash tools/ci.sh
 
-# 单独跑
-cd portal && ../mvnw -B test                    # 后端测试
-cd portal/frontend && npm ci && npm test        # 前端单测
-cd portal/frontend && npm run check:theme       # 主题变量门禁
+# Individually
+cd portal && ../mvnw -B test                    # backend tests
+cd portal/frontend && npm ci && npm test        # frontend unit tests
+cd portal/frontend && npm run check:theme       # theme variable gate
 ```
 
-打包（会先构建前端再打 jar）：
+Packaging (builds the frontend first, then the jar):
 
 ```bash
 cd portal/frontend && npm ci && npm run build
-cd .. && ../mvnw -DskipTests package            # 产物：portal/target/gal-world-portal-<version>.jar
+cd .. && ../mvnw -DskipTests package            # artifact: portal/target/gal-world-portal-<version>.jar
 ```
 
-## 改代码前请先读
+## Read before changing code
 
-- `README.md` 的「架构」：Portal 与串流链路的分工；
-- `docs/ENVIRONMENT.md`：平台差异与依赖；
-- `AGENTS.md`：架构边界与几条硬规则（版本号唯一来源、每游戏资源隔离、存档恢复五道保护、
-  前端产物不入库、第三方依赖要登记）。这份文件是写给 AI 编码代理的，但规则同样约束人。
+- Architecture in [`README.md`](README.md): how the portal and the streaming pipeline split work;
+- [`docs/ENVIRONMENT.md`](docs/ENVIRONMENT.md): platform differences and dependencies;
+- [`AGENTS.md`](AGENTS.md): architectural boundaries and hard rules (single source of truth for the
+  version, per-game resource isolation, five save-restore guards, frontend build output never
+  committed, third-party dependencies must be registered). It is written for AI coding agents, but the
+  rules bind humans too.
 
-几条最容易踩的：
+The easiest ones to trip over:
 
-1. **版本号只写 `portal/pom.xml` 的 `<version>` 一处**，不要在脚本或文档里硬编码；
-2. **不要硬编码版本号或内网地址**，走环境变量（清单见 `deploy.sh` 头部）；
-3. **新增前端页面只用主题变量**，写死颜色会让 `check:theme` 失败；
-4. **新增第三方依赖要同步 `THIRD-PARTY-NOTICES.md` 与 `licenses/`**——构建期的
-   `license-maven-plugin` 只生成报告，漏登记不会让构建失败，必须人工核对；
-5. **不要提交游戏本体、汉化补丁、游戏素材**：版权属于原作者与汉化组，仓库只放平台代码。
+1. **Write the version only in `<version>` of `portal/pom.xml`** — never hardcode it in scripts or docs;
+2. **Do not hardcode versions or internal addresses**; use environment variables (list at the top of
+   `deploy.sh`);
+3. **New frontend pages must use theme variables only**; hardcoded colors fail `check:theme`;
+4. **New third-party dependencies must be mirrored into `THIRD-PARTY-NOTICES.md` and `licenses/`** —
+   the build-time `license-maven-plugin` only generates a report and will not fail on omissions, so
+   manual review is required;
+5. **Never commit game files, localization patches or game assets**: copyright belongs to the original
+   authors and localization groups; this repository holds platform code only.
 
-## 提交与 PR
+## Commits and PRs
 
-- 一个提交只做一件事，提交信息说清「为什么」而不只是「改了什么」；
-- PR 描述里写：复现/动机、你实际跑过的验证（贴 `tools/ci.sh` 或 `mvn test` 结果）、
-  涉及系统状态的改动要写清风险；
-- 动到 `deploy.sh`、`deploy/win/*.ps1`、`uninstall.sh` 这类会改系统状态的脚本时，
-  请说明测过的操作系统与版本；
-- 不要为了「跑通」而放宽 `minFromVersion`、跳过 SHA256 校验或关掉鉴权。
+- One commit does one thing; the message explains **why**, not just what changed;
+- In the PR description, include: reproduction / motivation, the verification you actually ran (paste
+  `tools/ci.sh` or `mvn test` output), and the risks of changes that touch system state;
+- When changing `deploy.sh`, `deploy/win/*.ps1`, `uninstall.sh` and similar system-state scripts,
+  state which OS and version you tested on;
+- Do not relax `minFromVersion`, skip SHA256 verification or disable authentication just to make
+  something pass.
 
-## 许可
+## License
 
-项目以 [MIT](LICENSE) 发布。你提交的贡献按「inbound = outbound」处理：
-**提交即表示你同意该贡献以 MIT 许可证随本项目分发**，不需要额外签署 CLA，
-但请确保代码是你自己写的、或来自与本项目许可证兼容的来源。
+The project is released under [MIT](LICENSE). Contributions are handled as "inbound = outbound":
+**submitting a contribution means you agree it is distributed with this project under the MIT
+License**. No CLA is required, but make sure the code is your own or comes from a source compatible
+with this project's license.

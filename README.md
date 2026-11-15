@@ -80,7 +80,8 @@ Commands: `./deploy.sh --skip-deps` (setup only), `./uninstall.sh --dry-run` (pr
 - [`docs/PORTAL.md`](docs/PORTAL.md) — routes, playtime, canvas calibration, media
 - [`docs/ENVIRONMENT.md`](docs/ENVIRONMENT.md) — environment probing, Linux / Windows setup
 - [`docs/GAME-IMPORT-PLAN.md`](docs/GAME-IMPORT-PLAN.md) — import wizard design
-- [`CONTRIBUTING.md`](CONTRIBUTING.md) · [`SECURITY.md`](SECURITY.md) · [`CHANGELOG.md`](CHANGELOG.md)
+- [`CONTRIBUTING.md`](CONTRIBUTING.md) · [`SECURITY.md`](SECURITY.md) ·
+  [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md) · [`CHANGELOG.md`](CHANGELOG.md)
 - [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md) — bundled dependencies and licenses
 
 ## License
