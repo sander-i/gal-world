@@ -17,7 +17,7 @@
 # 环境变量:
 #   GALWORLD_ROOT       安装根目录（默认 ~/galworld）
 #   GALWORLD_UNIT       systemd 单元名（默认 galworld-portal）
-#   GALWORLD_CERT_PASS  p12 密码（默认 changeit，需与单元里的 GALWORLD_KEYSTORE_PASSWORD 一致）
+#   GALWORLD_CERT_PASS  p12 密码（默认 changeit；写入 ~/.config/galworld/creds.env，由单元 EnvironmentFile 读取）
 #   GALWORLD_DEPLOY_TOKEN  固定部署令牌；不传则沿用单元里已有的，没有就随机生成一个写进单元
 #   GALWORLD_ARTIFACT_NEXUS / _USER / _PASS  元件仓库地址与只读账号（可选）
 #   GALWORLD_ARTIFACT_PASS_FILE  从文件读取元件仓库密码（避免出现在命令行与 ps 里）
@@ -436,6 +436,16 @@ fi
 if [[ -f "$CREDS_FILE" ]]; then
   EXTRA_ENV+="EnvironmentFile=-$CREDS_FILE"$'\n'
 fi
+# 证书口令同样走 0600 的 EnvironmentFile，避免明文写进 0644 的单元文件
+if [[ "$TLS" -eq 1 ]]; then
+  CREDS_ENV="$CREDS_DIR/creds.env"
+  mkdir -p "$CREDS_DIR"
+  chmod 700 "$CREDS_DIR"
+  (umask 077
+   printf 'GALWORLD_KEYSTORE_PASSWORD=%s\n' "$CERT_PASS" > "$CREDS_ENV")
+  chmod 600 "$CREDS_ENV"
+  EXTRA_ENV+="EnvironmentFile=-$CREDS_ENV"$'\n'
+fi
 cat > "$UNIT_DIR/$UNIT.service" <<EOF
 [Unit]
 Description=Gal World Portal (game library + session control)
@@ -447,7 +457,6 @@ Environment=GALWORLD_ROOT=$ROOT
 Environment=XDG_RUNTIME_DIR=/run/user/%U
 Environment=GALWORLD_TLS=$([[ "$TLS" -eq 1 ]] && echo true || echo false)
 Environment=GALWORLD_KEYSTORE=$KEYSTORE
-Environment=GALWORLD_KEYSTORE_PASSWORD=$CERT_PASS
 Environment=GALWORLD_KEY_ALIAS=galworld
 Environment=GALWORLD_PORTAL_PORT=$PORT
 Environment=GALWORLD_DEPLOY_ALLOW_SUDO_PASSWORD=$ALLOW_SUDO_PASSWORD
