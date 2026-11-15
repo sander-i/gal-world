@@ -59,6 +59,7 @@ docs/internal/
 # 开源前自检产物
 .git.old/
 oss-preflight-terms.txt
+oss-preflight-reports/
 
 # 本机 MCP 配置（含本机绝对路径）
 .mcp.json
