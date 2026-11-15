@@ -80,7 +80,8 @@ cd .. && mvn -DskipTests package
 - [`docs/PORTAL.md`](docs/PORTAL.md)：门户路由、时长口径、画面校准、媒体
 - [`docs/ENVIRONMENT.md`](docs/ENVIRONMENT.md)：环境探测、Linux / Windows 部署
 - [`docs/GAME-IMPORT-PLAN.md`](docs/GAME-IMPORT-PLAN.md)：接入向导设计
-- [`CONTRIBUTING.md`](CONTRIBUTING.md) · [`SECURITY.md`](SECURITY.md) · [`CHANGELOG.md`](CHANGELOG.md)
+- [`CONTRIBUTING.zh-CN.md`](CONTRIBUTING.zh-CN.md) · [`SECURITY.zh-CN.md`](SECURITY.zh-CN.md) ·
+  [`CODE_OF_CONDUCT.zh-CN.md`](CODE_OF_CONDUCT.zh-CN.md) · [`CHANGELOG.md`](CHANGELOG.md)
 - [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md)：随发布物分发的第三方组件与许可证
 
 ## 许可

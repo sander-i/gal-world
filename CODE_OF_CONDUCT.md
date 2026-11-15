@@ -1,61 +1,74 @@
-# 贡献者行为准则（Code of Conduct）
+# Code of Conduct
 
-## 适用范围
+English | [简体中文](CODE_OF_CONDUCT.zh-CN.md)
 
-本准则适用于本项目的所有公共交流场所：仓库的 issue、Pull Request、代码评审意见、提交信息，
-以及代表本项目参与的其他场合（论坛、群组、线下活动等）。
+## Scope
 
-## 我们的期望
+This code applies to all public project spaces: repository issues, pull requests, code review comments,
+commit messages, and other settings where you represent this project (forums, chat groups, in-person
+events, etc.).
 
-这个项目是**单用户自建工具**，由一个维护者在业余时间推进，不承诺开箱即用或向后兼容。
-在这样的前提下，请：
+## Expectations
 
-- **对事不对人**：批评代码、方案、文档，而不是批评写它的人；
-- **先给信息再要结论**：报问题时带上环境、版本、复现步骤和日志（已脱敏）；
-- **尊重维护者的时间**：说明你已经尝试过什么，而不是只写「跑不起来」；
-- **接受「不合并」**：功能请求被拒绝不等于被否定，可能只是不符合项目定位；
-- **帮助后来者**：如果你遇到的问题最终解决了，回来在 issue 里补一句结论。
+This is a **single-user, self-hosted tool** maintained by one person in their spare time, with no
+out-of-the-box or backward-compatibility guarantee. Given that, please:
 
-## 不可接受的行为
+- **Criticize the work, not the person**: critique code, designs and docs, not the people who wrote
+  them;
+- **Give information before asking for conclusions**: when reporting a problem, include environment,
+  version, reproduction steps and (redacted) logs;
+- **Respect the maintainer's time**: say what you already tried instead of only "it doesn't work";
+- **Accept "not merged"**: a rejected feature request is not a rejection of you; it may simply not fit
+  the project's scope;
+- **Help those who come after**: if your problem gets solved, come back and add the conclusion to the
+  issue.
 
-- 人身攻击、侮辱、贬低、歧视性言论（针对性别、年龄、性取向、残障、外貌、种族、宗教、技术水平等）；
-- 性暗示、性骚扰，或在工作场合不合时宜的内容；
-- 未经允许公开他人的私人信息（真实姓名、住址、邮箱、内网地址、截图中的凭据等）；
-- 恶意刷屏、开重复 issue、在多个 issue 里重复同一诉求施压；
-- 在公开 issue 中发布**可利用的安全漏洞细节**（请走 [SECURITY.md](../SECURITY.md) 的流程）；
-- 持续打断、跟踪、纠缠，或在被明确拒绝后继续私下联系；
-- 其他在专业协作场合明显不当的行为。
+## Unacceptable behavior
 
-## 举报
+- Personal attacks, insults, belittling, or discriminatory remarks (based on gender, age, sexual
+  orientation, disability, appearance, race, religion, skill level, etc.);
+- Sexual innuendo, sexual harassment, or content inappropriate for a professional setting;
+- Publishing others' private information without permission (real names, addresses, emails, internal
+  addresses, credentials visible in screenshots, etc.);
+- Malicious spam, duplicate issues, or pushing the same demand across multiple issues;
+- Posting **exploitable security details** in public issues (use the process in
+  [`SECURITY.md`](SECURITY.md));
+- Persistent interruption, stalking, or continued private contact after an explicit refusal;
+- Any other behavior clearly inappropriate in professional collaboration.
 
-如果你遭遇或目击了上述行为：
+## Reporting
 
-1. 新建一个 issue，标题以 `[CONDUCT]` 开头，正文只写「希望私下沟通一件事」，
-   **不要**在公开内容里写具体经过、当事人或证据；
-2. 维护者会回复一个私下渠道，后续细节在那里沟通；
-3. 涉及安全漏洞的，请改用 [SECURITY.md](../SECURITY.md) 的流程。
+If you experience or witness such behavior:
 
-维护者会尽量在 7 天内回应。你的身份会被告知的范围内最小化处理。
+1. Open an issue whose title starts with `[CONDUCT]` and whose body only says that you would like to
+   discuss something privately. **Do not** include details, names or evidence in public;
+2. The maintainer will reply with a private channel for further details;
+3. For security vulnerabilities, use the process in [`SECURITY.md`](SECURITY.md) instead.
 
-## 处理方式
+The maintainer aims to respond within 7 days. Your identity will be handled on a minimal
+need-to-know basis.
 
-维护者可视情节采取：
+## Enforcement
 
-1. 私下提醒，说明问题所在；
-2. 要求公开或私下道歉；
-3. 删除或隐藏不当内容；
-4. 临时禁言；
-5. 永久禁止参与本项目。
+Depending on severity, the maintainer may:
 
-对**维护者本人**的举报，可以直接在 issue 里说明「需要第三方介入」——这种情况本项目没有更高一层
-的处理机构，你可以选择公开讨论或不再参与，我们尊重这个选择。
+1. Give a private reminder explaining the problem;
+2. Ask for a public or private apology;
+3. Remove or hide inappropriate content;
+4. Temporarily restrict participation;
+5. Permanently ban participation in the project.
 
-## 归属
+Reports about **the maintainer themself** can be raised in an issue noting that third-party mediation
+is needed — this project has no higher authority to appeal to, and you may choose to discuss it publicly
+or stop participating. We respect that choice.
 
-本准则参考 [Contributor Covenant v2.1](https://www.contributor-covenant.org/version/2/1/code_of_conduct/)
-的结构，并针对「单维护者 + 以 issue 为主要交流场所 + 不以公网多租户形式部署」的实际情况做了压缩和改写，
-并非逐字采用。如果你需要一份被广泛认可的标准文本，请直接引用上面链接的原文。
+## Attribution
+
+This code follows the structure of [Contributor Covenant v2.1](https://www.contributor-covenant.org/version/2/1/code_of_conduct/)
+and was condensed and rewritten for the reality of "one maintainer + issues as the main venue + not
+deployed as a public multi-tenant service"; it is not adopted verbatim. If you need a widely recognized
+standard text, cite the original at the link above.
 
 ---
 
-本文件随项目演进可能调整，修改会在提交记录中体现。
+This document may change as the project evolves; changes appear in the commit history.
