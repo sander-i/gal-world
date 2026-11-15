@@ -1,393 +1,438 @@
 # Gal World
 
-自建云游戏平台：把 Windows 视觉小说（galgame）部署到 Linux 或 Windows 主机，通过浏览器串流游玩。
-门户负责游戏库、元数据、会话、媒体、存档与运维，串流链路由 Selkies（Linux）或 Sunshine（Windows）承担。
+English | [简体中文](README.zh-CN.md)
 
-**版本**：`0.0.1`（版本号唯一来源是 `portal/pom.xml` 的 `<version>`；`application.yml`
-通过 `@project.version@` 注入，其余位置不重复声明）。
+A self-hosted cloud gaming platform for Windows visual novels (galgames): deploy games to a Linux or
+Windows host and play them in a browser. The portal owns the game library, metadata, sessions, media,
+saves and operations; the streaming pipeline is handled by Selkies (Linux) or Sunshine (Windows).
 
-项目以 [MIT 许可证](LICENSE) 开源。它是按个人需求长出来的自建方案，不是通用商业产品；
-欢迎自建部署、提 issue 与 PR，但不承诺开箱即用或向后兼容。
+**Version**: `0.0.1` (the single source of truth is `<version>` in `portal/pom.xml`; `application.yml`
+injects it via `@project.version@`, and no other location repeats it).
 
-## 界面
+Released under the [MIT License](LICENSE). This is a self-built solution that grew out of personal
+needs, not a general-purpose commercial product. Self-hosted deployments, issues and PRs are welcome,
+but no out-of-the-box or backward-compatibility guarantee is made.
 
-![游戏库：公司 / 标签筛选与卡片快捷启停](docs/images/portal-library.png)
+## Screenshots
 
-| 游戏详情：左侧信息与操作、右侧 CG 大屏 | 游戏编辑：元数据、封面与 CG 管理 |
+![Library: company / tag filters and quick start-stop on cards](docs/images/portal-library.png)
+
+| Game detail: info and actions on the left, CG showcase on the right | Game edit: metadata, cover and CG management |
 |---|---|
-| ![游戏详情](docs/images/portal-game.png) | ![游戏编辑](docs/images/portal-edit.png) |
+| ![Game detail](docs/images/portal-game.png) | ![Game edit](docs/images/portal-edit.png) |
 
-截图取自本地运行的门户，游戏、公司与封面均为示例数据（占位图，不含任何作品素材）。
+Screenshots are taken from a locally running portal; games, companies and covers are sample data
+(placeholder images, no actual game assets).
 
-## 能力
+## Features
 
-- **浏览器游玩**：Linux 走 Selkies 2.1（WebRTC/WebSocket），Windows 走 Sunshine + Moonlight Web
-- **多游戏并存**：Linux 下每游戏独立 wine prefix、独立 Xvfb 显示、独立 ALSA 子设备、独立音频链与端口
-- **断线不掉**：关闭浏览器不终止游戏会话，回来继续
-- **游戏库门户**：Hero 推荐位、为你推荐、公司 / 汉化组 / 标签筛选、搜索、卡片快捷启停
-- **接入向导**：浏览器上传 zip / 7z 或整个文件夹（分片、可续传），也可选服务器已有目录；
-  自动注册、初始化 wine 前缀、安装中文字体、首次启动验证
-- **元数据**：公司 / 汉化组（别名、网址、简介）、标签（别名、颜色），拖拽排序、整维度启停
-- **媒体管理**：封面、图标、宣传 CG（图片或视频），多图轮换、拖拽排序
-- **图片预加载**：按显示尺寸生成派生图，浏览器按 `srcset` 选档，先出画面再补清晰度
-- **游玩体验**：心跳计时、空闲自动停止、画面校准（自动 / 手动）、启动进度、时延显示、崩溃遥测
-- **游玩时长统计**：只在游玩页可见时计时（20 秒心跳），挂机不计
-- **存档管理与切换**：备份可填标签与描述，任意备份一键切换为当前存档；切换前自动快照。
-  五道安全保护（运行中拒绝切换、切换前快照、同分区临时目录、重命名替换 + 回滚、归档路径校验）；
-  接入游戏时自动留一份「原始」存档
-- **游戏打包下载**：详情页两步操作，先把游戏目录打包成 zip，完成后再下载；不含门户生成的
-  `game.env` 与 `wineprefix/`
-- **一键部署 / 彻底卸载**：后台按预置步骤执行环境部署或卸载（Linux / Windows），实时回传日志，危险步骤二次确认。
-  卸载会清到只剩门户可运行，切换其它环境方案时不留残留：
-  Linux 删 Wine / Selkies venv / 音频与游戏单元 / 元件缓存，purge xvfb、PulseAudio、python3-venv、
-  中文字体与全部 i386 包并撤销 i386 架构；Windows 删 Moonlight Web、Sunshine 服务与残留目录、
-  虚拟声卡驱动与元件缓存。两端都保留门户本体、数据库、证书、游戏与存档，Linux 另留 JDK、Windows 留 Java
-- **远程更新**：Gitee Release 资产 + 独立 updater，SHA256 校验、停服备份、健康检查、失败回滚
-- **主题**：四套内置主题 + 自定义主题编辑器（本机保存）
-- **配置快照**：`backup.sh` 带健康校验，故障时先恢复再排查
-- **数据导出**：`GET /api/export` 导出游戏、标签、设置与会话数的 JSON
+- **Play in the browser**: Selkies 2.1 on Linux (WebRTC/WebSocket), Sunshine + Moonlight Web on Windows
+- **Multiple concurrent games**: on Linux every game gets its own wine prefix, its own Xvfb display,
+  its own ALSA subdevice, its own audio chain and port
+- **Sessions survive disconnects**: closing the browser does not terminate the game session; come back
+  and continue
+- **Game library portal**: hero recommendations, "for you" picks, company / localization group / tag
+  filters, search, quick start-stop on cards
+- **Import wizard**: upload a zip / 7z or a whole folder in the browser (chunked, resumable), or pick a
+  directory already on the server; it registers the game, initializes the wine prefix, installs Chinese
+  fonts and verifies the first launch
+- **Metadata**: companies / localization groups (aliases, URLs, descriptions), tags (aliases, colors),
+  drag-to-sort, enable/disable per dimension
+- **Media management**: covers, icons, promotional CGs (images or videos), multi-image rotation,
+  drag-to-sort
+- **Image preloading**: derived images generated per display size, the browser picks one via `srcset`,
+  showing a fast preview before the sharp version loads
+- **Playback experience**: heartbeat timer, idle auto-stop, canvas calibration (auto / manual), launch
+  progress, latency display, crash telemetry
+- **Playtime tracking**: counted only while the play page is visible (20-second heartbeat), idle time
+  not counted
+- **Save management and switching**: backups can carry tags and descriptions, any backup can be
+  switched in as the current save; a snapshot is taken before switching. Five safety guards (refuse to
+  switch while running, snapshot before switching, temporary directory on the same partition,
+  rename-and-replace with rollback, archive path validation); importing a game automatically keeps an
+  "original" save
+- **Game package download**: two-step action on the detail page, first packaging the game directory
+  into a zip, then downloading it; excludes the portal-generated `game.env` and `wineprefix/`
+- **One-click deploy / full uninstall**: the backend runs preset steps to install or uninstall the
+  environment (Linux / Windows), streams logs in real time, and asks for a second confirmation on
+  dangerous steps. Uninstall cleans down to "portal still runnable" so switching to another environment
+  leaves no residue: on Linux it removes Wine / the Selkies venv / audio and game units / the artifact
+  cache, purges xvfb, PulseAudio, python3-venv, Chinese fonts and all i386 packages, and reverts the
+  i386 architecture; on Windows it removes Moonlight Web, the Sunshine service and leftover
+  directories, the virtual audio driver and the artifact cache. Both platforms keep the portal itself,
+  the database, certificates, games and saves; Linux also keeps the JDK and Windows keeps Java
+- **Remote update**: Gitee release assets plus a standalone updater, SHA256 verification, service stop
+  with backup, health check, rollback on failure
+- **Themes**: four built-in themes plus a custom theme editor (stored locally)
+- **Config snapshots**: `backup.sh` with health verification; on failure, restore first, then
+  investigate
+- **Data export**: `GET /api/export` exports games, tags, settings and session counts as JSON
 
-## 架构
+## Architecture
 
 ```text
-浏览器
+Browser
   │
-  ├── HTTPS :8088 ──> Portal（Spring Boot + Vue，单 jar）
-  │                     ├── H2 文件库
-  │                     ├── 会话控制 ──> systemd user unit / 本机进程
-  │                     └── 媒体、存档、备份、更新
+  ├── HTTPS :8088 ──> Portal (Spring Boot + Vue, single jar)
+  │                     ├── H2 file database
+  │                     ├── session control ──> systemd user unit / local process
+  │                     └── media, saves, backup, update
   │
-  └── HTTPS :9002/:9003 ──> Selkies（Linux）
-                              │ X11 采集
+  └── HTTPS :9002/:9003 ──> Selkies (Linux)
+                              │ X11 capture
                            Xvfb :2 / :3
                               │
-                           wine（每游戏独立 WINEPREFIX）
+                           wine (per-game WINEPREFIX)
                               │ ALSA hw:0,0,<slot>
-                        snd-aloop 虚拟声卡
-                              │ 采集 hw:0,1,<slot>
+                        snd-aloop virtual sound card
+                              │ capture hw:0,1,<slot>
                      PulseAudio source gal_<id>_in
                               │ module-loopback
                      PulseAudio sink gal_<id>
                               │ monitor
-                        pcmflux → Opus → 浏览器
+                        pcmflux → Opus → browser
 ```
 
-Windows 形态把最后一段换成 Sunshine 捕获桌面并硬件编码（NVENC / QSV / AMF），
-浏览器通过 Moonlight Web 解码播放；Portal 与游戏同机运行，游戏是原生 exe，不经 Wine。
+On Windows the last segment is replaced by Sunshine capturing the desktop and hardware-encoding it
+(NVENC / QSV / AMF), with the browser decoding and playing it through Moonlight Web; the portal and the
+game run on the same machine, and the game is a native exe that does not go through Wine.
 
-**技术栈**
+**Tech stack**
 
-| 层 | 选型 |
+| Layer | Choice |
 |---|---|
-| 后端 | Java 17、Spring Boot 3.3.5、Spring Data JPA、H2 文件模式 |
-| 前端 | Vue 3.5、Vue Router 4、Element Plus 2.14、Vite 6 |
-| Linux 串流 | Ubuntu 24.04、Selkies 2.1、Wine 9.0、PulseAudio 16.1、Xvfb、snd-aloop |
-| Windows 串流 | Sunshine、Moonlight Web、VB-Audio Virtual Cable |
-| 编码 | 服务器无 GPU：llvmpipe 软渲染 + x264 软编码；Windows 走硬件编码 |
+| Backend | Java 17, Spring Boot 3.3.5, Spring Data JPA, H2 file mode |
+| Frontend | Vue 3.5, Vue Router 4, Element Plus 2.14, Vite 6 |
+| Linux streaming | Ubuntu 24.04, Selkies 2.1, Wine 9.0, PulseAudio 16.1, Xvfb, snd-aloop |
+| Windows streaming | Sunshine, Moonlight Web, VB-Audio Virtual Cable |
+| Encoding | no GPU on the server: llvmpipe software rendering + x264 software encoding; hardware encoding on Windows |
 
-## 目录
+## Directory layout
 
 ```text
 portal/
-├── src/main/java/com/galworld/   后端：web / service / domain / platform / deploy / update
-├── src/test/java/                后端测试
-└── frontend/                     Vue 3 前端源码（构建产物进 src/main/resources/static/）
+├── src/main/java/com/galworld/   backend: web / service / domain / platform / deploy / update
+├── src/test/java/                backend tests
+└── frontend/                     Vue 3 frontend source (build output goes to src/main/resources/static/)
 
 deploy/
-├── bin/                          服务器端脚本（run-game.sh、galworld CLI、backup.sh、updater.sh 等）
-├── systemd/                      systemd user 单元
-├── win/                          Windows 部署脚本（install / galworld / update-portal / uninstall）
-├── openbox/                      窗口管理器配置（备选方案，当前未启用）
-├── portal-deploy.sh              本机构建 → 上传 jar → 重启 → 健康检查
-└── release.sh                    构建并发布 Gitee Release
+├── bin/                          server-side scripts (run-game.sh, galworld CLI, backup.sh, updater.sh, ...)
+├── systemd/                      systemd user units
+├── win/                          Windows deploy scripts (install / galworld / update-portal / uninstall)
+├── openbox/                      window manager config (alternative, currently disabled)
+├── portal-deploy.sh              build locally → upload jar → restart → health check
+└── release.sh                    build and publish a Gitee Release
 
 docs/
-├── ENVIRONMENT.md                环境探测与 Windows 部署方案
-├── GAME-IMPORT-PLAN.md           游戏接入方案
-└── *.md                          其余设计与优化方案
+├── ENVIRONMENT.md                environment probing and Windows deployment
+├── GAME-IMPORT-PLAN.md           game import design
+└── *.md                          other design and optimization documents
 
 tools/
-├── artifacts/                    第三方元件清单与同步脚本（Nexus + 镜像回退 + SHA256）
-└── diagnostics/                  排障用的一次性脚本（音频逐跳验证、冷启动模拟等）
+├── artifacts/                    third-party artifact manifest and sync script (Nexus + mirror fallback + SHA256)
+└── diagnostics/                  one-off troubleshooting scripts (per-hop audio checks, cold-boot simulation, ...)
 
-preview/                          静态界面原型（纯 HTML，无需构建）
-demo/                             演示素材
-deploy.sh                         Linux 一键引导脚本（系统依赖 → JDK → 证书 → 服务 → 健康检查）
-uninstall.sh                      彻底卸载脚本（连门户、数据、游戏与提权入口一起清）
+preview/                          static UI prototype (plain HTML, no build required)
+demo/                             demo assets
+deploy.sh                         Linux one-shot bootstrap (system deps → JDK → cert → service → health check)
+uninstall.sh                      full uninstall script (removes the portal, data, games and privilege entry too)
 ```
 
-## 快速开始
+## Getting started
 
-### 环境要求
+### Requirements
 
-| 项 | 要求 |
+| Item | Requirement |
 |---|---|
-| JDK | 17+（后端编译目标 17） |
-| Node | 20+（前端构建） |
+| JDK | 17+ (backend compiles to 17) |
+| Node | 20+ (frontend build) |
 | Maven | 3.9+ |
-| Linux | Ubuntu 22.04+ / 24.04，Wine 9.0、PulseAudio、snd-aloop、Xvfb、Selkies |
-| Windows | Windows 10 1903+ / 11（x64），Sunshine、Moonlight Web、虚拟声卡 |
-| 权限 | Linux 需 `loginctl enable-linger`；Windows 安装需管理员一次 |
+| Linux | Ubuntu 22.04+ / 24.04, Wine 9.0, PulseAudio, snd-aloop, Xvfb, Selkies |
+| Windows | Windows 10 1903+ / 11 (x64), Sunshine, Moonlight Web, virtual audio cable |
+| Permissions | `loginctl enable-linger` on Linux; one-time admin install on Windows |
 
-### 构建
+### Build
 
 ```bash
-# 前端构建进 portal/src/main/resources/static/
+# Build the frontend into portal/src/main/resources/static/
 cd portal/frontend
 npm ci
 npm run build
 
-# 打单 jar
+# Build the single jar
 cd ..
 mvn -DskipTests package
-# 产物：portal/target/gal-world-portal-<version>.jar（版本取自 portal/pom.xml）
+# Artifact: portal/target/gal-world-portal-<version>.jar (version comes from portal/pom.xml)
 ```
 
-### Linux 部署
+### Linux deployment
 
 ```bash
 git clone https://gitee.com/sander-o/gal-world.git
 cd gal-world
 
-# deploy.sh 自动找 portal/target 下的 jar；也可 --jar 指定
+# deploy.sh finds the jar under portal/target automatically; use --jar to point at one
 ./deploy.sh
 ```
 
-`deploy.sh` 覆盖基础环境的一次性准备：系统依赖（apt）→ JDK → 目录 → jar → 自签证书 →
-systemd user 单元 → linger → 防火墙 → 健康检查。可重复执行，已装好的部分会跳过。
-系统依赖只在 Debian/Ubuntu 上自动安装，其它发行版会提示后跳过；已自行准备好环境时可用
-`--skip-deps` 跳过这一步。Wine / Selkies / 音频链等中间件仍由后台「环境信息 → 一键部署」执行。
+`deploy.sh` covers one-time base-environment setup: system packages (apt) → JDK → directories → jar →
+self-signed certificate → systemd user units → linger → firewall → health check. It is idempotent, and
+anything already installed is skipped. System packages are only installed automatically on
+Debian/Ubuntu; other distributions get a notice and skip that step, and if you already prepared the
+environment yourself you can skip it with `--skip-deps`. Middleware such as Wine / Selkies / the audio
+chain is still installed from the backend's "Environment info → One-click deploy".
 
-访问 `https://<host>:8088/`。`deploy.sh` 会把一个固定部署令牌写进 systemd 单元，
-脚本结束时会打印出来（重启不变）：
+Open `https://<host>:8088/`. `deploy.sh` writes a fixed deploy token into the systemd unit and prints it
+when the script finishes (it persists across restarts):
 
 ```bash
 部署令牌: 7f3c...
 ```
 
-想自己指定就用 `--token <令牌>` 或环境变量 `GALWORLD_DEPLOY_TOKEN`；
-只有绕过 `deploy.sh` 手工起 jar 时，令牌才会随机生成并只出现在启动日志里：
+To set your own, use `--token <token>` or the `GALWORLD_DEPLOY_TOKEN` environment variable. Only when
+you start the jar manually, bypassing `deploy.sh`, is the token generated randomly and printed solely
+to the startup log:
 
 ```bash
 journalctl --user -u galworld-portal -n 200 --no-pager | grep '随机令牌'
 ```
 
-把它填到「管理」页即可解锁环境信息、一键部署与远程更新。
+Enter it on the "Admin" page to unlock environment info, one-click deploy and remote update.
 
-元件仓库地址（Nexus）不指定时只探测本机 `127.0.0.1:8081`；`manifest.json` 能取到就写进单元，
-探测不到会在结尾告警，用 `--artifact-nexus` 或 `GALWORLD_ARTIFACT_CANDIDATES` 指定即可。
+If no artifact repository (Nexus) address is given, only `127.0.0.1:8081` on the local machine is
+probed; if `manifest.json` can be fetched it is written into the unit, otherwise a warning is printed at
+the end. Use `--artifact-nexus` or `GALWORLD_ARTIFACT_CANDIDATES` to specify one.
 
-Nexus 需要账号时，用 `--artifact-user` + `--artifact-pass`，或把密码写进文件后传
-`--artifact-pass-file <path>`。账号密码统一落到 `~/.config/galworld/artifacts.env`（0600），
-由 systemd `EnvironmentFile` 读取，之后重跑不必再传。
+If Nexus needs credentials, use `--artifact-user` + `--artifact-pass`, or write the password to a file
+and pass `--artifact-pass-file <path>`. Credentials are stored in `~/.config/galworld/artifacts.env`
+(0600), read by systemd via `EnvironmentFile`, so later reruns do not need them again.
 
-`deploy.sh` 还会装一个固定提权入口 `/usr/local/sbin/galworld-sudo` 与对应的
-`/etc/sudoers.d/galworld-deploy` 白名单（只放行 packages / snd-aloop / audio-group / linger /
-uninstall-sys / uninstall-packages 六个子命令），后台「一键部署」因此不需要在页面输 sudo 密码。
-不想装就加 `--no-sudoers`，退回页面输密码的方式。
+`deploy.sh` also installs a fixed privilege entry `/usr/local/sbin/galworld-sudo` and a matching
+`/etc/sudoers.d/galworld-deploy` allowlist (only these six subcommands: packages / snd-aloop /
+audio-group / linger / uninstall-sys / uninstall-packages), so the backend's "one-click deploy" does not
+need a sudo password typed into the page. To skip it, pass `--no-sudoers` and fall back to entering the
+password in the page.
 
-### 彻底卸载
+### Full uninstall
 
 ```bash
-./uninstall.sh --dry-run   # 先看会删什么
-./uninstall.sh             # 执行，要求手打「销毁」确认
+./uninstall.sh --dry-run   # first see what would be deleted
+./uninstall.sh             # run it; requires typing "销毁" to confirm
 ```
 
-与后台「一键卸载环境」不同：页面卸载只清到门户还能跑（用于切环境），
-`uninstall.sh` 连门户一起销毁——单元、`~/galworld`（含游戏与存档）、
-`~/.config/galworld`、上传的 jar/脚本、系统运行时包与 i386 架构、linger、
-ufw 放行、提权入口与 sudoers 白名单。不可逆。
+Unlike the backend's "uninstall environment": the page action only cleans down to "portal still
+runnable" (for switching environments), while `uninstall.sh` destroys the portal too — units,
+`~/galworld` (including games and saves), `~/.config/galworld`, uploaded jars/scripts, system runtime
+packages and the i386 architecture, linger, ufw rules, the privilege entry and the sudoers allowlist.
+Irreversible.
 
-`--keep-data` 保留 `data/` 与 `games/`，`--keep-packages` 跳过系统包卸载，
-`--yes` 跳过交互确认。清理干净后脚本会删掉自己；有残留时保留，便于重跑排查。
+`--keep-data` keeps `data/` and `games/`, `--keep-packages` skips system package removal, and `--yes`
+skips the interactive confirmation. Once cleanup is complete the script deletes itself; if residue
+remains it is kept so you can rerun and investigate.
 
-### Windows 部署
+### Windows deployment
 
 ```powershell
-# 管理员 PowerShell
+# Administrator PowerShell
 .\deploy\win\install.ps1 -Jar ..\portal\target\gal-world-portal-<version>.jar
-.\deploy\win\galworld.ps1 add sample-game --name "示例游戏" --exe "D:\Games\sample-game\game.exe"
+.\deploy\win\galworld.ps1 add sample-game --name "Sample Game" --exe "D:\Games\sample-game\game.exe"
 ```
 
-Sunshine、Moonlight Web、虚拟声卡的前置条件与配对步骤见 [`docs/ENVIRONMENT.md`](docs/ENVIRONMENT.md)。
+Prerequisites and pairing steps for Sunshine, Moonlight Web and the virtual audio cable are in
+[`docs/ENVIRONMENT.md`](docs/ENVIRONMENT.md).
 
-### 开发
+### Development
 
 ```bash
-# 后端 :8080（前端 dev 代理指向这里）
+# Backend on :8080 (the frontend dev proxy points here)
 cd portal
 GALWORLD_PORTAL_PORT=8080 mvn spring-boot:run
 
-# 另开终端，前端 :5173
+# In another terminal, frontend on :5173
 cd portal/frontend
 npm ci
 npm run dev
 ```
 
-测试：
+Tests:
 
 ```bash
 cd portal && mvn test
 cd portal/frontend && npm test && npm run check:theme
 ```
 
-## 门户
+## Portal
 
-| 路径 | 内容 |
+| Path | Content |
 |---|---|
-| `/` | 游戏库：Hero 推荐位、为你推荐、公司 / 汉化组 / 标签筛选、搜索 |
-| `/games` | 全部游戏 |
-| `/games/import` | 接入向导：上传压缩包 / 文件夹或选择服务器目录 |
-| `/game/<id>` | 详情：启停 / 重启、时长统计、元数据、封面图标、存档管理与切换、游戏打包下载 |
-| `/game/<id>/edit` | 编辑：名称、画布、公司 / 汉化组 / 标签、简介、封面 / 图标 / CG、轮换规则 |
-| `/play/<id>` | 游玩：iframe 串流、心跳计时、画面校准、遥测 |
-| `/settings` | 外观主题、功能开关、切换方式、画面校准、空闲停止、CG 声音、轮换、令牌、关于 |
-| `/admin` | 访问令牌、上传限制、图片预加载优化、环境信息与一键部署、版本与检查更新 |
-| `/companies` | 公司维护 |
-| `/localization-groups` | 汉化组维护 |
-| `/tags` | 标签维护 |
+| `/` | Library: hero recommendations, "for you" picks, company / localization group / tag filters, search |
+| `/games` | All games |
+| `/games/import` | Import wizard: upload an archive / folder or choose a server directory |
+| `/game/<id>` | Detail: start-stop / restart, playtime, metadata, cover and icon, save management and switching, game package download |
+| `/game/<id>/edit` | Edit: name, canvas, company / localization group / tags, description, cover / icon / CG, rotation rules |
+| `/play/<id>` | Play: iframe streaming, heartbeat timer, canvas calibration, telemetry |
+| `/settings` | Appearance themes, feature flags, switching mode, canvas calibration, idle stop, CG audio, rotation, token, about |
+| `/admin` | Access token, upload limits, image preloading optimization, environment info and one-click deploy, version and update check |
+| `/companies` | Company maintenance |
+| `/localization-groups` | Localization group maintenance |
+| `/tags` | Tag maintenance |
 
-**必须 HTTPS**：游玩页用 iframe 内嵌 Selkies，而 Selkies 客户端用 WebCodecs，
-要求 `window.isSecureContext === true`。HTTP 父页面里嵌 HTTPS iframe 仍判为非安全上下文。
+**HTTPS is required**: the play page embeds Selkies in an iframe, and the Selkies client uses WebCodecs,
+which requires `window.isSecureContext === true`. An HTTPS iframe embedded in an HTTP parent page is
+still judged a non-secure context.
 
-### 游玩时长口径
+### Playtime accounting
 
-只在**游玩页可见**时计时（20 秒心跳）。切到别的标签、最小化窗口、离开页面都会停止计时，
-45 秒内自动结算。因此挂机不计入时长。
+Time is counted only while the **play page is visible** (20-second heartbeat). Switching to another tab,
+minimizing the window or leaving the page stops the timer, and it settles automatically within 45
+seconds. Idle time therefore does not count.
 
-### 画面校准
+### Canvas calibration
 
-Wine 会按游戏自身协商窗口大小，有时会顶到画布边缘导致画面被裁。
-游玩页进入后（自动模式）或点右上角「校准分辨率」（手动模式）读取 `xwininfo` 窗口矩形，
-把 `WIDTH/HEIGHT` 调整为约 `窗口 + 24`，最多 4 轮，取窗口面积最大的画布。
-全局设置 →「画面校准」可切换自动 / 手动。
+Wine negotiates the window size from the game itself, and sometimes it hits the canvas edge and the
+picture gets cropped. When the play page loads (auto mode), or when you click "Calibrate resolution" in
+the top-right corner (manual mode), it reads the window rectangle from `xwininfo` and adjusts
+`WIDTH/HEIGHT` to roughly `window + 24`, up to 4 rounds, taking the canvas with the largest window area.
+Global settings → "Canvas calibration" toggles auto / manual.
 
-### 媒体与轮换
+### Media and rotation
 
-每个游戏可上传多张封面、一个图标、多段宣传 CG（图片或短视频）。
-封面与 CG 各自配置顺序 / 随机轮换与间隔；CG 可设置自动播放下一段、循环或停在当前。
-视频默认静音，可在设置里改为默认有声。
-图片会生成 640 / 1024 两档派生图（源图不超过 1024 时不降分辨率），由浏览器按显示尺寸选择。
-默认上限：封面 8 个、CG 5 个、图片 8 MB、视频 120 MB，可在「管理 → 上传限制」调整。
+Each game can have several covers, one icon and multiple promotional CGs (images or short videos).
+Covers and CGs each have their own order / random rotation and interval; CGs can be set to auto-advance,
+loop, or stay on the current one. Videos are muted by default, which can be changed to sound-on in the
+settings. Images get two derived sizes, 640 / 1024 (the resolution is not reduced when the source is
+1024 or smaller), and the browser picks one by display size. Default limits: 8 covers, 5 CGs, 8 MB
+images, 120 MB videos, adjustable under "Admin → Upload limits".
 
-## 配置
+## Configuration
 
-常用环境变量（完整项见 `portal/src/main/resources/application.yml`）：
+Common environment variables (full list in `portal/src/main/resources/application.yml`):
 
-| 变量 | 默认 | 说明 |
+| Variable | Default | Description |
 |---|---|---|
-| `GALWORLD_ROOT` | `~/galworld` | 安装根目录（games / data / lib） |
-| `GALWORLD_PORTAL_PORT` | `8088` | 门户端口 |
-| `GALWORLD_TLS` | `false` | 是否启用 HTTPS；`deploy.sh` 默认设为 `true` |
-| `GALWORLD_KEYSTORE` | 空 | PKCS12 证书路径 |
-| `GALWORLD_KEYSTORE_PASSWORD` | `changeit` | 证书密码 |
-| `GALWORLD_KEY_ALIAS` | `galworld` | 证书别名 |
-| `GALWORLD_STREAM_URL` | 空 | Windows 下固定的 Moonlight Web 串流地址 |
-| `GALWORLD_WRITE_TOKEN` | 空 | 写接口令牌；留空不校验 |
-| `GALWORLD_DEPLOY_TOKEN` | 空 | 部署 / 后台令牌；留空启动时随机生成并打印日志 |
-| `GALWORLD_DEPLOY_CIDRS` | `127.0.0.1/32,192.168.0.0/16,10.0.0.0/8` | 部署接口允许的网段 |
-| `GALWORLD_DEPLOY_ALLOW_SUDO_PASSWORD` | `false` | 是否允许页面输入 sudo 密码 |
-| `GALWORLD_UPDATE_ENABLED` | `true` | 是否允许远程更新 |
-| `GALWORLD_UPDATE_ALLOW_OVERRIDE` | `false` | 管理页允许指定 tag / 版本覆盖更新（含降级） |
-| `GALWORLD_UPDATE_API_BASE` | `https://gitee.com/api/v5/repos` | 更新源发布接口根地址；连不上默认站时指向镜像或自建实例 |
-| `GALWORLD_UPDATE_REPO` | `sander-o/gal-world` | 更新源仓库路径 `owner/repo` |
-| `GALWORLD_UPDATE_WEB_BASE` | `https://gitee.com` | 更新源仓库网页根地址，用于拼发布页链接 |
-| `GALWORLD_UPDATE_TOKEN` | 空 | 私有仓库 / 镜像的只读令牌；Linux 更新器也可从 `~/.config/galworld-update.env` 读取 |
-| `GALWORLD_ARTIFACT_NEXUS` | 本机 Nexus | 一键部署元件下载源 |
-| `GALWORLD_ARTIFACT_USER` / `GALWORLD_ARTIFACT_PASS` | 空 | 元件仓库账号；留空匿名读取，私有仓库再配置 |
+| `GALWORLD_ROOT` | `~/galworld` | Installation root (games / data / lib) |
+| `GALWORLD_PORTAL_PORT` | `8088` | Portal port |
+| `GALWORLD_TLS` | `false` | Enable HTTPS; `deploy.sh` sets it to `true` |
+| `GALWORLD_KEYSTORE` | empty | PKCS12 certificate path |
+| `GALWORLD_KEYSTORE_PASSWORD` | `changeit` | Certificate password |
+| `GALWORLD_KEY_ALIAS` | `galworld` | Certificate alias |
+| `GALWORLD_STREAM_URL` | empty | Fixed Moonlight Web stream URL on Windows |
+| `GALWORLD_WRITE_TOKEN` | empty | Write API token; empty means no check |
+| `GALWORLD_DEPLOY_TOKEN` | empty | Deploy / admin token; when empty a random one is generated at startup and logged |
+| `GALWORLD_DEPLOY_CIDRS` | `127.0.0.1/32,192.168.0.0/16,10.0.0.0/8` | Networks allowed to call deploy endpoints |
+| `GALWORLD_DEPLOY_ALLOW_SUDO_PASSWORD` | `false` | Whether the page may accept a sudo password |
+| `GALWORLD_UPDATE_ENABLED` | `true` | Whether remote update is allowed |
+| `GALWORLD_UPDATE_ALLOW_OVERRIDE` | `false` | Let the admin page specify a tag / version override (including downgrade) |
+| `GALWORLD_UPDATE_API_BASE` | `https://gitee.com/api/v5/repos` | Release API base for the update source; point at a mirror or self-hosted instance when the default is unreachable |
+| `GALWORLD_UPDATE_REPO` | `sander-o/gal-world` | Update source repository path `owner/repo` |
+| `GALWORLD_UPDATE_WEB_BASE` | `https://gitee.com` | Web base of the update source repository, used to build release page links |
+| `GALWORLD_UPDATE_TOKEN` | empty | Read-only token for private repositories / mirrors; the Linux updater can also read `~/.config/galworld-update.env` |
+| `GALWORLD_ARTIFACT_NEXUS` | local Nexus | Artifact download source for one-click deploy |
+| `GALWORLD_ARTIFACT_USER` / `GALWORLD_ARTIFACT_PASS` | empty | Artifact repository credentials; empty reads anonymously, configure for private repositories |
 
-设置项存在 H2 `setting` 表，由设置页 / 管理页修改。
+Settings live in the H2 `setting` table and are changed from the settings / admin pages.
 
-## 部署与更新
+## Deployment and update
 
 ```bash
-# 开发机构建后推送到服务器（SSH 兜底路径）
+# Build on the development machine and push to the server (SSH fallback path)
 bash deploy/portal-deploy.sh
-bash deploy/portal-deploy.sh --build-only   # 只构建
+bash deploy/portal-deploy.sh --build-only   # build only
 
-# 构建并发布 Gitee Release
+# Build and publish a Gitee Release
 GITEE_TOKEN=<token> bash deploy/release.sh
-bash deploy/release.sh --dry-run            # 只构建并生成 dist/，不发布
+bash deploy/release.sh --dry-run            # build and produce dist/ only, do not publish
 ```
 
-门户内「管理 → 版本与检查更新」可检查并执行远程更新。
-更新器是独立进程，流程为：下载 → SHA256 / zip / 版本校验 → 停服 → 备份 jar 与 H2 →
-原子替换 → 启动 → 健康冒烟 → 失败自动回滚。
+From the portal's "Admin → Version and check for updates" you can check for and perform a remote
+update. The updater is a separate process: download → SHA256 / zip / version verification → stop the
+service → back up the jar and H2 → atomic replace → start → health smoke test → automatic rollback on
+failure.
 
-`GALWORLD_UPDATE_ALLOW_OVERRIDE=true` 时管理页出现「覆盖更新」，可指定任意
-已发布 Release 的 tag 或版本（如 `v<version>-pr7`）强制安装，允许降级与同版本重装。
-默认关闭。目标版本必须自带更新接口，更新器会在停服前检查 jar，不含更新器的版本直接拒绝。
+With `GALWORLD_UPDATE_ALLOW_OVERRIDE=true` the admin page shows "override update", letting you force any
+published Release tag or version (for example `v<version>-pr7`), including downgrades and reinstalling
+the same version. Off by default. The target version must ship the update endpoint itself; the updater
+checks the jar before stopping the service and rejects versions without it.
 
-分支验证流程：`GALWORLD_RELEASE_TAG=v<version>-pr7 bash deploy/release.sh` 发布分支包，
-再在管理页填该 tag 覆盖安装。
+Branch verification flow: `GALWORLD_RELEASE_TAG=v<version>-pr7 bash deploy/release.sh` publishes a
+branch build, then enter that tag in the admin page's override install.
 
-**更新源可配置。**「管理 → 远程更新源」可改发布接口根地址、仓库路径与仓库网页根地址，
-也可以直接设 `GALWORLD_UPDATE_API_BASE` / `GALWORLD_UPDATE_REPO` / `GALWORLD_UPDATE_WEB_BASE`。
-接口只需兼容 GitHub / Gitee 的 Release API（`/repos/{owner}/{repo}/releases`），
-所以连不上 GitHub 时可以指向 Gitee、自建 Gitea / GitLab 或镜像站。改完立即生效，
-更新器进程会从 `update-request.json` 的 `releaseApi` 读到同一个地址，不需要重启或单独设环境变量。
-私有仓库的只读令牌走 `GALWORLD_UPDATE_TOKEN`（Linux 更新器也接受
-`~/.config/galworld-update.env` 里的 `GITEE_TOKEN=` 或 `UPDATE_TOKEN=`，文件权限需 600）。
+**The update source is configurable.** "Admin → Remote update source" can change the release API base,
+repository path and repository web base, or you can set `GALWORLD_UPDATE_API_BASE` /
+`GALWORLD_UPDATE_REPO` / `GALWORLD_UPDATE_WEB_BASE` directly. The API only needs to be compatible with
+the GitHub / Gitee Release API (`/repos/{owner}/{repo}/releases`), so when GitHub is unreachable you
+can point it at Gitee, a self-hosted Gitea / GitLab or a mirror. Changes take effect immediately; the
+updater process reads the same address from `releaseApi` in `update-request.json`, with no restart or
+separate environment variable needed. For private repositories the read-only token goes through
+`GALWORLD_UPDATE_TOKEN` (the Linux updater also accepts `GITEE_TOKEN=` or `UPDATE_TOKEN=` in
+`~/.config/galworld-update.env`, and the file must be mode 600).
 
-注意：门户内更新只替换 jar 与 H2，不更新 `~/galworld/bin/*`。更新器脚本本身有改动时，
-升级后在页面「管理 → 一键部署」跑一遍「部署门户运维脚本」，它会从 jar 里重新落盘
-`updater.sh` / `backup.sh` / `galworld` / `gen-stream-cert.sh`；也可以直接在开发机执行
-`bash deploy/portal-deploy.sh`。否则服务器上仍在跑旧脚本。
+Note: an in-portal update only replaces the jar and H2, not `~/galworld/bin/*`. When the updater scripts
+themselves change, after upgrading run "Deploy portal operational scripts" under "Admin → One-click
+deploy", which writes `updater.sh` / `backup.sh` / `galworld` / `gen-stream-cert.sh` back out from the
+jar; alternatively run `bash deploy/portal-deploy.sh` on the development machine. Otherwise the server
+keeps running the old scripts.
 
-Windows 与 Linux 同级：下载并校验 jar → 停服 → 备份 jar 与 H2 → 原子替换 → 启动 →
-按版本冒烟 → 失败自动回滚。更新器脚本随 jar 分发，运行时释放到 `data\update\`；
-手工用法 `deploy\win\update-portal.ps1 -Jar <jar>` 保留。
+Windows is at parity with Linux: download and verify the jar → stop the service → back up the jar and
+H2 → atomic replace → start → version smoke test → automatic rollback on failure. The updater script
+ships with the jar and is released to `data\update\` at runtime; the manual usage
+`deploy\win\update-portal.ps1 -Jar <jar>` is retained.
 
-## 自检与恢复
+## Self-check and recovery
 
 ```bash
-~/galworld/bin/selfcheck.sh      # 全栈自检
-~/galworld/bin/backup.sh backup  # 配置快照（含健康校验）
-~/galworld/bin/backup.sh restore # 故障时先跑这个
+~/galworld/bin/selfcheck.sh      # full-stack self-check
+~/galworld/bin/backup.sh backup  # config snapshot (with health verification)
+~/galworld/bin/backup.sh restore # run this first when troubleshooting
 
-bash tools/diagnostics/m4-check.sh   # 门户验收（在仓库目录里跑，不随部署安装）
+bash tools/diagnostics/m4-check.sh   # portal acceptance check (run in the repository, not installed by deployment)
 ```
 
-`selfcheck.sh` / `backup.sh` / `galworld` CLI 由页面「一键部署」的「部署音频脚本」
-与「部署门户运维脚本」两步从 jar 装到 `~/galworld/bin/`；不想开页面时，
-`bash deploy/portal-deploy.sh` 也会把 `deploy/bin/*` 一并推上去。
+`selfcheck.sh` / `backup.sh` / the `galworld` CLI are installed from the jar into `~/galworld/bin/` by
+the "Deploy audio scripts" and "Deploy portal operational scripts" steps under "One-click deploy"; if
+you prefer not to open the page, `bash deploy/portal-deploy.sh` also pushes `deploy/bin/*` up.
 
-运维手册属于内部文档，不随仓库分发。
+Operational runbooks are internal documents and are not distributed with the repository.
 
-## 已知限制
+## Known limitations
 
-| 项 | 现状 |
+| Item | Status |
 |---|---|
-| 画质 | Wine 下按 4:3 渲染，低于 Windows 原生 16:9；服务器无 GPU，软渲染 + 软编码 |
-| 窗口标题栏 | Wine 自绘 30px 无法去除，采用居中放置规避 |
-| 并发 | 每路约 1–2 核编码；32 线程实测 2 路稳定 |
-| HTTPS | 门户必须 HTTPS，否则游玩页黑屏并报 `This application requires a secure connection` |
-| 远程更新 | Linux 与 Windows 均支持；Windows 无 journal 等价检查，冒烟只覆盖版本与三个 HTTP 接口 |
-| 平台差异 | Linux 每游戏独立端口与音频链；Windows 共用 Moonlight Web 入口 |
+| Image quality | Rendered at 4:3 under Wine, below native 16:9 on Windows; no GPU on the server, so software rendering + software encoding |
+| Window title bar | Wine's self-drawn 30px cannot be removed; mitigated by centering |
+| Concurrency | about 1–2 cores of encoding per stream; 2 streams stable in a 32-thread test |
+| HTTPS | The portal must use HTTPS, otherwise the play page is black and reports `This application requires a secure connection` |
+| Remote update | Supported on both Linux and Windows; Windows has no journal-equivalent check, so the smoke test only covers the version and three HTTP endpoints |
+| Platform differences | Linux uses a dedicated port and audio chain per game; Windows shares one Moonlight Web entry |
 
-## 文档
+## Documentation
 
-- [`docs/ENVIRONMENT.md`](docs/ENVIRONMENT.md)：环境探测、Linux / Windows 部署方案
-- [`docs/GAME-IMPORT-PLAN.md`](docs/GAME-IMPORT-PLAN.md)：游戏接入向导设计
-- [`CONTRIBUTING.md`](CONTRIBUTING.md)：开发环境、构建与测试、提交约定
-- [`SECURITY.md`](SECURITY.md)：安全模型、默认值与漏洞上报
-- [`CHANGELOG.md`](CHANGELOG.md)：版本变更记录
+- [`docs/ENVIRONMENT.md`](docs/ENVIRONMENT.md): environment probing, Linux / Windows deployment
+- [`docs/GAME-IMPORT-PLAN.md`](docs/GAME-IMPORT-PLAN.md): game import wizard design
+- [`CONTRIBUTING.md`](CONTRIBUTING.md): development environment, build and test, commit conventions
+- [`SECURITY.md`](SECURITY.md): security model, defaults and vulnerability reporting
+- [`CHANGELOG.md`](CHANGELOG.md): version history
 
-运维手册、一键部署执行细节与远程更新实测记录属于内部文档，不随仓库分发。
+Operational runbooks, one-click deploy execution details and remote update field-test records are
+internal documents and are not distributed with the repository.
 
-## 许可
+## License
 
-本项目以 [MIT 许可证](LICENSE) 开源，版权归 sander 所有。
+Released under the [MIT License](LICENSE), copyright sander.
 
-游戏本体、汉化补丁、游戏内素材的版权归原作者与汉化组，不包含在本仓库中。
-随发布 jar 分发的第三方组件（Spring、Hibernate、Logback、H2、Vue、Element Plus 等）
-及其许可证全文见 [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md) 与 [`licenses/`](licenses/)，
-这两份文件也会打进 jar 的 `META-INF/` 并随 Release 资产一并提供。
+The copyright of game content, localization patches and in-game assets belongs to the original authors
+and localization groups and is not included in this repository. Third-party components distributed with
+the release jar (Spring, Hibernate, Logback, H2, Vue, Element Plus, etc.) and their full license texts
+are listed in [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md) and [`licenses/`](licenses/); both are
+also packed into the jar's `META-INF/` and provided with the Release assets.
 
-部署期由脚本从上游获取、以独立进程运行的组件（Sunshine、Moonlight Web、Wine、Selkies、VB-Cable）
-遵循各自许可证，不链接进本项目代码。本项目的元件镜像仅供部署者内网自用，不对外提供下载。
+Components fetched from upstream by deployment scripts and run as separate processes (Sunshine,
+Moonlight Web, Wine, Selkies, VB-Cable) follow their own licenses and are not linked into this project's
+code. The project's artifact mirror is for the deployer's own intranet use only and is not offered for
+public download.
 
 ---
 
-用 AI 编码代理（Claude Code / Codex 等）改动本项目时，先读 [`AGENTS.md`](AGENTS.md)：
-里面写了架构边界、版本号唯一来源、哪些脚本会改系统状态。
+When modifying this project with an AI coding agent (Claude Code / Codex, etc.), read
+[`AGENTS.md`](AGENTS.md) first: it describes the architectural boundaries, the single source of truth
+for the version number, and which scripts change system state.
