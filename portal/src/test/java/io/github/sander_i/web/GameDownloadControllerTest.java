@@ -57,6 +57,52 @@ class GameDownloadControllerTest {
     }
 
     @Test
+    void estimatePassesThroughService() throws Exception {
+        GameDownloadService downloads = mock(GameDownloadService.class);
+        GameRepository repo = mock(GameRepository.class);
+        SessionService sessions = mock(SessionService.class);
+        when(repo.findById("demo")).thenReturn(Optional.of(game("demo", 9001)));
+        var est = new GameDownloadService.Estimate(1024, 3, 7);
+        when(downloads.estimate("demo")).thenReturn(est);
+
+        var controller = new GameDownloadController(downloads, repo, sessions);
+
+        assertEquals(est, controller.estimate("demo"));
+    }
+
+    @Test
+    void currentReturnsJobForRefreshRecovery() {
+        GameDownloadService downloads = mock(GameDownloadService.class);
+        GameRepository repo = mock(GameRepository.class);
+        SessionService sessions = mock(SessionService.class);
+        when(repo.findById("demo")).thenReturn(Optional.of(game("demo", 9001)));
+        var job = new GameDownloadService.JobView("dl-1", "demo", "RUNNING", "demo.zip",
+                100, 40, 2, 1, "", "2026-01-01T00:00:00Z");
+        when(downloads.current("demo")).thenReturn(job);
+
+        var controller = new GameDownloadController(downloads, repo, sessions);
+        var res = controller.current("demo");
+
+        assertEquals(200, res.getStatusCode().value());
+        assertEquals(job, res.getBody());
+    }
+
+    @Test
+    void currentWithoutJobIs204() {
+        GameDownloadService downloads = mock(GameDownloadService.class);
+        GameRepository repo = mock(GameRepository.class);
+        SessionService sessions = mock(SessionService.class);
+        when(repo.findById("demo")).thenReturn(Optional.of(game("demo", 9001)));
+        when(downloads.current("demo")).thenReturn(null);
+
+        var controller = new GameDownloadController(downloads, repo, sessions);
+        var res = controller.current("demo");
+
+        assertEquals(204, res.getStatusCode().value());
+        assertNull(res.getBody());
+    }
+
+    @Test
     void unknownGameIs404() {
         GameDownloadService downloads = mock(GameDownloadService.class);
         GameRepository repo = mock(GameRepository.class);

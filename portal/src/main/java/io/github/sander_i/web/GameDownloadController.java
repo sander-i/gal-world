@@ -61,6 +61,19 @@ public class GameDownloadController {
         return ResponseEntity.status(HttpStatus.ACCEPTED).body(downloads.start(id));
     }
 
+    @GetMapping("/estimate")
+    public GameDownloadService.Estimate estimate(@PathVariable String id) throws IOException {
+        requireGame(id);
+        return downloads.estimate(id);
+    }
+
+    @GetMapping("/current")
+    public ResponseEntity<GameDownloadService.JobView> current(@PathVariable String id) {
+        requireGame(id);
+        var job = downloads.current(id);
+        return job == null ? ResponseEntity.noContent().build() : ResponseEntity.ok(job);
+    }
+
     @GetMapping("/{jobId}")
     public GameDownloadService.JobView status(@PathVariable String id, @PathVariable String jobId) {
         return downloads.view(id, jobId);
