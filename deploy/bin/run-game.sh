@@ -68,11 +68,47 @@ fi
 
 LOGFILE="$GALROOT/data/logs/$ID.log"
 mkdir -p "$(dirname "$LOGFILE")"
+
+# ---- 日志轮转 ----
+#
+# 本脚本和 Selkies 的 stdout/stderr 全都 go 到同一个文件。Selkies 每秒都在打
+# INFO（ALSA underrun、帧统计、剪贴板事件），一场长会话能写到 1 GB 以上
+# （2026-11-16 tenshi-reboot 实测 1.1 GB），既占盘又让 journalctl/排查变慢。
+#
+# 两头兜：会话启动时先轮转一次，运行期间每 60 秒检查一次。超过上限就把尾部
+# 保留到 `<id>.log.1`，再把当前文件原地截断。
+#
+# 原地截断是安全的：`exec >>` 用的是 O_APPEND，内核每次写都会把偏移量移到新的
+# EOF，所以截断后不会出现空洞，也不会因为换 inode 而丢失后续输出
+# （换成 mv 新文件的方式，写入方还握着旧 inode，后续日志会全部丢）。
+LOG_MAX_MB="${GALWORLD_LOG_MAX_MB:-20}"
+LOG_KEEP_MB="${GALWORLD_LOG_KEEP_MB:-2}"
+
+rotate_log() {
+  [[ -f "$LOGFILE" ]] || return 0
+  local size
+  size=$(stat -c %s "$LOGFILE" 2>/dev/null || echo 0)
+  [[ "${size:-0}" -gt $(( LOG_MAX_MB * 1024 * 1024 )) ]] || return 0
+  tail -c $(( LOG_KEEP_MB * 1024 * 1024 )) "$LOGFILE" >"$LOGFILE.1" 2>/dev/null || true
+  : >"$LOGFILE"
+}
+
+rotate_log
+
 exec >>"$LOGFILE" 2>&1
 
 echo "[$(date '+%F %T')] start game=$ID display=:$DISPLAY_NUM port=$PORT slot=$LOOPBACK_SLOT"
 
 PIDS=()
+
+# 运行期间定期轮转：长会话不会因为一次启动就撑爆磁盘
+(
+  while :; do
+    sleep 60
+    rotate_log || true
+  done
+) &
+PIDS+=($!)
 # 释放本游戏占用的 pulse 模块，把 snd-aloop 的 subdevice 还回可用池。
 #
 # 为什么必须做：snd-aloop 每张卡只有 8 个 subdevice（pcm_substreams 参数上限
