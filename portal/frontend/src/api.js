@@ -417,8 +417,9 @@ export const api = {
       body: JSON.stringify({ label: label || '', description: description || '' }),
     }),
   /** 切换存档：语义与恢复相同，切换前后端会自动快照当前存档 */
-  switchSave: (id, name) =>
-    req(`/api/games/${encodeURIComponent(id)}/saves/${encodeURIComponent(name)}/switch`, {
+  /** 切换存档。snapshot=true 时切换前先自动快照当前状态（默认关闭，避免堆积整包备份） */
+  switchSave: (id, name, snapshot = false) =>
+    req(`/api/games/${encodeURIComponent(id)}/saves/${encodeURIComponent(name)}/switch?snapshot=${snapshot}`, {
       method: 'POST',
     }),
   restoreSave: (id, name) =>
@@ -434,6 +435,10 @@ export const api = {
     req(`/api/games/${encodeURIComponent(id)}/saves/${encodeURIComponent(name)}`, {
       method: 'DELETE',
     }),
+  /** 从原始存档（导入时留底）恢复初始状态；存档列表为空时兜底用 */
+  restoreOriginalSave: (id) =>
+    req(`/api/games/${encodeURIComponent(id)}/saves/restore-original`, { method: 'POST' }),
+
   /** 下载某份备份（tar.gz）；浏览器直接 GET，不需要写令牌 */
   saveFileUrl: (id, name) =>
     `/api/games/${encodeURIComponent(id)}/saves/${encodeURIComponent(name)}/file`,

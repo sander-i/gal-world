@@ -15,7 +15,7 @@ import { playBackTarget } from '../play-origin'
 import { canvasAutoCalibrate } from '../feature-flags'
 import { buildSample, postTelemetry } from '../play-telemetry'
 import { notify } from '../feedback'
-import { useGameLaunch } from '../use-game-launch'
+import { beginClose } from '../closing'
 import { useLatency } from '../use-latency'
 import { latencyTone } from '../latency'
 
@@ -69,13 +69,6 @@ const playing = computed(() => view.value === 'playing')
 
 /** 顶部栏正中的时延：只在真正进入画面后采集 */
 const { latency } = useLatency(playing)
-
-/** 关闭游戏的进度与轮询 */
-const { launches, toggle: sessionToggle } = useGameLaunch({
-  idOf: () => props.id,
-  onError: (msg) => notify.error(msg),
-})
-const closeAction = computed(() => launches[props.id] || null)
 
 const HEARTBEAT_MS = 20_000
 const POLL_MS = 3_000
@@ -694,11 +687,18 @@ function cancelBoot() {
   router.push(`/game/${props.id}`)
 }
 
-/** 关闭游戏：显示关闭进度，确认停止后按来源返回 */
+/**
+ * 关闭游戏。
+ *
+ * 关闭要等游戏自己存盘退出（10~15s），不能把用户锁在游玩页干等：
+ * 先发起停止请求，然后立刻回到来源页面，进度由全局横幅展示
+ * （见 closing.js / ClosingBanner），和「启动游戏」的体验一致。
+ */
 async function closeGame() {
-  if (closeAction.value || !canHeartbeat()) return
-  const updated = await sessionToggle({ id: props.id, state: 'RUNNING' })
-  if (!updated) return
+  if (!canHeartbeat()) return
+  beginClose(props.id, game.value?.name)
+  // 不等待：请求照常走完，服务端会等游戏自己退出后再收拾串流
+  api.stopGame(props.id).catch((e) => notify.error('关闭失败：' + e.message))
   stopPolling()
   stopHeartbeat()
   leave()
@@ -974,9 +974,8 @@ onBeforeUnmount(() => {
       <button
         v-if="view === 'playing' || view === 'booting'"
         class="ghost-btn danger"
-        :disabled="!!closeAction"
         @click="closeGame"
-      >{{ closeAction ? '关闭中 ' + closeAction.percent + '%' : '关闭游戏' }}</button>
+      >关闭游戏</button>
       <button class="ghost-btn" @click="router.push(`/game/${id}`)">会话管理</button>
       <button class="ghost-btn" @click="toggleFullscreen">
         {{ fullscreenActive ? '⤢ 退出全屏' : '⛶ 全屏' }}
@@ -1004,7 +1003,7 @@ onBeforeUnmount(() => {
       >⤢ 退出全屏</button>
 
       <transition name="play-fade">
-        <div v-if="view === 'booting' && !closeAction" class="play-overlay">
+        <div v-if="view === 'booting'" class="play-overlay">
           <div class="play-boot-card">
             <div class="play-boot-ring" :style="{ '--p': percent + '%' }">
               <span class="play-boot-percent">{{ percent }}<em>%</em></span>
@@ -1025,7 +1024,7 @@ onBeforeUnmount(() => {
         </div>
       </transition>
 
-      <div v-if="card && !closeAction" class="play-overlay">
+      <div v-if="card" class="play-overlay">
         <div class="play-card" :class="`tone-${card.tone}`">
           <div class="play-card-icon">{{ card.icon }}</div>
           <h1>{{ card.title }}</h1>
@@ -1055,18 +1054,6 @@ onBeforeUnmount(() => {
               {{ card.primary }}
             </button>
             <button class="btn" @click="backToSource">{{ back.label }}</button>
-          </div>
-        </div>
-      </div>
-
-      <div v-if="closeAction" class="play-overlay">
-        <div class="play-boot-card">
-          <div class="play-boot-ring" :style="{ '--p': closeAction.percent + '%' }">
-            <span class="play-boot-percent">{{ closeAction.percent }}<em>%</em></span>
-          </div>
-          <div class="play-boot-stage">{{ closeAction.label }}</div>
-          <div class="play-boot-track">
-            <span class="play-boot-fill" :style="{ width: closeAction.percent + '%' }" />
           </div>
         </div>
       </div>

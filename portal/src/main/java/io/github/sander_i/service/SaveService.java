@@ -308,7 +308,8 @@ public class SaveService {
      * 恢复 / 切换到指定存档。调用方必须先确认会话已停止。
      *
      * 顺序（任何一步失败都不会留下半截存档）:
-     *  1. 先对当前存档做 pre-restore 快照
+     *  1. 可选：先对当前存档做 pre-restore 快照（{@code snapshotCurrent=false} 时跳过，
+     *     避免每次切换都堆一份整包自动快照）
      *  2. 解压到**游戏目录内**的临时目录（同分区，重命名才是原子的；
      *     用系统临时目录会在跨分区 move 目录时失败）
      *  3. 校验归档成员无越界路径
@@ -318,17 +319,28 @@ public class SaveService {
      *     成功后删掉 .old；失败则把 .old 改回来
      */
     public SaveArchive restore(String gameId, String archiveName) throws IOException {
+        return restore(gameId, archiveName, true);
+    }
+
+    /**
+     * @param snapshotCurrent 切换前是否给当前状态拍 pre-restore 快照。
+     *                        常规切换传 false：每切一次就多一份整包备份，没必要。
+     */
+    public SaveArchive restore(String gameId, String archiveName, boolean snapshotCurrent)
+            throws IOException {
         Path root = backupRoot(gameId);
         Path archive = resolveArchive(root, archiveName);
         if (!Files.isRegularFile(archive)) {
             throw new IllegalArgumentException("备份不存在: " + archiveName);
         }
 
-        // 1) 保护性快照：先保住当前状态
-        try {
-            backup(gameId, "pre-restore", "切换存档前自动快照", KIND_PRE_RESTORE);
-        } catch (IllegalStateException e) {
-            log.warn("恢复前快照跳过: {}", e.getMessage());
+        // 1) 保护性快照（按需，默认不拍）
+        if (snapshotCurrent) {
+            try {
+                backup(gameId, "pre-restore", "切换存档前自动快照", KIND_PRE_RESTORE);
+            } catch (IllegalStateException e) {
+                log.warn("恢复前快照跳过: {}", e.getMessage());
+            }
         }
 
         Path gameDir = paths.gameDir(gameId).toAbsolutePath().normalize();
@@ -355,10 +367,41 @@ public class SaveService {
                 }
             }
             log.info("存档已切换 {} <- {}", gameId, archive.getFileName());
+            // 记录「当前正在游玩的是哪份存档」，页面据此高亮
+            writeCurrent(gameId, archive.getFileName().toString());
             return describe(archive);
         } finally {
             deleteRecursively(tmp);
         }
+    }
+
+    /** 当前生效的存档备份名；从未切换过则返回空串 */
+    public String currentArchive(String gameId) {
+        Path marker = currentMarker(gameId);
+        try {
+            String v = Files.readString(marker, java.nio.charset.StandardCharsets.UTF_8).trim();
+            // 备份被删掉后标记失效，避免页面指向不存在的条目
+            return Files.isRegularFile(backupRoot(gameId).resolve(v)) ? v : "";
+        } catch (IOException e) {
+            return "";
+        }
+    }
+
+    private void writeCurrent(String gameId, String archiveName) {
+        Path marker = currentMarker(gameId);
+        try {
+            Files.createDirectories(marker.getParent());
+            Files.writeString(marker, archiveName + System.lineSeparator(),
+                    java.nio.charset.StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            // 标记写失败不影响切换本身，只是页面不会高亮
+            log.warn("写入当前存档标记失败 {}: {}", marker, e.toString());
+        }
+    }
+
+    /** 当前存档标记文件放在备份目录旁边，跟着备份一起删干净 */
+    private Path currentMarker(String gameId) {
+        return paths.dataDir().resolve("backups").resolve("saves").resolve(gameId + ".current");
     }
 
     /**
@@ -403,10 +446,39 @@ public class SaveService {
         deleteRecursively(old);
     }
 
+    /**
+     * 删除一份备份。
+     *
+     * 两类备份不允许删除：
+     *  - 「原始存档」（{@link #KIND_ORIGINAL}）：导入游戏时留的底，玩家把游戏玩坏、
+     *    存档全部丢失后唯一能回到初始状态的东西；
+     *  - 「当前正在游玩的那份」：删掉它，游戏目录里的实际存档就失去了对应的备份锚点，
+     *    页面上也没法再判断当前进度来自哪份备份。要删先切到别的存档。
+     *
+     * 前端同样隐藏删除按钮，这里再挡一道，防止直接调接口绕过。
+     */
     public void delete(String gameId, String archiveName) throws IOException {
         Path archive = resolveArchive(backupRoot(gameId), archiveName);
+        if (!Files.isRegularFile(archive)) {
+            throw new IllegalArgumentException("备份不存在: " + archiveName);
+        }
+        if (KIND_ORIGINAL.equals(describe(archive).kind())) {
+            throw new IllegalStateException("原始存档不可删除：它是游戏导入时的初始状态，"
+                    + "存档全部丢失时靠它恢复");
+        }
+        if (archiveName.equals(currentArchive(gameId))) {
+            throw new IllegalStateException("当前正在游玩的存档不可删除："
+                    + "请先切换到其它存档，再删除这一份");
+        }
         Files.deleteIfExists(archive);
         Files.deleteIfExists(metaPath(archive));
+    }
+
+    /** 原始存档（导入时留底）；没有则返回 null */
+    public SaveArchive originalArchive(String gameId) throws IOException {
+        return list(gameId).stream()
+                .filter(a -> KIND_ORIGINAL.equals(a.kind()))
+                .findFirst().orElse(null);
     }
 
     /** 备份文件路径；下载用。只做路径解析，不保证文件存在 */

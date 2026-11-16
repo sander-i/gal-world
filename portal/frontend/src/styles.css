@@ -1116,6 +1116,39 @@ select optgroup {
   border-color: var(--warn-line);
 }
 
+/* 当前正在游玩的那份存档：整行加底色，标签旁加徽标 */
+.saves tr.is-current td {
+  background: var(--accent-faint);
+}
+.save-current-badge {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 600;
+  background: var(--accent-soft);
+  color: var(--accent);
+  border: 1px solid var(--accent-line);
+}
+.save-current-line {
+  margin: 10px 0 2px;
+  font-size: 13px;
+}
+
+/* 原始存档兜底区：灰底一块，与备份表格区分开 */
+.save-original-box {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface-2);
+}
+
 .link-btn {
   display: inline-flex;
   align-items: center;

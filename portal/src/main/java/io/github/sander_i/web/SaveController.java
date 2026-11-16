@@ -29,6 +29,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -52,11 +53,7 @@ public class SaveController {
     @GetMapping
     public Map<String, Object> list(@PathVariable String id) throws IOException {
         requireGame(id);
-        List<String> dirs = saveDirLabels(id);
-        return Map.of(
-                "saveDirs", dirs,
-                "saveDirNames", saves.saveDirNames(id),
-                "backups", saves.list(id));
+        return state(id, Map.of());
     }
 
     /** 浏览游戏目录内容，供「手动选择存档目录」用 */
@@ -87,9 +84,7 @@ public class SaveController {
         String label = req == null ? "" : req.label();
         String description = req == null ? "" : req.description();
         Path archive = saves.backup(id, label, description, SaveService.KIND_MANUAL);
-        return Map.of(
-                "created", archive.getFileName().toString(),
-                "backups", saves.list(id));
+        return state(id, Map.of("created", archive.getFileName().toString()));
     }
 
     /** 修改备份的标签 / 描述 */
@@ -100,17 +95,25 @@ public class SaveController {
         String label = req == null ? "" : req.label();
         String description = req == null ? "" : req.description();
         SaveService.SaveArchive updated = saves.updateMeta(id, name, label, description);
-        return Map.of("updated", updated.name(), "backups", saves.list(id));
+        return state(id, Map.of("updated", updated.name()));
     }
 
     /** 切换存档：把指定备份解压回游戏目录 */
     @PostMapping("/{name}/switch")
-    public ResponseEntity<?> switchTo(@PathVariable String id, @PathVariable String name) throws IOException {
-        return restore(id, name);
+    public ResponseEntity<?> switchTo(@PathVariable String id, @PathVariable String name,
+                                      @RequestParam(defaultValue = "false") boolean snapshot)
+            throws IOException {
+        return doRestore(id, name, snapshot);
     }
 
     @PostMapping("/{name}/restore")
-    public ResponseEntity<?> restore(@PathVariable String id, @PathVariable String name) throws IOException {
+    public ResponseEntity<?> restore(@PathVariable String id, @PathVariable String name,
+                                     @RequestParam(defaultValue = "false") boolean snapshot)
+            throws IOException {
+        return doRestore(id, name, snapshot);
+    }
+
+    private ResponseEntity<?> doRestore(String id, String name, boolean snapshot) throws IOException {
         requireGame(id);
         // 游戏在跑时恢复会与写盘冲突，直接拒绝
         var st = sessions.status(id, portOf(id));
@@ -119,15 +122,45 @@ public class SaveController {
                     .body(Map.of("code", "SESSION_RUNNING",
                             "message", "游戏正在运行，请先在门户停止会话再切换存档"));
         }
-        SaveService.SaveArchive restored = saves.restore(id, name);
-        return ResponseEntity.ok(Map.of("restored", restored.name(), "backups", saves.list(id)));
+        SaveService.SaveArchive restored = saves.restore(id, name, snapshot);
+        return ResponseEntity.ok(state(id, Map.of("restored", restored.name())));
     }
 
     @DeleteMapping("/{name}")
     public Map<String, Object> delete(@PathVariable String id, @PathVariable String name) throws IOException {
         requireGame(id);
         saves.delete(id, name);
-        return Map.of("backups", saves.list(id));
+        return state(id, Map.of());
+    }
+
+    /**
+     * 存档面板的完整状态。
+     *
+     * 所有写操作都返回它：前端拿到响应会整体替换本地状态，只回 {@code backups}
+     * 会让 {@code saveDirs} 变成 undefined，模板读 {@code .length} 时抛错、整页白屏。
+     */
+    private Map<String, Object> state(String id, Map<String, Object> extra) throws IOException {
+        Map<String, Object> out = new LinkedHashMap<>(extra);
+        out.put("saveDirs", saveDirLabels(id));
+        out.put("saveDirNames", saves.saveDirNames(id));
+        out.put("current", saves.currentArchive(id));
+        SaveService.SaveArchive original = saves.originalArchive(id);
+        out.put("original", original == null ? "" : original.name());
+        out.put("backups", saves.list(id));
+        return out;
+    }
+
+    /** 从原始存档（导入时的初始状态）恢复；存档列表为空时页面用它兜底 */
+    @PostMapping("/restore-original")
+    public ResponseEntity<?> restoreOriginal(@PathVariable String id) throws IOException {
+        requireGame(id);
+        SaveService.SaveArchive original = saves.originalArchive(id);
+        if (original == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("code", "NO_ORIGINAL",
+                            "message", "没有原始存档备份，无法恢复初始状态"));
+        }
+        return doRestore(id, original.name(), false);
     }
 
     /** 下载某份备份（tar.gz）。文件名用备份名，浏览器另存为 */

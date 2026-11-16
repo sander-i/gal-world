@@ -33,7 +33,7 @@ class SaveControllerTest {
                 "demo", SessionService.State.RUNNING, "active", null, false));
 
         var controller = new SaveController(saves, sessions, repo);
-        var res = controller.switchTo("demo", "20260101-010101_a.tar.gz");
+        var res = controller.switchTo("demo", "20260101-010101_a.tar.gz", false);
 
         assertEquals(409, res.getStatusCode().value());
         verifyNoInteractions(saves);
@@ -50,13 +50,18 @@ class SaveControllerTest {
                 "demo", SessionService.State.STOPPED, "inactive", null, false));
         var archive = new SaveService.SaveArchive("20260101-010101_a.tar.gz", "a", "desc",
                 SaveService.KIND_MANUAL, 10, java.time.Instant.EPOCH);
-        when(saves.restore("demo", archive.name())).thenReturn(archive);
+        when(saves.restore("demo", archive.name(), false)).thenReturn(archive);
         when(saves.list("demo")).thenReturn(List.of(archive));
+        // state() 会拼存档目录展示名，需要游戏目录与生效目录名
+        when(saves.gameDirOf("demo")).thenReturn(java.nio.file.Path.of("/tmp/demo"));
+        when(saves.saveDirs("demo")).thenReturn(List.of());
+        when(saves.saveDirNames("demo")).thenReturn(List.of());
+        when(saves.currentArchive("demo")).thenReturn("");
 
         var controller = new SaveController(saves, sessions, repo);
-        var res = controller.switchTo("demo", archive.name());
+        var res = controller.switchTo("demo", archive.name(), false);
 
         assertEquals(200, res.getStatusCode().value());
-        verify(saves).restore("demo", archive.name());
+        verify(saves).restore("demo", archive.name(), false);
     }
 }

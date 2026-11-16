@@ -34,7 +34,24 @@ const game = ref(null)
 const loading = ref(true)
 const error = ref('')
 
-const saves = ref({ saveDirs: [], saveDirNames: [], backups: [] })
+const saves = ref({ saveDirs: [], saveDirNames: [], current: '', original: '', backups: [] })
+
+/**
+ * 合并存档面板状态。
+ *
+ * 后端写接口理应返回完整状态，但任何一处漏字段都会让模板读 undefined.length
+ * 直接崩掉整页（表现为白屏）。这里以现有值为底，只覆盖响应里真实存在的键。
+ */
+function mergeSaves(res) {
+  const base = saves.value || {}
+  return {
+    saveDirs: Array.isArray(res?.saveDirs) ? res.saveDirs : (base.saveDirs || []),
+    saveDirNames: Array.isArray(res?.saveDirNames) ? res.saveDirNames : (base.saveDirNames || []),
+    current: typeof res?.current === 'string' ? res.current : (base.current || ''),
+    original: typeof res?.original === 'string' ? res.original : (base.original || ''),
+    backups: Array.isArray(res?.backups) ? res.backups : (base.backups || []),
+  }
+}
 /** 存档面板默认收起：没有备份时它只是一块占位，把详情页撑得很长 */
 const savesOpen = ref(false)
 /** 手动选择存档目录的弹窗 */
@@ -49,6 +66,13 @@ const savesBusy = ref(false)
 const editingName = ref('')
 const editLabel = ref('')
 const editDescription = ref('')
+
+/** 当前正在游玩的那份备份；未切换过则为 null */
+const currentBackup = computed(() => {
+  const name = saves.value?.current
+  if (!name) return null
+  return (saves.value.backups || []).find((b) => b.name === name) || null
+})
 
 const SAVE_KIND_TEXT = { MANUAL: '手动', ORIGINAL: '原始', PRE_RESTORE: '自动快照' }
 
@@ -154,6 +178,27 @@ const STATE_TEXT = {
 
 const running = computed(() => game.value?.state === 'RUNNING')
 
+/**
+ * 「进入游戏」按钮的实际可用状态。
+ *
+ * 会话状态变 RUNNING 只代表串流端已就绪，游戏本体（Wine 启动、资源加载）
+ * 往往还要再等一会儿。部分游戏立刻点进去会看到黑屏或初始化中的画面，
+ * 所以这里额外延迟 {@link ENTER_DELAY_MS} 再放行。
+ */
+const ENTER_DELAY_MS = 500
+const enterReady = ref(false)
+let enterTimer = null
+watch(running, (isRunning) => {
+  clearTimeout(enterTimer)
+  if (!isRunning) {
+    enterReady.value = false
+    return
+  }
+  enterReady.value = false
+  enterTimer = setTimeout(() => { enterReady.value = true }, ENTER_DELAY_MS)
+}, { immediate: true })
+onBeforeUnmount(() => clearTimeout(enterTimer))
+
 const { busy, launches, toggle: sessionToggle, restart: sessionRestart } = useGameLaunch({
   idOf: () => props.id,
   onError: (msg) => notify.error(msg),
@@ -187,7 +232,7 @@ async function load() {
   error.value = ''
   try {
     game.value = await api.getGame(props.id)
-    saves.value = await api.listSaves(props.id)
+    saves.value = mergeSaves(await api.listSaves(props.id))
     playtime.value = await api.playtime(props.id)
     const s = await api.settings()
     switchMode.value = s.switchMode || 'page'
@@ -236,7 +281,7 @@ async function stop() {
 async function doBackup() {
   savesBusy.value = true
   try {
-    saves.value = await api.backupSaves(props.id, saveLabel.value, saveDescription.value)
+    saves.value = mergeSaves(await api.backupSaves(props.id, saveLabel.value, saveDescription.value))
     saveLabel.value = ''
     saveDescription.value = ''
     notify.success('存档已备份')
@@ -262,7 +307,7 @@ function cancelEdit() {
 async function saveEdit(name) {
   savesBusy.value = true
   try {
-    saves.value = await api.updateSave(props.id, name, editLabel.value, editDescription.value)
+    saves.value = mergeSaves(await api.updateSave(props.id, name, editLabel.value, editDescription.value))
     cancelEdit()
     notify.success('备份信息已更新')
   } catch (e) {
@@ -272,18 +317,21 @@ async function saveEdit(name) {
   }
 }
 
-/** 切换存档：后端会先把当前存档快照成 pre-restore，再解压目标备份 */
+/**
+ * 切换存档：把备份解压回游戏目录。
+ * 默认不自动快照——每次切换都留一份整包备份（动辄几十 MB）没必要，
+ * 需要保底时用户可以自己先手动备份。
+ */
 async function doSwitch(b) {
   const desc = b.label ? `「${b.label}」` : '该备份'
   if (!await confirmAction(
-    `切换当前存档到${desc}？当前进度会先自动快照一份（pre-restore），切错了可以再切回来。`,
+    `切换当前存档到${desc}？游戏目录里的存档文件会被这份备份覆盖。`,
     { title: '切换存档', confirmText: '切换' },
   )) return
   savesBusy.value = true
   try {
-    await api.switchSave(props.id, b.name)
-    saves.value = await api.listSaves(props.id)
-    notify.success('已切换存档（切换前的状态已自动备份）')
+    saves.value = mergeSaves(await api.switchSave(props.id, b.name))
+    notify.success(`已切换到${desc}`)
   } catch (e) {
     notify.error('切换失败：' + e.message)
   } finally {
@@ -297,11 +345,33 @@ async function doDelete(b) {
   })) return
   savesBusy.value = true
   try {
-    saves.value = await api.deleteSave(props.id, b.name)
+    saves.value = mergeSaves(await api.deleteSave(props.id, b.name))
     if (editingName.value === b.name) cancelEdit()
     notify.success('备份已删除')
   } catch (e) {
     notify.error('删除失败：' + e.message)
+  } finally {
+    savesBusy.value = false
+  }
+}
+
+/**
+ * 恢复到原始存档（导入游戏时的初始状态）。
+ *
+ * 这是存档出问题时的兜底：列表里没有任何备份、或者存档被玩坏了，
+ * 用它把游戏目录还原到刚接入时的样子。
+ */
+async function doRestoreOriginal() {
+  if (!await confirmAction(
+    `恢复到「${saves.value.original}」？游戏目录里的存档会被导入时的初始状态覆盖。`,
+    { title: '恢复初始存档', confirmText: '恢复' },
+  )) return
+  savesBusy.value = true
+  try {
+    saves.value = mergeSaves(await api.restoreOriginalSave(props.id))
+    notify.success('已恢复初始存档')
+  } catch (e) {
+    notify.error('恢复失败：' + e.message)
   } finally {
     savesBusy.value = false
   }
@@ -318,7 +388,7 @@ function openDirPicker() {
 }
 
 async function onDirsSaved() {
-  saves.value = await api.listSaves(props.id)
+  saves.value = mergeSaves(await api.listSaves(props.id))
 }
 
 // ---------------- 游戏打包下载 ----------------
@@ -513,7 +583,17 @@ onMounted(load)
           </div>
 
           <div class="actions">
-            <button v-if="running" class="btn primary sm" :disabled="busy || !!action" @click="openPlay">进入游戏</button>
+            <button
+              v-if="running && enterReady"
+              class="btn primary sm"
+              :disabled="busy || !!action"
+              @click="openPlay"
+            >进入游戏</button>
+            <button
+              v-else-if="running"
+              class="btn primary sm"
+              disabled
+            >游戏启动中…</button>
             <button v-else-if="game.state === 'FAILED' || game.crashed" class="btn primary sm" :disabled="busy || !!action" @click="restart">
               {{ action?.action === 'start' ? '启动中 ' + action.percent + '%' : '重新启动' }}
             </button>
@@ -702,9 +782,17 @@ onMounted(load)
 
         <p v-if="!savesOpen" class="muted-sm">
           {{ saves.backups?.length ? saves.backups.length + ' 份备份（可切换）' : '暂无存档备份' }}
+          <template v-if="currentBackup"> · 当前：{{ currentBackup.label || currentBackup.name }}</template>
         </p>
 
         <template v-else>
+          <p v-if="currentBackup" class="save-current-line">
+            当前游玩中：<strong>{{ currentBackup.label || currentBackup.name }}</strong>
+            <span class="muted-sm">（{{ fmtTime(currentBackup.createdAt) }}）</span>
+          </p>
+          <p v-else class="muted-sm">
+            还没有切换到任何备份 —— 游戏里正在用的存档就是当前进度。
+          </p>
           <div class="backup-bar">
             <input
               v-model="saveLabel"
@@ -737,7 +825,11 @@ onMounted(load)
               </tr>
             </thead>
             <tbody>
-              <tr v-for="b in saves.backups" :key="b.name">
+              <tr
+                v-for="b in saves.backups"
+                :key="b.name"
+                :class="{ 'is-current': b.name === saves.current }"
+              >
                 <td class="mono">{{ fmtTime(b.createdAt) }}</td>
                 <td>
                   <span class="save-kind" :class="b.kind">
@@ -761,6 +853,7 @@ onMounted(load)
                     />
                   </template>
                   <template v-else>
+                    <span v-if="b.name === saves.current" class="save-current-badge">当前游玩中</span>
                     <span v-if="b.label" class="tag">{{ b.label }}</span>
                     <span v-else class="muted-sm">无标签</span>
                     <div v-if="b.description" class="muted-sm" style="margin-top:4px">
@@ -778,7 +871,13 @@ onMounted(load)
                     <button class="link-btn" :disabled="savesBusy" @click="downloadSave(b)">下载</button>
                     <button class="link-btn" :disabled="savesBusy" @click="doSwitch(b)">切换到此存档</button>
                     <button class="link-btn" :disabled="savesBusy" @click="startEdit(b)">编辑</button>
-                    <button class="link-btn danger" :disabled="savesBusy" @click="doDelete(b)">删除</button>
+                    <!-- 原始存档与当前正在游玩的那份都不可删：前者是兜底，后者会让当前进度失去备份锚点 -->
+                    <button
+                      v-if="b.kind !== 'ORIGINAL' && b.name !== saves.current"
+                      class="link-btn danger"
+                      :disabled="savesBusy"
+                      @click="doDelete(b)"
+                    >删除</button>
                   </template>
                 </td>
               </tr>
@@ -786,6 +885,25 @@ onMounted(load)
           </table>
 
           <p v-else class="muted-sm" style="margin-top:10px">还没有备份。</p>
+
+          <!-- 没有任何手动备份时的兜底：回到导入游戏时留的原始存档 -->
+          <div class="save-original-box">
+            <div v-if="saves.original">
+              <span class="muted-sm">
+                原始存档：<strong>{{ saves.original }}</strong>
+                　　这是游戏导入时自动留底的初始状态，不可删除，存档出问题时用它回退。
+              </span>
+              <button
+                class="btn sm"
+                style="margin-left:10px"
+                :disabled="savesBusy || running"
+                @click="doRestoreOriginal"
+              >恢复初始存档</button>
+            </div>
+            <span v-else class="muted-sm">
+              这个游戏没有原始存档备份（导入时未发现存档目录，或导入了不含存档的包）。
+            </span>
+          </div>
 
           <p class="muted-sm" style="margin-top:14px">
             切换前会自动对当前存档做一份 <code>pre-restore</code> 快照，切错了可以再切回来；

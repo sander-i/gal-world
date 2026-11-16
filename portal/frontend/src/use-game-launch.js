@@ -10,7 +10,13 @@ import { LAUNCH_LABELS, launchPercent, startVerdict, stopPercent } from './launc
 const POLL_MS = 400
 const START_MS = 15_000
 const STREAM_MS = 20_000
-const STOP_MS = 8_000
+/**
+ * 关闭期望时长。
+ *
+ * 关闭走「先请求游戏自身退出、等它存盘」，实测 KiriKiri 类游戏要 10~15s
+ * 才真正结束（不会强杀）。进度条只到 95% 就停在原地等，所以这里按真实时长给。
+ */
+const STOP_MS = 15_000
 const START_TIMEOUT_MS = 90_000
 const STOP_TIMEOUT_MS = 30_000
 const DONE_HOLD_MS = 700
