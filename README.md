@@ -19,7 +19,9 @@ commercial product; self-hosting, issues and PRs are welcome, but no out-of-the-
 - **Library** — hero picks, filters by company / localization group / tag, search, quick start-stop
 - **Import wizard** — upload zip / 7z or a folder (chunked, resumable), or use a server directory
 - **Metadata and media** — companies / groups / tags, covers, icons, CG rotation, image preloading
-- **Saves** — tagged backups, one-click switching, five safety guards, automatic original snapshot
+- **Saves** — tagged backups, one-click switching, download, five safety guards, automatic original
+  snapshot. Save locations are configurable: browse the game directory and pick folders or single
+  files, including nested paths (`SteamEmu/Saves`) and per-file saves (`.ksd` / `.sav`)
 - **Operations** — one-click deploy / uninstall with live logs, remote update with rollback,
   config snapshots, game package download
 - **Playback extras** — heartbeat playtime, idle stop, canvas calibration, latency display, telemetry
