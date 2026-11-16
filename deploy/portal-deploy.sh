@@ -20,7 +20,8 @@ SSH_BIN="${SSH_BIN:-/c/Windows/System32/OpenSSH/ssh.exe}"
 SCP_BIN="${SCP_BIN:-/c/Windows/System32/OpenSSH/scp.exe}"
 SSH_TARGET="${SSH_TARGET:-galworld}"
 JAVA_HOME_LOCAL="${JAVA_HOME_LOCAL:-/g/Program Files/Java/corretto-17.0.14}"
-REMOTE_LIB='$HOME/galworld/lib'
+# scp 用相对家目录的路径：OpenSSH 9 起 scp 走 SFTP，远端不再展开 $HOME / ~
+REMOTE_LIB='galworld/lib'
 PORTAL_PORT="${GALWORLD_PORTAL_PORT:-8088}"
 
 say() { printf '\n== %s\n' "$*"; }
