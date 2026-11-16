@@ -48,3 +48,17 @@ test('打包下载两步接口的 URL 正确且带编码', async () => {
     '/api/games/demo%20game/download/packages/dl-1/file',
   )
 })
+
+test('刷新后按游戏找回当前打包任务', async () => {
+  const calls = capture()
+  await api.currentDownloadPackage('demo game')
+  assert.equal(calls[0].method, 'GET')
+  assert.equal(calls[0].url, '/api/games/demo%20game/download/packages/current')
+})
+
+test('打包预估走 estimate 接口', async () => {
+  const calls = capture()
+  await api.packageEstimate('demo game')
+  assert.equal(calls[0].method, 'GET')
+  assert.equal(calls[0].url, '/api/games/demo%20game/download/packages/estimate')
+})

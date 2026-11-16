@@ -438,6 +438,12 @@ export const api = {
   /** 第一步：异步打包游戏目录，返回可轮询的 job */
   packageGame: (id) =>
     req(`/api/games/${encodeURIComponent(id)}/download/packages`, { method: 'POST' }),
+  /** 打包前预估：本地待打包字节数、文件数与预计耗时 */
+  packageEstimate: (id) =>
+    req(`/api/games/${encodeURIComponent(id)}/download/packages/estimate`),
+  /** 最近一次打包任务；没有时后端返回 204，此处得到 null。页面刷新后恢复进度用。 */
+  currentDownloadPackage: (id) =>
+    req(`/api/games/${encodeURIComponent(id)}/download/packages/current`),
   downloadJob: (id, jobId) =>
     req(`/api/games/${encodeURIComponent(id)}/download/packages/${encodeURIComponent(jobId)}`),
   /** 第二步：打包完成后由浏览器直接下载（GET，不需要写令牌） */
