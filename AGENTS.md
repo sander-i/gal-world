@@ -131,6 +131,33 @@ cd .. && mvn -DskipTests package
 
 `mvn` 需要 JDK 17。本机若无 JDK，`deploy/release.sh` 会用它内置的 `JAVA_HOME_LOCAL`。
 
+## 提交信息
+
+格式参照 Conventional Commits，subject 用中文：
+
+```
+<type>(<scope>): <一句话说清改了什么，50 字符内>
+
+<body：为什么这么改、放弃了什么方案，不写“改了哪些文件”>
+```
+
+- **type**：`feat` / `fix` / `refactor` / `perf` / `docs` / `test` / `build` / `ci` / `chore` / `revert`
+- **scope**：`portal` / `web` / `service` / `save` / `deploy` / `frontend` / `ci` / `docs`，
+  或具体模块名（如 `release`）；跨多处时省略
+- **subject**：不加句号；不用「更新了」「修改了」「优化了一下」这类空话；
+  写**行为变化**而不是操作过程（「切换存档保留当前进度」而不是「改了 SaveService」）
+- **body**：只在需要解释**为什么**时写。一句话能说清就不写 body。
+  取舍、被否掉的方案、踩过的坑放这里 —— 这是后来排查时唯一能看到的上下文
+- **一个提交只做一件事**。格式化、重命名、行为改动不要混在同一条里
+- **不要写工具署名**：不加 `Co-Authored-By`、不加生成器标识；作者就是提交人
+
+提交身份固定为仓库级配置，不要用全局身份提交：
+
+```bash
+git config user.name  sander
+git config user.email <仓库约定的 noreply 邮箱>
+```
+
 ## 要花钱 / 有风险的操作（执行前必须问用户）
 
 | 操作 | 风险 |
