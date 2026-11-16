@@ -141,12 +141,25 @@ EMBEDDED_VERSION="$(unzip -p "$DIST/$JAR" BOOT-INF/classes/application.yml \
 require_clean_tree
 
 say "创建 Release $TAG"
+# body 里的中文必须走文件：Git Bash 把 argv 传给原生 curl.exe 时会按系统 ANSI
+# 代码页（中文 Windows 是 GBK）转换，直接写在参数里会变成乱码字节，Gitee 按
+# UTF-8 解出来就是「锟斤拷」。--data-urlencode name@file 读的是文件原始字节，
+# 不经过 argv 编码转换。
+#
+# 有版本说明就用它（docs/release-notes/<version>.zh.md），没有则退回一行摘要。
+RELEASE_BODY_FILE="$DIST/release-body.txt"
+NOTES_ZH="$REPO_ROOT/docs/release-notes/$VERSION.zh.md"
+if [[ -f "$NOTES_ZH" ]]; then
+  cp "$NOTES_ZH" "$RELEASE_BODY_FILE"
+else
+  printf '发布 %s\n' "$TAG" >"$RELEASE_BODY_FILE"
+fi
 RESP="$(auth_curl -fsS -X POST --connect-timeout 10 --max-time 60 \
   -H 'Accept: application/json' \
   --data-urlencode "tag_name=$TAG" \
   --data-urlencode "target_commitish=$COMMIT" \
   --data-urlencode "name=$TAG" \
-  --data-urlencode "body=发布 $TAG" \
+  --data-urlencode "body@$RELEASE_BODY_FILE" \
   --data-urlencode "prerelease=$PRERELEASE" \
   "$API/releases")" || die "创建 Release $TAG 失败"
 REL_ID="$(printf '%s' "$RESP" | jq -r '.id // empty')"

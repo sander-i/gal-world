@@ -119,18 +119,34 @@ jobs:
       - name: 创建 Release 并上传资产
         env:
           TAG: ${{ steps.ver.outputs.tag }}
+          VERSION: ${{ steps.ver.outputs.version }}
           JAR: ${{ steps.ver.outputs.jar }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release create "$TAG" \
-            --title "$TAG" \
-            --notes "发布 $TAG" \
-            --verify-tag \
-            "dist/$JAR" \
-            "dist/$JAR.sha256" \
-            dist/release-manifest.json \
-            dist/LICENSE \
-            dist/THIRD-PARTY-NOTICES.md
+          # GitHub 侧用英文说明（docs/release-notes/<version>.en.md），
+          # Gitee 侧用同目录的 .zh.md，两边各写各的
+          NOTES="docs/release-notes/${VERSION}.en.md"
+          if [[ -f "$NOTES" ]]; then
+            gh release create "$TAG" \
+              --title "$TAG" \
+              --notes-file "$NOTES" \
+              --verify-tag \
+              "dist/$JAR" \
+              "dist/$JAR.sha256" \
+              dist/release-manifest.json \
+              dist/LICENSE \
+              dist/THIRD-PARTY-NOTICES.md
+          else
+            gh release create "$TAG" \
+              --title "$TAG" \
+              --notes "Release $TAG" \
+              --verify-tag \
+              "dist/$JAR" \
+              "dist/$JAR.sha256" \
+              dist/release-manifest.json \
+              dist/LICENSE \
+              dist/THIRD-PARTY-NOTICES.md
+          fi
 
       # 上传失败时 gh 会报错，这里再核一遍资产清单，防静默缺失
       - name: 校验 Release 资产
