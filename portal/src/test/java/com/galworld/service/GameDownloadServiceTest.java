@@ -115,6 +115,56 @@ class GameDownloadServiceTest {
     }
 
     @Test
+    void estimateCountsOnlyFilesThatWouldBePackaged() throws Exception {
+        GameDownloadService.Estimate est = service.estimate("g1");
+
+        assertEquals(7, est.totalBytes());
+        assertEquals(2, est.totalFiles());
+        assertTrue(est.estimatedSeconds() >= 1);
+    }
+
+    @Test
+    void estimateRejectsMissingGameDirectory() {
+        assertThrows(GameDownloadService.NotFound.class, () -> service.estimate("nope"));
+    }
+
+    @Test
+    void bootRecoveryDeletesPartFilesAndAdoptsFinishedZip() throws Exception {
+        Path dir = root.resolve("data/downloads/g1");
+        Files.createDirectories(dir);
+        Path finished = dir.resolve("dl-20260101000000-aaaa.zip");
+        Files.writeString(finished, "zipbytes");
+        Path part = dir.resolve("dl-20260101000000-bbbb.zip.part");
+        Files.writeString(part, "half");
+
+        GameDownloadService restarted = new GameDownloadService(new PathConfig(root.toString()), queue);
+        restarted.cleanupStaleOnBoot();
+
+        assertFalse(Files.exists(part));
+        GameDownloadService.JobView current = restarted.current("g1");
+        assertNotNull(current);
+        assertEquals("dl-20260101000000-aaaa", current.jobId());
+        assertEquals(GameDownloadService.STATE_READY, current.state());
+        assertEquals(8, current.doneBytes());
+        assertEquals(finished.toAbsolutePath().normalize(),
+                restarted.file("g1", current.jobId()));
+    }
+
+    @Test
+    void bootRecoveryLeavesNoJobWhenOnlyPartFileExists() throws Exception {
+        Path dir = root.resolve("data/downloads/g1");
+        Files.createDirectories(dir);
+        Path part = dir.resolve("dl-20260101000000-bbbb.zip.part");
+        Files.writeString(part, "half");
+
+        GameDownloadService restarted = new GameDownloadService(new PathConfig(root.toString()), queue);
+        restarted.cleanupStaleOnBoot();
+
+        assertFalse(Files.exists(part));
+        assertNull(restarted.current("g1"));
+    }
+
+    @Test
     void deleteRemovesPackage() throws Exception {
         GameDownloadService.JobView job = await(service.start("g1").jobId());
         Path archive = service.file("g1", job.jobId());
@@ -123,5 +173,41 @@ class GameDownloadServiceTest {
 
         assertFalse(Files.exists(archive));
         assertThrows(GameDownloadService.NotFound.class, () -> service.view("g1", job.jobId()));
+        assertNull(service.current("g1"));
+    }
+
+    @Test
+    void currentFindsFinishedJobAfterPageRefresh() throws Exception {
+        assertNull(service.current("g1"));
+        GameDownloadService.JobView job = await(service.start("g1").jobId());
+
+        GameDownloadService.JobView current = service.current("g1");
+
+        assertNotNull(current);
+        assertEquals(job.jobId(), current.jobId());
+        assertEquals(GameDownloadService.STATE_READY, current.state());
+    }
+
+    @Test
+    void currentFindsRunningJobAfterPageRefresh() throws Exception {
+        ExecutorService blocked = Executors.newSingleThreadExecutor();
+        CountDownLatch release = new CountDownLatch(1);
+        blocked.submit(() -> {
+            release.await();
+            return null;
+        });
+        try {
+            GameDownloadService queued = new GameDownloadService(new PathConfig(root.toString()), blocked);
+            GameDownloadService.JobView started = queued.start("g1");
+
+            GameDownloadService.JobView current = queued.current("g1");
+
+            assertNotNull(current);
+            assertEquals(started.jobId(), current.jobId());
+            assertEquals(GameDownloadService.STATE_QUEUED, current.state());
+        } finally {
+            release.countDown();
+            blocked.shutdownNow();
+        }
     }
 }

@@ -24,6 +24,7 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -62,10 +63,21 @@ public class GameDownloadService {
     static final Duration PACKAGE_TTL = Duration.ofHours(24);
     /** 打包前要求的最小剩余空间（除 zip 本身外），防止把系统盘写满 */
     private static final long DISK_RESERVE_BYTES = 1024L * 1024 * 1024;
+    /** 还没有实测吞吐时用的兜底值；完成一次打包后改用实测（见 #rememberRate） */
+    private static final double DEFAULT_BYTES_PER_SECOND = 64d * 1024 * 1024;
+    /** 实测吞吐落盘，进程重启后估算仍然有效 */
+    private static final String RATE_FILE = ".pack-rate";
+    /** 样本太小时耗时估计噪声大，不参与吞吐更新 */
+    private static final long RATE_SAMPLE_MIN_BYTES = 8L * 1024 * 1024;
+    private static final long RATE_SAMPLE_MIN_MILLIS = 500;
 
     public record JobView(String jobId, String gameId, String state, String fileName,
                           long totalBytes, long doneBytes, int totalFiles, int doneFiles,
                           String error, String createdAt) {
+    }
+
+    /** 打包预估：待打包的本地字节数、文件数与预计耗时（秒） */
+    public record Estimate(long totalBytes, int totalFiles, long estimatedSeconds) {
     }
 
     /** 游戏目录不存在或 job 不属于该游戏 */
@@ -116,8 +128,14 @@ public class GameDownloadService {
     private final PathConfig paths;
     private final ExecutorService queue;
     private final Map<String, Job> jobs = new ConcurrentHashMap<>();
-    /** gameId -> jobId，保证同一游戏同时只有一个打包任务 */
-    private final Map<String, String> active = new ConcurrentHashMap<>();
+    /**
+     * gameId -> 最近一次打包任务的 jobId。
+     *
+     * 任务结束后不立刻清掉：页面刷新会丢掉前端持有的 jobId，
+     * 需要按游戏找回运行中或已完成的打包结果，否则进度条与下载按钮都会消失。
+     * 过期清理与手动删除时才移除。
+     */
+    private final Map<String, String> latest = new ConcurrentHashMap<>();
 
     @Autowired
     public GameDownloadService(PathConfig paths) {
@@ -137,6 +155,83 @@ public class GameDownloadService {
     @PostConstruct
     void cleanupStaleOnBoot() {
         cleanupExpired();
+        recoverPackages();
+    }
+
+    /**
+     * 重启后的现场恢复。
+     *
+     * 任务进度只存在内存，进程重启必然丢失打包中的进度；这里保证重启不会留下脏数据：
+     *  - {@code .part} 一定是没写完的半成品，进程没了就永远写不完，直接删除；
+     *  - 已完成的 {@code .zip} 本身是完整可下载的，重新登记成 READY 任务，
+     *    避免变成页面上看不到、却占着磁盘直到 24 小时后才清掉的孤儿文件。
+     *
+     * 只在启动时执行一次；运行期间仍由 {@link #cleanupExpired()} 按 TTL 清理。
+     */
+    void recoverPackages() {
+        Path base = paths.downloadDir();
+        if (!Files.isDirectory(base)) {
+            return;
+        }
+        try (var dirs = Files.list(base)) {
+            for (Path dir : dirs.toList()) {
+                if (!Files.isDirectory(dir, LinkOption.NOFOLLOW_LINKS)) {
+                    continue;
+                }
+                Path newest = null;
+                java.util.List<Path> zips = new ArrayList<>();
+                try (var files = Files.list(dir)) {
+                    for (Path p : files.toList()) {
+                        String name = p.getFileName().toString();
+                        if (name.endsWith(".part")) {
+                            deleteRecursively(p);
+                            continue;
+                        }
+                        if (!name.endsWith(".zip") || !Files.isRegularFile(p)) {
+                            continue;
+                        }
+                        zips.add(p);
+                        if (newest == null || isNewer(p, newest)) {
+                            newest = p;
+                        }
+                    }
+                }
+                // 同一游戏只保留一份产物，多出来的（异常中断遗留）一并清掉
+                for (Path zip : zips) {
+                    if (!zip.equals(newest)) {
+                        deleteRecursively(zip);
+                    }
+                }
+                if (newest != null) {
+                    adopt(dir.getFileName().toString(), newest);
+                }
+            }
+        } catch (IOException e) {
+            log.warn("恢复打包产物失败: {}", e.toString());
+        }
+    }
+
+    /** 把磁盘上已有的完整 zip 登记成 READY 任务，进度按已完成处理 */
+    private void adopt(String gameId, Path archive) {
+        String name = archive.getFileName().toString();
+        String jobId = name.substring(0, name.length() - ".zip".length());
+        Job job = new Job(jobId, gameId);
+        long size = sizeOf(archive);
+        job.written.set(size);
+        job.totalBytes = size;
+        job.archive = archive.toAbsolutePath().normalize();
+        job.state = STATE_READY;
+        jobs.put(jobId, job);
+        latest.put(gameId, jobId);
+        log.info("恢复已完成的打包产物 {} -> {}", gameId, job.archive);
+    }
+
+    private static boolean isNewer(Path a, Path b) {
+        try {
+            return Files.getLastModifiedTime(a).compareTo(Files.getLastModifiedTime(b)) > 0;
+        } catch (IOException e) {
+            return false;
+        }
     }
 
     public JobView start(String gameId) {
@@ -145,27 +240,65 @@ public class GameDownloadService {
             throw new NotFound("游戏目录不存在: " + gameId);
         }
         synchronized (this) {
-            String runningId = active.get(gameId);
+            String runningId = latest.get(gameId);
             if (runningId != null) {
                 Job running = jobs.get(runningId);
                 if (running != null && !running.terminal()) {
                     return running.view();
                 }
-                active.remove(gameId, runningId);
+                // 上一次任务已结束：连同记录一起丢弃，避免反复打包把 jobs 越攒越大
+                jobs.remove(runningId);
+                latest.remove(gameId, runningId);
             }
             String jobId = "dl-" + Instant.now().toString()
                     .replaceAll("[^0-9]", "").substring(0, 14) + "-"
                     + UUID.randomUUID().toString().substring(0, 4);
             Job job = new Job(jobId, gameId);
             jobs.put(jobId, job);
-            active.put(gameId, jobId);
+            latest.put(gameId, jobId);
             queue.submit(() -> execute(job));
             return job.view();
         }
     }
 
+    /** 最近一次打包任务；没有则返回 null。页面刷新后据此恢复进度。 */
+    public JobView current(String gameId) {
+        String jobId = latest.get(gameId);
+        if (jobId == null) {
+            return null;
+        }
+        Job job = jobs.get(jobId);
+        if (job == null) {
+            latest.remove(gameId, jobId);
+            return null;
+        }
+        return job.view();
+    }
+
     public JobView view(String gameId, String jobId) {
         return require(gameId, jobId).view();
+    }
+
+    /**
+     * 打包前的预估：按与打包相同的过滤规则统计本地文件，再用实测吞吐折算耗时。
+     * 只做目录遍历与 stat，不读文件内容，大游戏也很快。
+     */
+    public Estimate estimate(String gameId) throws IOException {
+        Path dir = paths.gameDir(gameId);
+        if (!Files.isDirectory(dir, LinkOption.NOFOLLOW_LINKS)) {
+            throw new NotFound("游戏目录不存在: " + gameId);
+        }
+        long totalBytes = 0;
+        int totalFiles = 0;
+        for (Path p : collectEntries(dir)) {
+            if (Files.isDirectory(p, LinkOption.NOFOLLOW_LINKS)) {
+                continue;
+            }
+            totalFiles++;
+            totalBytes += sizeOf(p);
+        }
+        long seconds = totalBytes > 0 ? Math.max(1, Math.round(totalBytes / estimateRate())) : 0;
+        return new Estimate(totalBytes, totalFiles, seconds);
     }
 
     /** 只有打包完成的包才允许下载 */
@@ -190,7 +323,7 @@ public class GameDownloadService {
         }
         if (job.terminal()) {
             jobs.remove(jobId);
-            active.remove(gameId, jobId);
+            latest.remove(gameId, jobId);
         }
     }
 
@@ -220,6 +353,7 @@ public class GameDownloadService {
                     .mapToLong(GameDownloadService::sizeOf).sum();
             ensureDiskSpace(dir, job.totalBytes);
 
+            long packStartedAt = System.nanoTime();
             try (OutputStream out = Files.newOutputStream(part);
                  ZipOutputStream zip = new ZipOutputStream(out)) {
                 Path root = paths.gameDir(job.gameId).toAbsolutePath().normalize();
@@ -256,6 +390,7 @@ public class GameDownloadService {
                     job.doneFiles++;
                 }
             }
+            rememberRate(job.written.get(), (System.nanoTime() - packStartedAt) / 1_000_000);
 
             try {
                 Files.move(part, target, StandardCopyOption.REPLACE_EXISTING,
@@ -275,8 +410,6 @@ public class GameDownloadService {
             job.error = e.getMessage() == null ? e.toString() : e.getMessage();
             deleteRecursively(part);
             log.warn("游戏打包失败 {}: {}", job.gameId, job.error, e);
-        } finally {
-            active.remove(job.gameId, job.jobId);
         }
     }
 
@@ -327,10 +460,44 @@ public class GameDownloadService {
             for (Path p : list.toList()) {
                 if (!p.equals(keep)) {
                     deleteRecursively(p);
+                    forgetJobOf(gameId, p.getFileName().toString());
                 }
             }
         } catch (IOException e) {
             log.warn("清理旧打包文件失败 {}: {}", dir, e.toString());
+        }
+    }
+
+    /** 估算用的吞吐：优先用上次实测，没有则用兜底值 */
+    private double estimateRate() {
+        double stored = storedRate();
+        return stored > 0 ? stored : DEFAULT_BYTES_PER_SECOND;
+    }
+
+    /** 读实测吞吐；文件缺失或内容不合法都返回 0 */
+    private double storedRate() {
+        Path file = paths.downloadDir().resolve(RATE_FILE);
+        try {
+            double v = Double.parseDouble(Files.readString(file).trim());
+            return Double.isFinite(v) && v > 0 ? v : 0;
+        } catch (IOException | NumberFormatException e) {
+            return 0;
+        }
+    }
+
+    /** 打包完成后更新实测吞吐（新旧各半，平滑单次抖动）；写失败不影响打包结果 */
+    private void rememberRate(long bytes, long millis) {
+        if (bytes < RATE_SAMPLE_MIN_BYTES || millis < RATE_SAMPLE_MIN_MILLIS) {
+            return;
+        }
+        double measured = bytes * 1000.0 / millis;
+        double prev = storedRate();
+        long next = Math.round(prev > 0 ? (prev + measured) / 2 : measured);
+        try {
+            Files.createDirectories(paths.downloadDir());
+            Files.writeString(paths.downloadDir().resolve(RATE_FILE), Long.toString(next));
+        } catch (IOException e) {
+            log.debug("记录打包吞吐失败: {}", e.toString());
         }
     }
 
@@ -374,6 +541,7 @@ public class GameDownloadService {
                         try {
                             if (Files.getLastModifiedTime(p).toInstant().isBefore(cutoff)) {
                                 deleteRecursively(p);
+                                forgetJobOf(dir.getFileName().toString(), p.getFileName().toString());
                             }
                         } catch (IOException ignored) {
                             // 单个文件删不掉不影响其它清理
@@ -390,6 +558,19 @@ public class GameDownloadService {
             }
         } catch (IOException e) {
             log.warn("清理过期打包文件失败: {}", e.toString());
+        }
+    }
+
+    /** 打包产物过期删除后，同步丢掉内存里的任务记录，避免页面指向不存在的文件 */
+    private void forgetJobOf(String gameId, String fileName) {
+        if (!fileName.endsWith(".zip")) {
+            return;
+        }
+        String jobId = fileName.substring(0, fileName.length() - ".zip".length());
+        Job job = jobs.get(jobId);
+        if (job != null && job.terminal()) {
+            jobs.remove(jobId);
+            latest.remove(gameId, jobId);
         }
     }
 

@@ -52,6 +52,8 @@ const SAVE_KIND_TEXT = { MANUAL: '手动', ORIGINAL: '原始', PRE_RESTORE: '自
 /** 打包下载任务：两段式，先打包再下载 */
 const downloadJob = ref(null)
 const downloadBusy = ref(false)
+/** 打包前预估：本地文件大小与预计耗时 */
+const packageEstimate = ref(null)
 let downloadTimer = null
 const downloadPercent = computed(() => {
   const j = downloadJob.value
@@ -182,6 +184,8 @@ async function load() {
     } else {
       mediaMode.value = s.defaultMediaMode === 'cover' ? 'cover' : 'cg'
     }
+    await resumeDownload()
+    await loadEstimate()
   } catch (e) {
     error.value = e.message
   } finally {
@@ -290,6 +294,24 @@ async function doDelete(b) {
 
 // ---------------- 游戏打包下载 ----------------
 
+/** 打包任务进度只存后端内存；刷新后 jobId 丢了，靠这个接口找回并继续轮询 */
+async function resumeDownload() {
+  try {
+    const job = await api.currentDownloadPackage(props.id)
+    if (!job) {
+      downloadJob.value = null
+      downloadBusy.value = false
+      return
+    }
+    downloadJob.value = job
+    const running = job.state !== 'READY' && job.state !== 'FAILED' && job.state !== 'CANCELLED'
+    downloadBusy.value = running
+    if (running) pollDownload()
+  } catch {
+    // 查询失败不影响页面其它内容；用户重新点打包即可
+  }
+}
+
 async function prepareDownload() {
   downloadBusy.value = true
   try {
@@ -298,6 +320,15 @@ async function prepareDownload() {
   } catch (e) {
     downloadBusy.value = false
     notify.error('打包失败：' + e.message)
+  }
+}
+
+/** 预估失败可忽略：面板只是少一行提示，不影响打包 */
+async function loadEstimate() {
+  try {
+    packageEstimate.value = await api.packageEstimate(props.id)
+  } catch {
+    packageEstimate.value = null
   }
 }
 
@@ -336,7 +367,18 @@ onBeforeUnmount(() => clearTimeout(downloadTimer))
 function fmtSize(n) {
   if (n < 1024) return n + ' B'
   if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB'
-  return (n / 1024 / 1024).toFixed(2) + ' MB'
+  if (n < 1024 * 1024 * 1024) return (n / 1024 / 1024).toFixed(2) + ' MB'
+  return (n / 1024 / 1024 / 1024).toFixed(2) + ' GB'
+}
+
+/** 预计耗时的口语化展示；调用方自己加「约」等前缀 */
+function fmtDuration(totalSeconds) {
+  const s = Math.max(0, Math.round(totalSeconds))
+  if (s < 60) return s + ' 秒'
+  const m = Math.floor(s / 60)
+  if (m < 60) return s % 60 ? `${m} 分 ${s % 60} 秒` : `${m} 分钟`
+  const h = Math.floor(m / 60)
+  return m % 60 ? `${h} 小时 ${m % 60} 分` : `${h} 小时`
 }
 
 function fmtTime(iso) {
@@ -564,6 +606,16 @@ onMounted(load)
           把游戏目录原样打包。门户生成的 <code>game.env</code> 与 <code>wineprefix/</code>
           不包含在内，换机器后需要重新接入。
         </p>
+        <p
+          v-if="packageEstimate && packageEstimate.totalBytes > 0"
+          class="muted-sm"
+          style="margin-top:6px"
+        >
+          本地文件 {{ fmtSize(packageEstimate.totalBytes) }} ·
+          {{ packageEstimate.totalFiles }} 个文件<span
+            v-if="packageEstimate.estimatedSeconds > 0"
+          > · 预计打包约 {{ fmtDuration(packageEstimate.estimatedSeconds) }}</span>
+        </p>
         <div class="backup-bar" style="margin-top:12px;align-items:center">
           <button class="btn" :disabled="downloadBusy || running" @click="prepareDownload">
             {{ downloadBusy
@@ -572,12 +624,13 @@ onMounted(load)
           </button>
           <button
             v-if="downloadJob?.state === 'READY'"
-            class="btn primary"
+            class="btn primary sm"
             @click="startDownload"
           >第二步：下载压缩包</button>
           <span v-if="running" class="muted-sm">请先关闭游戏再打包</span>
           <span v-else-if="downloadJob?.state === 'READY'" class="muted-sm">
-            {{ fmtSize(downloadJob.doneBytes) }} · {{ downloadJob.totalFiles }} 个文件
+            {{ fmtSize(downloadJob.doneBytes)
+            }}<template v-if="downloadJob.totalFiles > 0"> · {{ downloadJob.totalFiles }} 个文件</template>
           </span>
         </div>
         <div
