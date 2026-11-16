@@ -13,6 +13,8 @@ Environment=GALWORLD_KEYSTORE=%h/galworld/data/certs/galworld.p12
 # 密钥库密码从 0600 权限的独立文件读取；若不存在则回退到 application.yml 默认值
 EnvironmentFile=-%h/.config/galworld/creds.env
 Environment=GALWORLD_KEY_ALIAS=galworld
+# 页面「设置 → 关于」显示的仓库地址（网页地址，不要带 .git）；fork 时改这里
+Environment=GALWORLD_REPO_URL=https://gitee.com/sander-o/gal-world
 ExecStart=/usr/bin/java -Xms128m -Xmx512m -Dfile.encoding=UTF-8 \
   -jar %h/galworld/lib/gal-world-portal.jar
 Restart=on-failure
