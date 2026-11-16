@@ -107,8 +107,9 @@ function fmtSize(n) {
         <button class="link-btn" @click="close">关闭</button>
       </div>
       <p class="muted-sm">
-        在游戏主目录下勾选存放存档的文件夹，可多选、可进入子目录。
-        不勾选任何目录时保存会回到默认约定（savedata_cn / savedata_jp / savedata / save）。
+        勾选存放存档的<strong>文件夹或文件</strong>，可多选、可进入子目录。
+        存档有「文件夹」和「单个文件」两种形态，都支持。
+        不勾选任何项时保存会回到默认约定（savedata_cn / savedata_jp / savedata / save）。
       </p>
       <div class="sdp-crumbs">
         <a @click="go('')">根目录</a>
@@ -117,19 +118,30 @@ function fmtSize(n) {
           <a @click="go(crumbs.slice(0, i + 1).join('/'))">{{ c }}</a>
         </template>
       </div>
+      <!-- 当前所在目录本身也可选：存档目录常是深层目录（如 SteamEmu/Saves），
+           没有这条就只能勾它的子项 -->
+      <label v-if="path" class="sdp-current">
+        <input
+          type="checkbox"
+          :checked="selected.includes(path)"
+          @change="toggle(path)"
+        />
+        <span>选中的当前目录：<code>{{ path }}</code></span>
+      </label>
       <div class="sdp-list">
         <div v-if="loading" class="muted-sm">加载中…</div>
         <div v-else-if="error" class="muted-sm" style="color:var(--warn)">{{ error }}</div>
         <div v-else-if="!entries.length" class="muted-sm">这个目录下没有内容</div>
         <template v-else>
           <div v-for="e in entries" :key="e.name" class="sdp-row">
+            <!-- 目录与文件都可选：存档有「文件夹」和「单个文件」两种形态 -->
             <input
-              v-if="e.dir"
               type="checkbox"
               :checked="selected.includes(childPath(e.name))"
               @change="toggle(childPath(e.name))"
             />
             <span v-if="e.dir" class="sdp-enter" title="进入该目录" @click="go(childPath(e.name))">▸</span>
+            <span v-else class="sdp-enter-placeholder" />
             <span class="sdp-name">{{ e.name }}</span>
             <span v-if="!e.dir" class="muted-sm sdp-size">{{ fmtSize(e.size) }}</span>
           </div>
@@ -196,6 +208,21 @@ function fmtSize(n) {
   color: var(--muted);
   margin: 0 2px;
 }
+.sdp-current {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 8px;
+  padding: 6px 10px;
+  font-size: 12.5px;
+  background: var(--accent-faint);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  cursor: pointer;
+}
+.sdp-current code {
+  font-size: 12px;
+}
 .sdp-list {
   border: 1px solid var(--line-strong);
   border-radius: 6px;
@@ -211,6 +238,10 @@ function fmtSize(n) {
 }
 .sdp-row:last-child {
   border-bottom: none;
+}
+.sdp-enter-placeholder {
+  width: 14px;
+  display: inline-block;
 }
 .sdp-enter {
   cursor: pointer;

@@ -86,16 +86,27 @@ public class SaveService {
     }
 
     /** 游戏里实际存在的存档目录 */
+    /**
+     * 游戏里实际存在的存档条目。
+     *
+     * 存档有两种形态：**目录**（如 savedata/、SteamEmu/Saves/）和**单个文件**
+     * （如某个 .ksd / .sav）。两者都要支持，不能只认目录。
+     */
     public List<Path> saveDirs(String gameId) {
         Path work = paths.gameDir(gameId);
-        List<Path> dirs = new ArrayList<>();
+        List<Path> items = new ArrayList<>();
         for (String name : resolveSaveDirNames(gameId)) {
             Path p = work.resolve(name);
-            if (Files.isDirectory(p, LinkOption.NOFOLLOW_LINKS)) {
-                dirs.add(p);
+            if (Files.exists(p, LinkOption.NOFOLLOW_LINKS)) {
+                items.add(p);
             }
         }
-        return dirs;
+        return items;
+    }
+
+    /** 游戏目录本身，供控制器计算存档目录的相对展示名 */
+    public Path gameDirOf(String gameId) {
+        return paths.gameDir(gameId);
     }
 
     /** 生效的存档目录名（相对游戏目录）：用户配置优先，未配置时用默认约定 */
@@ -107,15 +118,44 @@ public class SaveService {
     public List<String> setSaveDirs(String gameId, List<String> dirs) {
         Game game = repo.findById(gameId)
                 .orElseThrow(() -> new IllegalArgumentException("没有这个游戏: " + gameId));
+        Path root = paths.gameDir(gameId).toAbsolutePath().normalize();
         String normalized = dirs == null ? "" : String.join(",", dirs.stream()
-                .map(String::trim)
+                .map(SaveService::normalizeRelDir)
                 .filter(s -> !s.isEmpty())
-                .filter(s -> !s.contains("/") && !s.contains("\\") && !s.contains(".."))
+                .filter(s -> insideGameDir(root, s))
                 .distinct()
                 .toList());
         game.setSaveDirs(normalized.isEmpty() ? null : normalized);
         repo.save(game);
         return resolveSaveDirNames(gameId);
+    }
+
+    /**
+     * 归一化用户给的相对目录：允许子目录（如 {@code SteamEmu/Saves}），
+     * 但拒绝绝对路径与任何 {@code ..} 片段。
+     */
+    private static String normalizeRelDir(String raw) {
+        if (raw == null) {
+            return "";
+        }
+        String s = raw.trim().replace('\\', '/');
+        if (s.isEmpty() || s.startsWith("/")) {
+            return "";
+        }
+        List<String> parts = new ArrayList<>();
+        for (String p : s.split("/")) {
+            if (p.isEmpty() || ".".equals(p) || "..".equals(p)) {
+                return "";
+            }
+            parts.add(p);
+        }
+        return String.join("/", parts);
+    }
+
+    /** 解析后必须仍在游戏目录内，挡住符号链接与拼接出来的越界路径 */
+    private static boolean insideGameDir(Path root, String rel) {
+        Path p = root.resolve(rel).normalize();
+        return p.startsWith(root) && !p.equals(root);
     }
 
     private static long sizeOf(Path p) {
@@ -130,8 +170,7 @@ public class SaveService {
     public Map<String, Object> listFiles(String gameId, String relPath) throws IOException {
         Path root = paths.gameDir(gameId).toAbsolutePath().normalize();
         Path target = root.resolve(relPath == null ? "" : relPath).normalize();
-        if (!target.startsWith(root)
-                || !Files.isDirectory(target, LinkOption.NOFOLLOW_LINKS)) {
+        if (!target.startsWith(root) || !Files.isDirectory(target, LinkOption.NOFOLLOW_LINKS)) {
             throw new IllegalArgumentException("目录不存在: " + relPath);
         }
         List<Map<String, Object>> entries = new ArrayList<>();
@@ -193,14 +232,21 @@ public class SaveService {
         }
 
         // tar -czf <archive> -C <gameDir> <dir1> <dir2> ...
+        Path gameDir = paths.gameDir(gameId).toAbsolutePath().normalize();
         List<String> cmd = new ArrayList<>();
         cmd.add("tar");
         cmd.add("-czf");
         cmd.add(archive.toString());
         cmd.add("-C");
-        cmd.add(paths.gameDir(gameId).toString());
+        cmd.add(gameDir.toString());
         for (Path d : dirs) {
-            cmd.add(d.getFileName().toString());
+            // 必须用相对游戏目录的完整路径：嵌套存档目录（SteamEmu/Saves）只取末段
+            // 会变成 Saves，tar 找不到就整个备份失败
+            Path abs = d.toAbsolutePath().normalize();
+            if (!abs.startsWith(gameDir)) {
+                continue;
+            }
+            cmd.add(gameDir.relativize(abs).toString().replace('\\', '/'));
         }
         runTar(cmd, "备份失败");
 
@@ -266,7 +312,9 @@ public class SaveService {
      *  2. 解压到**游戏目录内**的临时目录（同分区，重命名才是原子的；
      *     用系统临时目录会在跨分区 move 目录时失败）
      *  3. 校验归档成员无越界路径
-     *  4. 逐个顶层目录：现有目录改名为 *.galworld-old → 新目录改名就位 →
+     *  4. 按**存档目录的相对路径**逐个就位（嵌套目录如 SteamEmu/Saves 只替换该子目录，
+     *     不能整体替换顶层 SteamEmu，否则会连 UserStats / Inventory 一起覆盖）
+     *  5. 每个目标：现有目录改名为 *.galworld-old → 新目录改名就位 →
      *     成功后删掉 .old；失败则把 .old 改回来
      */
     public SaveArchive restore(String gameId, String archiveName) throws IOException {
@@ -283,7 +331,7 @@ public class SaveService {
             log.warn("恢复前快照跳过: {}", e.getMessage());
         }
 
-        Path gameDir = paths.gameDir(gameId);
+        Path gameDir = paths.gameDir(gameId).toAbsolutePath().normalize();
         cleanupStale(gameDir);
         Path tmp = Files.createTempDirectory(gameDir, ".galworld-restore-");
         try {
@@ -291,10 +339,19 @@ public class SaveService {
             runTar(List.of("tar", "-xzf", archive.toString(), "-C", tmp.toString()), "解压失败");
             validateExtracted(tmp);
 
-            // 3) 原子替换
-            try (Stream<Path> s = Files.list(tmp)) {
-                for (Path src : s.toList()) {
-                    swapIn(src, gameDir.resolve(src.getFileName().toString()));
+            // 3) 原子替换：只搬归档里实际存在的存档目录，按相对路径定位
+            List<Path> targets = extractedSaveDirs(tmp, gameId);
+            if (targets.isEmpty()) {
+                // 老备份（平铺目录）与目录名变更后的兜底：整层顶层项就位
+                try (Stream<Path> s = Files.list(tmp)) {
+                    for (Path src : s.toList()) {
+                        swapIn(src, gameDir.resolve(src.getFileName().toString()));
+                    }
+                }
+            } else {
+                for (Path src : targets) {
+                    Path rel = tmp.relativize(src);
+                    swapIn(src, gameDir.resolve(rel));
                 }
             }
             log.info("存档已切换 {} <- {}", gameId, archive.getFileName());
@@ -304,8 +361,31 @@ public class SaveService {
         }
     }
 
+    /**
+     * 在解压结果里找出与「生效存档目录」对应的路径。
+     *
+     * 归档可能是嵌套结构（SteamEmu/Saves）也可能是平铺的旧结构（savedata），
+     * 两者都按相对游戏目录的路径匹配；找不到就返回空，由调用方走兜底逻辑。
+     */
+    private List<Path> extractedSaveDirs(Path tmp, String gameId) throws IOException {
+        List<Path> out = new ArrayList<>();
+        for (String name : resolveSaveDirNames(gameId)) {
+            Path p = tmp.resolve(name).normalize();
+            // 目录或单个文件都算：存档两种形态并存
+            if (p.startsWith(tmp) && Files.exists(p, LinkOption.NOFOLLOW_LINKS)) {
+                out.add(p);
+            }
+        }
+        return out;
+    }
+
     /** 把 src 目录换到 dst。同分区下 rename 是原子的，失败可回滚。 */
     private void swapIn(Path src, Path dst) throws IOException {
+        // 嵌套存档目录（SteamEmu/Saves）的父级可能已被清理，先补出来
+        Path parent = dst.getParent();
+        if (parent != null) {
+            Files.createDirectories(parent);
+        }
         Path old = dst.resolveSibling(dst.getFileName() + ".galworld-old");
         deleteRecursively(old);
         boolean hadOld = Files.exists(dst);
