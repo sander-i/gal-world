@@ -73,7 +73,8 @@ public class GameDownloadService {
 
     public record JobView(String jobId, String gameId, String state, String fileName,
                           long totalBytes, long doneBytes, int totalFiles, int doneFiles,
-                          String error, String createdAt) {
+                          String error, String createdAt, String startedAt,
+                          Long elapsedSeconds, Long remainingSeconds) {
     }
 
     /** 打包预估：待打包的本地字节数、文件数与预计耗时（秒） */
@@ -99,6 +100,9 @@ public class GameDownloadService {
         final String gameId;
         final Instant createdAt = Instant.now();
         final AtomicBoolean cancel = new AtomicBoolean();
+        /** 估算用的写入吞吐（字节/秒），用于推算剩余时间 */
+        final double rate;
+        volatile Instant startedAt;
         volatile String state = STATE_QUEUED;
         volatile String error = "";
         volatile long totalBytes;
@@ -108,9 +112,10 @@ public class GameDownloadService {
         volatile int doneFiles;
         volatile Path archive;
 
-        Job(String jobId, String gameId) {
+        Job(String jobId, String gameId, double rate) {
             this.jobId = jobId;
             this.gameId = gameId;
+            this.rate = rate;
         }
 
         boolean terminal() {
@@ -119,9 +124,19 @@ public class GameDownloadService {
         }
 
         JobView view() {
+            Instant started = startedAt;
+            Long elapsed = started == null ? null
+                    : Math.max(0, Duration.between(started, Instant.now()).getSeconds());
+            Long remaining = null;
+            long done = written.get();
+            if (elapsed != null && elapsed > 0 && rate > 0 && totalBytes > done) {
+                remaining = Math.max(0, Math.round((double) (totalBytes - done) / rate));
+            }
             return new JobView(jobId, gameId, state, gameId + ".zip",
-                    totalBytes, written.get(), totalFiles, doneFiles, error,
-                    createdAt.toString());
+                    totalBytes, done, totalFiles, doneFiles, error,
+                    createdAt.toString(),
+                    started == null ? null : started.toString(),
+                    elapsed, remaining);
         }
     }
 
@@ -215,7 +230,7 @@ public class GameDownloadService {
     private void adopt(String gameId, Path archive) {
         String name = archive.getFileName().toString();
         String jobId = name.substring(0, name.length() - ".zip".length());
-        Job job = new Job(jobId, gameId);
+        Job job = new Job(jobId, gameId, estimateRate());
         long size = sizeOf(archive);
         job.written.set(size);
         job.totalBytes = size;
@@ -253,7 +268,7 @@ public class GameDownloadService {
             String jobId = "dl-" + Instant.now().toString()
                     .replaceAll("[^0-9]", "").substring(0, 14) + "-"
                     + UUID.randomUUID().toString().substring(0, 4);
-            Job job = new Job(jobId, gameId);
+            Job job = new Job(jobId, gameId, estimateRate());
             jobs.put(jobId, job);
             latest.put(gameId, jobId);
             queue.submit(() -> execute(job));
@@ -338,6 +353,7 @@ public class GameDownloadService {
     // ---------------- 打包 ----------------
 
     private void execute(Job job) {
+        job.startedAt = Instant.now();
         job.state = STATE_RUNNING;
         Path dir = packageDir(job.gameId);
         Path part = dir.resolve(job.jobId + ".zip.part");

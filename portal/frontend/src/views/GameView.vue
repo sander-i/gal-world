@@ -17,6 +17,7 @@ import { useSessionRefresh } from '../use-session-refresh'
 import { companyEnabled, localizationEnabled } from '../feature-flags'
 import { latencyTone } from '../latency'
 import MediaRotator from '../components/MediaRotator.vue'
+import SaveDirPicker from '../components/SaveDirPicker.vue'
 
 const props = defineProps({ id: { type: String, required: true } })
 const router = useRouter()
@@ -33,9 +34,11 @@ const game = ref(null)
 const loading = ref(true)
 const error = ref('')
 
-const saves = ref({ saveDirs: [], backups: [] })
+const saves = ref({ saveDirs: [], saveDirNames: [], backups: [] })
 /** 存档面板默认收起：没有备份时它只是一块占位，把详情页撑得很长 */
 const savesOpen = ref(false)
+/** 手动选择存档目录的弹窗 */
+const dirPickerVisible = ref(false)
 watch(() => saves.value.backups?.length, (n) => {
   if (n > 0) savesOpen.value = true
 }, { immediate: true })
@@ -60,6 +63,12 @@ const downloadPercent = computed(() => {
   if (!j || !j.totalBytes) return 0
   return Math.min(100, Math.round((j.doneBytes / j.totalBytes) * 100))
 })
+/** 打包已用时长与预估剩余（后端按实测吞吐推算，每秒刷新一次由轮询驱动） */
+const downloadTiming = computed(() => {
+  const j = downloadJob.value
+  if (!j) return null
+  return { elapsed: j.elapsedSeconds || 0, remaining: j.remainingSeconds || 0 }
+})
 const playtime = ref(null)
 const cgSound = ref(false)
 const switchMode = ref('page')
@@ -78,6 +87,12 @@ const cgFailed = ref(false)
 const hasCg = computed(() => (game.value?.cgs || []).length > 0)
 const hasCover = computed(() => (game.value?.covers || []).length > 0)
 const bothMedia = computed(() => hasCg.value && hasCover.value)
+/** 公司 / 汉化组 / 标签三项都没有时，整张信息卡不渲染 */
+const hasMeta = computed(() =>
+  (companyEnabled && (game.value?.companies || []).length > 0)
+  || (localizationEnabled && (game.value?.localizations || []).length > 0)
+  || (game.value?.tags || []).length > 0
+)
 
 /** 是否加载 CG：偏好 CG，或根本没有封面（退回 CG） */
 const prefersCg = computed(() => hasCg.value && (mediaMode.value === 'cg' || !hasCover.value))
@@ -292,6 +307,20 @@ async function doDelete(b) {
   }
 }
 
+/** 下载某份备份：让浏览器直接 GET 备份文件 */
+function downloadSave(b) {
+  window.location.href = api.saveFileUrl(props.id, b.name)
+}
+
+/** 打开存档目录选择器；currentDirs 用后端返回的生效目录名回显勾选 */
+function openDirPicker() {
+  dirPickerVisible.value = true
+}
+
+async function onDirsSaved() {
+  saves.value = await api.listSaves(props.id)
+}
+
 // ---------------- 游戏打包下载 ----------------
 
 /** 打包任务进度只存后端内存；刷新后 jobId 丢了，靠这个接口找回并继续轮询 */
@@ -426,9 +455,9 @@ onMounted(load)
             >· 时延 {{ latency }} ms</span>
           </div>
 
-          <!-- 公司 / 标签信息卡片 -->
-          <div class="game-meta-card">
-            <div v-if="companyEnabled" class="meta-line">
+          <!-- 公司 / 汉化组 / 标签：三项都空则整卡不渲染 -->
+          <div v-if="hasMeta" class="game-meta-card">
+            <div v-if="companyEnabled && game.companies?.length" class="meta-line">
               <span class="meta-label">公司</span>
               <span class="meta-values">
                 <template v-for="c in (game.companies || [])" :key="c.id">
@@ -442,10 +471,9 @@ onMounted(load)
                   >{{ c.name }}<span v-if="c.alias" class="company-alias">（{{ c.alias }}）</span></a>
                   <span v-else :title="c.description || undefined">{{ c.name }}<span v-if="c.alias" class="company-alias">（{{ c.alias }}）</span></span>
                 </template>
-                <span v-if="!game.companies || !game.companies.length" class="muted-sm">未填写</span>
               </span>
             </div>
-            <div v-if="localizationEnabled" class="meta-line">
+            <div v-if="localizationEnabled && game.localizations?.length" class="meta-line">
               <span class="meta-label">汉化组</span>
               <span class="meta-values">
                 <template v-for="g in (game.localizations || [])" :key="g.id">
@@ -459,14 +487,12 @@ onMounted(load)
                   >{{ g.name }}<span v-if="g.alias" class="company-alias">（{{ g.alias }}）</span></a>
                   <span v-else :title="g.description || undefined">{{ g.name }}<span v-if="g.alias" class="company-alias">（{{ g.alias }}）</span></span>
                 </template>
-                <span v-if="!game.localizations || !game.localizations.length" class="muted-sm">未填写</span>
               </span>
             </div>
-            <div class="meta-line">
+            <div v-if="game.tags?.length" class="meta-line">
               <span class="meta-label">标签</span>
               <span class="meta-values">
                 <span v-for="t in (game.tags || [])" :key="t" class="mini-tag">{{ t }}</span>
-                <span v-if="!game.tags || !game.tags.length" class="muted-sm">未填写</span>
               </span>
             </div>
           </div>
@@ -641,7 +667,15 @@ onMounted(load)
             <span class="action-progress-fill" :style="{ width: downloadPercent + '%' }" />
           </div>
           <div class="action-progress-label">
-            <span>{{ downloadJob?.state === 'QUEUED' ? '排队中' : '正在打包游戏文件' }}</span>
+            <span>
+              {{ downloadJob?.state === 'QUEUED' ? '排队中' : '正在打包游戏文件' }}
+              <template v-if="downloadTiming && downloadTiming.elapsed > 0">
+                · 已用 {{ fmtDuration(downloadTiming.elapsed) }}
+                <template v-if="downloadTiming.remaining > 0">
+                  · 预计剩余 {{ fmtDuration(downloadTiming.remaining) }}
+                </template>
+              </template>
+            </span>
             <span>{{ downloadPercent }}%</span>
           </div>
         </div>
@@ -660,6 +694,7 @@ onMounted(load)
           <span class="muted-sm">
             存档目录：{{ saves.saveDirs.length ? saves.saveDirs.join('、') : '未找到' }}
           </span>
+          <button class="link-btn" @click="openDirPicker">手动选择</button>
           <button class="link-btn" @click="savesOpen = !savesOpen">
             {{ savesOpen ? '收起 ▴' : '展开 ▾' }}
           </button>
@@ -740,6 +775,7 @@ onMounted(load)
                     <button class="link-btn" :disabled="savesBusy" @click="cancelEdit">取消</button>
                   </template>
                   <template v-else>
+                    <button class="link-btn" :disabled="savesBusy" @click="downloadSave(b)">下载</button>
                     <button class="link-btn" :disabled="savesBusy" @click="doSwitch(b)">切换到此存档</button>
                     <button class="link-btn" :disabled="savesBusy" @click="startEdit(b)">编辑</button>
                     <button class="link-btn danger" :disabled="savesBusy" @click="doDelete(b)">删除</button>
@@ -757,6 +793,13 @@ onMounted(load)
           </p>
         </template>
       </section>
+
+      <SaveDirPicker
+        v-model:visible="dirPickerVisible"
+        :game-id="props.id"
+        :current-dirs="saves.saveDirNames"
+        @saved="onDirsSaved"
+      />
     </template>
   </div>
 </template>

@@ -90,6 +90,12 @@ docs/                         环境搭建与各模块方案（接入、媒体�
 2. 主题只用 `check-theme-vars.mjs` 认可的 CSS 变量，不要写死颜色（门禁用例会失败）
 3. 产物由 `npm run build` 写进 `portal/src/main/resources/static/`（gitignore，不入库）；
    `deploy/release.sh` 打包前会自动构建
+4. **按钮只用全局 `.btn` 体系，别自造样式。** 尺寸三档（`styles.css` 的 `--ctl-h-*`）：
+   `.btn` / `.btn.sm` = md（34px），`.btn.primary` = lg（40px，**仅每屏唯一主动作**），
+   `.btn.compact` = sm（28px）。同一行按钮必须同尺寸：多按钮同排时用 `.btn primary sm`，
+   裸 `.btn primary` 会比同排的 `.btn` 高 6px —— 这是历史 bug 的常见来源。
+   行内容器 `.backup-bar` 已统一降到 md（含 `.btn.primary`），`.hero-left .actions` 与
+   `.edit-grid .actions` 显式统一为 lg。
 
 ### 改部署步骤
 

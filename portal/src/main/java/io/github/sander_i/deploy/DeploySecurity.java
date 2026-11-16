@@ -5,12 +5,20 @@
 
 package io.github.sander_i.deploy;
 
+import io.github.sander_i.config.PathConfig;
+import jakarta.annotation.PostConstruct;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.List;
@@ -28,16 +36,28 @@ public class DeploySecurity {
 
     private final String token;
     private final boolean configured;
+    private final Path tokenFile;
     private final List<Cidr> allowed = new ArrayList<>();
 
-    public DeploySecurity(@Value("${galworld.deploy.token:}") String token,
-                          @Value("${galworld.deploy.allowed-cidrs:127.0.0.1/32,192.168.0.0/16,10.0.0.0/8}")
+    public DeploySecurity(PathConfig paths,
+                          @Value("${galworld.deploy.token:}") String token,
+                          @Value("${galworld.deploy.allowed-cidrs:127.0.0.1/32,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16}")
                           String cidrs) {
+        this.tokenFile = paths.dataDir().resolve("deploy-token");
         this.configured = token != null && !token.isBlank();
-        this.token = configured ? token : randomToken();
-        if (!configured) {
-            log.warn("galworld.deploy.token 未配置，本次启动使用随机令牌: {}", this.token);
-            log.warn("仅本机可用；如需页面调用，请把该令牌写入 application.yml 的 galworld.deploy.token");
+        if (configured) {
+            this.token = token;
+        } else {
+            String persisted = loadPersisted();
+            if (persisted != null) {
+                this.token = persisted;
+                log.info("galworld.deploy.token 未配置，复用已保存的令牌（{}）", tokenFile);
+            } else {
+                this.token = randomToken();
+                persist(this.token);
+                log.warn("galworld.deploy.token 未配置，已生成随机令牌并保存到 {}", tokenFile);
+                log.warn("令牌跨重启保持不变；删除该文件会重新生成，或在 application.yml 配置固定值");
+            }
         }
         for (String part : cidrs.split(",")) {
             String v = part.trim();
@@ -98,6 +118,50 @@ public class DeploySecurity {
         byte[] b = new byte[16];
         new SecureRandom().nextBytes(b);
         return java.util.HexFormat.of().formatHex(b);
+    }
+
+    /** 读取上次生成的令牌；文件缺失或内容不合法都当作没有 */
+    private String loadPersisted() {
+        try {
+            String v = Files.readString(tokenFile, StandardCharsets.UTF_8).trim();
+            return isValidToken(v) ? v : null;
+        } catch (IOException e) {
+            return null;
+        }
+    }
+
+    /** 令牌落盘，权限 0600（Windows 无 POSIX 权限位时跳过，靠目录权限保护） */
+    private void persist(String value) {
+        try {
+            if (tokenFile.getParent() != null) {
+                Files.createDirectories(tokenFile.getParent());
+            }
+            Files.writeString(tokenFile, value + System.lineSeparator(), StandardCharsets.UTF_8,
+                    StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
+            try {
+                Files.setPosixFilePermissions(tokenFile, PosixFilePermissions.fromString("rw-------"));
+            } catch (UnsupportedOperationException ignored) {
+                // Windows 无 POSIX 权限位
+            }
+        } catch (IOException e) {
+            log.warn("部署令牌写入失败 {}: {}", tokenFile, e.toString());
+        }
+    }
+
+    /** 只接受长度合理、字符受限的令牌，避免把意外内容当令牌用 */
+    private static boolean isValidToken(String v) {
+        if (v.length() < 8 || v.length() > 256) {
+            return false;
+        }
+        for (int i = 0; i < v.length(); i++) {
+            char c = v.charAt(i);
+            boolean ok = (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f')
+                    || (c >= 'A' && c <= 'F') || c == '-' || c == '_';
+            if (!ok) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /** 极简 IPv4 CIDR */

@@ -948,7 +948,16 @@ a:focus-visible,
 
 .muted-sm { color: var(--muted); font-size: 12.5px; }
 
-.backup-bar { display: flex; gap: 10px; }
+.backup-bar { display: flex; gap: 10px; align-items: center; }
+
+/* 行内按钮统一 md：.btn.primary 默认 lg（40px），与同排的 .btn / .input（md 34px）差 6px。
+   每屏唯一主动作用 .hero-left .actions / .edit-grid .actions（那里显式统一为 lg）。 */
+.backup-bar .btn,
+.backup-bar .btn.primary {
+  height: var(--ctl-h-md);
+  padding: 0 16px;
+  font-size: var(--ctl-fs-md);
+}
 
 /* 数值输入 + 单位下拉：别让 flex:1 把单位选择器拉成整行 */
 .backup-bar input[type="number"].input { flex: 0 0 120px; }

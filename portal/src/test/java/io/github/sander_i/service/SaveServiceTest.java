@@ -18,7 +18,7 @@ class SaveServiceTest {
 
     @BeforeEach
     void setUp() throws Exception {
-        saves = new SaveService(new PathConfig(root.toString()));
+        saves = new SaveService(new PathConfig(root.toString()), null);
         Path savedata = root.resolve("games/g1/savedata");
         Files.createDirectories(savedata);
         Files.writeString(savedata.resolve("global.sav"), "slot-1");

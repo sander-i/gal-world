@@ -77,7 +77,15 @@ bash deploy/portal-deploy.sh --build-only   # 只构建
 # 构建并发布 Gitee Release
 GITEE_TOKEN=<token> bash deploy/release.sh
 bash deploy/release.sh --dry-run            # 只构建并生成 dist/，不发布
+
+# GitHub Release：推 v* tag 后由 .github/workflows/release.yml 自动构建并发布
+git tag v<version> && git push origin v<version>
+gh workflow run Release -f tag=v<version>   # 或手动触发，tag 必须已存在
 ```
+
+**两个托管平台要各发一次。** Gitee 的仓库镜像只同步 git 代码对象，不同步 Release 资产；
+GitHub 上发的 Release 不会出现在 Gitee，反之亦然。两个 workflow / 脚本的产物结构与
+校验逻辑完全一致，更新器只认 manifest 里的 `artifact.name`，不关心资产来自哪个平台。
 
 门户内「管理 → 版本与检查更新」可检查并执行远程更新。
 更新器是独立进程，流程为：下载 → SHA256 / zip / 版本校验 → 停服 → 备份 jar 与 H2 →
