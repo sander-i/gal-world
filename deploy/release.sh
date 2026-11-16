@@ -154,12 +154,17 @@ if [[ -f "$NOTES_ZH" ]]; then
 else
   printf '发布 %s\n' "$TAG" >"$RELEASE_BODY_FILE"
 fi
+# curl 是原生 Windows 程序，不认 MSYS 的 /d/... 路径，转成 Windows 形式再传
+RELEASE_BODY_ARG="$RELEASE_BODY_FILE"
+if command -v cygpath >/dev/null 2>&1; then
+  RELEASE_BODY_ARG="$(cygpath -w "$RELEASE_BODY_FILE")"
+fi
 RESP="$(auth_curl -fsS -X POST --connect-timeout 10 --max-time 60 \
   -H 'Accept: application/json' \
   --data-urlencode "tag_name=$TAG" \
   --data-urlencode "target_commitish=$COMMIT" \
   --data-urlencode "name=$TAG" \
-  --data-urlencode "body@$RELEASE_BODY_FILE" \
+  --data-urlencode "body@$RELEASE_BODY_ARG" \
   --data-urlencode "prerelease=$PRERELEASE" \
   "$API/releases")" || die "创建 Release $TAG 失败"
 REL_ID="$(printf '%s' "$RESP" | jq -r '.id // empty')"
