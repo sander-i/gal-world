@@ -50,6 +50,9 @@ portal/devdata/data/
 # 排查用临时产物（截图、抓包片段、一次性脚本）
 .diag/
 
+# Playwright MCP 的页面快照与控制台日志（本地调试产物）
+.playwright-mcp/
+
 # 本地验证用的临时根目录（Windows 验证时的门户快照、日志）
 /.tmp/
 
