@@ -52,7 +52,7 @@ public class SaveController {
     @GetMapping
     public Map<String, Object> list(@PathVariable String id) throws IOException {
         requireGame(id);
-        List<String> dirs = saves.saveDirs(id).stream().map(p -> p.getFileName().toString()).toList();
+        List<String> dirs = saveDirLabels(id);
         return Map.of(
                 "saveDirs", dirs,
                 "saveDirNames", saves.saveDirNames(id),
@@ -70,11 +70,11 @@ public class SaveController {
     /** 手动指定存档目录（相对游戏目录）；传空数组则回到默认约定 */
     @PutMapping("/dirs")
     public Map<String, Object> setDirs(@PathVariable String id,
-                                       @RequestBody(required = false) DirsRequest req) {
+                                       @RequestBody(required = false) DirsRequest req) throws IOException {
         requireGame(id);
         List<String> dirs = req == null || req.dirs() == null ? List.of() : req.dirs();
         return Map.of("saveDirNames", saves.setSaveDirs(id, dirs),
-                "saveDirs", saves.saveDirs(id).stream().map(p -> p.getFileName().toString()).toList());
+                "saveDirs", saveDirLabels(id));
     }
 
     public record DirsRequest(List<String> dirs) {
@@ -170,6 +170,18 @@ public class SaveController {
         if (!repo.existsById(id)) {
             throw new IllegalArgumentException("没有这个游戏: " + id);
         }
+    }
+
+    /**
+     * 存档目录的展示名：相对游戏目录的路径。
+     * 嵌套目录（如 {@code SteamEmu/Saves}）只取末段会丢失区分度，这里保留完整相对路径。
+     */
+    private List<String> saveDirLabels(String id) throws IOException {
+        Path gameDir = saves.gameDirOf(id).toAbsolutePath().normalize();
+        return saves.saveDirs(id).stream()
+                .map(p -> gameDir.relativize(p.toAbsolutePath().normalize())
+                        .toString().replace('\\', '/'))
+                .toList();
     }
 
     private int portOf(String id) {

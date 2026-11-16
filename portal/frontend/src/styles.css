@@ -1202,9 +1202,18 @@ select optgroup {
 .tag-chip.active:hover { color: var(--accent-ink); border-color: var(--accent-hi); }
 
 .card-tags {
-  display: flex; flex-wrap: wrap; gap: 5px; margin: 2px 0 2px;
+  display: flex; flex-wrap: nowrap; gap: 5px; margin: 2px 0 2px;
+  /* 标签多时单行截断：卡片高度必须一致，否则网格错位。
+     不换行 + 溢出隐藏，超出部分直接切掉。 */
+  overflow: hidden;
   /* 没标签时也留一行高度，保证卡片内容高度一致、按钮对齐 */
   min-height: 20px;
+}
+
+/* 单个标签不参与压缩，否则会被挤成竖排文字；超出部分由容器裁掉 */
+.card-tags .mini-tag {
+  flex: 0 0 auto;
+  white-space: nowrap;
 }
 
 .mini-tag {
@@ -1676,7 +1685,16 @@ select optgroup {
   opacity: .7;
 }
 
-.card-company { font-size: 11.5px; color: var(--muted); }
+/* 公司 / 汉化组：单行省略。名称多时不能让卡片长高，否则网格错位 */
+.card-company {
+  font-size: 11.5px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.card-localization { color: var(--muted-soft); }
 
 /* 多图轮换 */
 .rotator { position: relative; width: 100%; height: 100%; overflow: hidden; background: var(--surface-deep); }
@@ -3310,6 +3328,11 @@ tr[draggable="true"]:active { cursor: grabbing; }
   padding-bottom: 2px;
 }
 .list-fixed::-webkit-scrollbar { width: 6px; }
+
+/* 全部游戏页的内容区：与吸顶筛选栏之间留 5px，卡片不贴着分隔线 */
+.list-grid {
+  margin-top: 5px;
+}
 
 /* 收起 / 展开按钮：筛选条件框右上角 */
 .filter-collapse {

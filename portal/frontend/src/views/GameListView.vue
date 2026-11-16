@@ -388,7 +388,7 @@ function hostOf(url) {
       {{ hasFilter ? '没有符合筛选条件的游戏。' : '游戏库为空。用 galworld add 注册游戏后刷新。' }}
     </div>
     <template v-else>
-      <div class="grid" :data-density="density">
+      <div class="grid list-grid" :data-density="density">
         <article
           v-for="g in games"
           :key="g.id"

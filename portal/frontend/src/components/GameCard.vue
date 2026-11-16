@@ -13,7 +13,7 @@
 import MediaRotator from './MediaRotator.vue'
 import { formatPlaytimeShort } from '../format'
 import { latencyTone } from '../latency'
-import { companyEnabled } from '../feature-flags'
+import { companyEnabled, localizationEnabled } from '../feature-flags'
 
 defineProps({
   game: { type: Object, required: true },
@@ -67,6 +67,12 @@ const STATE_TEXT = {
     </div>
     <div v-if="companyEnabled && game.companies && game.companies.length" class="card-company">
       {{ game.companies.map((c) => c.name).join(' × ') }}
+    </div>
+    <div
+      v-if="localizationEnabled && game.localizations && game.localizations.length"
+      class="card-company card-localization"
+    >
+      {{ game.localizations.map((g) => g.name).join(' × ') }}
     </div>
     <div class="card-tags">
       <span v-for="t in (game.tags || [])" :key="t" class="mini-tag">{{ t }}</span>
