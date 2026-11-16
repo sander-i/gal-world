@@ -417,8 +417,11 @@ export const api = {
       body: JSON.stringify({ label: label || '', description: description || '' }),
     }),
   /** 切换存档：语义与恢复相同，切换前后端会自动快照当前存档 */
-  /** 切换存档。snapshot=true 时切换前先自动快照当前状态（默认关闭，避免堆积整包备份） */
-  switchSave: (id, name, snapshot = false) =>
+  /**
+   * 切换存档。snapshot 默认开启：切换是整目录覆盖，不先存一份当前进度的话，
+   * 切走再切回来，这期间在游戏里存的进度就丢了。服务端只保留最新一份快照。
+   */
+  switchSave: (id, name, snapshot = true) =>
     req(`/api/games/${encodeURIComponent(id)}/saves/${encodeURIComponent(name)}/switch?snapshot=${snapshot}`, {
       method: 'POST',
     }),

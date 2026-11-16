@@ -101,14 +101,14 @@ public class SaveController {
     /** 切换存档：把指定备份解压回游戏目录 */
     @PostMapping("/{name}/switch")
     public ResponseEntity<?> switchTo(@PathVariable String id, @PathVariable String name,
-                                      @RequestParam(defaultValue = "false") boolean snapshot)
+                                      @RequestParam(defaultValue = "true") boolean snapshot)
             throws IOException {
         return doRestore(id, name, snapshot);
     }
 
     @PostMapping("/{name}/restore")
     public ResponseEntity<?> restore(@PathVariable String id, @PathVariable String name,
-                                     @RequestParam(defaultValue = "false") boolean snapshot)
+                                     @RequestParam(defaultValue = "true") boolean snapshot)
             throws IOException {
         return doRestore(id, name, snapshot);
     }

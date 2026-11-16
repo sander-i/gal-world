@@ -334,10 +334,13 @@ public class SaveService {
             throw new IllegalArgumentException("备份不存在: " + archiveName);
         }
 
-        // 1) 保护性快照（按需，默认不拍）
+        // 1) 保护性快照：把「切换前的当前进度」存下来，否则切走再切回来，
+        //    这期间在游戏里存的进度就永久丢了（切换本质是整目录覆盖）。
+        //    只保留最新一份，不会像以前那样每切一次就多堆积一份整包备份。
         if (snapshotCurrent) {
             try {
-                backup(gameId, "pre-restore", "切换存档前自动快照", KIND_PRE_RESTORE);
+                backup(gameId, "切换前进度", "切换存档时自动保存的当前进度", KIND_PRE_RESTORE);
+                prunePreRestore(gameId);
             } catch (IllegalStateException e) {
                 log.warn("恢复前快照跳过: {}", e.getMessage());
             }
@@ -480,6 +483,35 @@ public class SaveService {
         }
         Files.deleteIfExists(archive);
         Files.deleteIfExists(metaPath(archive));
+    }
+
+    /**
+     * 只保留最新一份 pre-restore 快照。
+     *
+     * 切换必须留一份「切换前的进度」当退路，但不需要保留历史上每一份 ——
+     * 那样跑几次切换就堆出上百 MB。这里删掉除最新之外的全部。
+     *
+     * 不走 {@link #delete}：那条路径有「当前游玩中不可删」「最后一份不可删」
+     * 的业务约束，清理内部快照不该受它们影响（也不该因为约束失败而中断切换）。
+     */
+    private void prunePreRestore(String gameId) throws IOException {
+        String current = currentArchive(gameId);
+        List<SaveArchive> stale = list(gameId).stream()
+                .filter(a -> KIND_PRE_RESTORE.equals(a.kind()))
+                .filter(a -> !a.name().equals(current))
+                .sorted(Comparator.comparing(SaveArchive::createdAt).reversed())
+                .skip(1)
+                .toList();
+        for (SaveArchive a : stale) {
+            Path p = backupRoot(gameId).resolve(a.name());
+            try {
+                Files.deleteIfExists(p);
+                Files.deleteIfExists(metaPath(p));
+                log.debug("清理旧快照 {}", a.name());
+            } catch (IOException e) {
+                log.warn("清理旧快照失败 {}: {}", a.name(), e.toString());
+            }
+        }
     }
 
     /** 原始存档（导入时留底）；没有则返回 null */

@@ -319,13 +319,15 @@ async function saveEdit(name) {
 
 /**
  * 切换存档：把备份解压回游戏目录。
- * 默认不自动快照——每次切换都留一份整包备份（动辄几十 MB）没必要，
- * 需要保底时用户可以自己先手动备份。
+ *
+ * 切换是整目录覆盖，所以默认先给当前进度存一份「切换前进度」快照 ——
+ * 否则切走再切回来，这期间在游戏里存的进度就永久丢了。
  */
 async function doSwitch(b) {
   const desc = b.label ? `「${b.label}」` : '该备份'
   if (!await confirmAction(
-    `切换当前存档到${desc}？游戏目录里的存档文件会被这份备份覆盖。`,
+    `切换当前存档到${desc}？游戏目录里的存档会被这份备份覆盖，`
+      + `当前进度会先存成「切换前进度」，切错了可以再切回来。`,
     { title: '切换存档', confirmText: '切换' },
   )) return
   savesBusy.value = true

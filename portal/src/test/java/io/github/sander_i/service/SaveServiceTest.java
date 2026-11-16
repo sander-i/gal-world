@@ -129,8 +129,27 @@ class SaveServiceTest {
         saves.restore("g1", archive.getFileName().toString());
 
         assertEquals("slot-1", Files.readString(savedata.resolve("global.sav")));
-        assertTrue(saves.list("g1").stream()
-                .anyMatch(a -> SaveService.KIND_PRE_RESTORE.equals(a.kind())));
+        // 切换前的进度必须留下来，否则切走再切回来就找不回来了
+        SaveService.SaveArchive pre = saves.list("g1").stream()
+                .filter(a -> SaveService.KIND_PRE_RESTORE.equals(a.kind()))
+                .findFirst().orElseThrow();
+        assertTrue(pre.description().contains("切换存档时自动保存"));
+    }
+
+    @Test
+    void repeatedRestoreKeepsOnlyLatestPreRestoreSnapshot() throws Exception {
+        Path archive = saves.backup("g1", "old", "", SaveService.KIND_MANUAL);
+        Path savedata = root.resolve("games/g1/savedata");
+
+        for (int i = 0; i < 3; i++) {
+            Files.writeString(savedata.resolve("global.sav"), "slot-" + (i + 2));
+            saves.restore("g1", archive.getFileName().toString());
+        }
+
+        long preCount = saves.list("g1").stream()
+                .filter(a -> SaveService.KIND_PRE_RESTORE.equals(a.kind()))
+                .count();
+        assertEquals(1, preCount, "pre-restore 快照只保留最新一份，避免越切越堆");
     }
 
     @Test

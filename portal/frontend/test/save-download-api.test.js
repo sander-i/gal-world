@@ -24,17 +24,17 @@ test('备份存档同时提交标签与描述', async () => {
   assert.equal(calls[0].url, '/api/games/demo%20game/saves/backup')
 })
 
-test('切换存档走 /switch 接口，默认不自动快照', async () => {
+test('切换存档默认先给当前进度拍快照', async () => {
   const calls = capture()
   await api.switchSave('demo', '20260101-010101_a.tar.gz')
   assert.equal(calls[0].method, 'POST')
-  assert.equal(calls[0].url, '/api/games/demo/saves/20260101-010101_a.tar.gz/switch?snapshot=false')
+  assert.equal(calls[0].url, '/api/games/demo/saves/20260101-010101_a.tar.gz/switch?snapshot=true')
 })
 
-test('切换存档可显式要求切换前快照', async () => {
+test('切换存档可显式跳过快照', async () => {
   const calls = capture()
-  await api.switchSave('demo', 'a.tar.gz', true)
-  assert.equal(calls[0].url, '/api/games/demo/saves/a.tar.gz/switch?snapshot=true')
+  await api.switchSave('demo', 'a.tar.gz', false)
+  assert.equal(calls[0].url, '/api/games/demo/saves/a.tar.gz/switch?snapshot=false')
 })
 
 test('编辑备份信息走 PUT', async () => {
