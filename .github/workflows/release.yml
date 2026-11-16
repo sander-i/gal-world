@@ -76,11 +76,11 @@ jobs:
           npm ci
           npm run build
 
+      # mvnw 在仓库根目录，不在 portal/ 下；用 -f 指定 pom
       - name: 构建 jar
-        working-directory: portal
         run: |
           chmod +x ./mvnw
-          ./mvnw -q -B -DskipTests package
+          ./mvnw -q -B -DskipTests -f portal/pom.xml package
 
       - name: 生成发布物
         id: gen
