@@ -182,13 +182,21 @@ graceful_close() {
   return 0
 }
 
+CLEANED=0
 cleanup() {
+  [[ "${CLEANED:-0}" == "1" ]] && return 0
+  CLEANED=1
   graceful_close
   local p
   for p in "${PIDS[@]}"; do kill "$p" 2>/dev/null || true; done
   release_audio
 }
-trap cleanup EXIT TERM INT
+
+# 收到停止信号时清完再正常退出。
+# 不这么做的话，bash 处理完 TERM trap 会带着 143 退出，systemd 记成 failed，
+# 页面把刚被用户正常关闭的会话显示成「服务失败」。
+trap cleanup EXIT
+trap 'cleanup; exit 0' TERM INT
 
 # ---- 1. 虚拟显示 ----
 # 屏幕必须等于游戏分辨率（小屏）：
