@@ -1,0 +1,150 @@
+# 发布到 GitHub Release。主发布渠道仍是 Gitee（deploy/release.sh）；
+# 此文件给 GitHub 镜像 / fork 用——Gitee 镜像不会同步 Release 资产，两边要各发一次。
+# 产物结构与 release.sh 完全一致（jar + sha256 + manifest + LICENSE + NOTICES），
+# 更新器只认 manifest 里的 artifact.name，与托管平台无关。
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag，形如 v0.0.2'
+        required: true
+
+permissions:
+  contents: write
+
+env:
+  # 低于该版本的安装不能自动升级；jar/H2 结构不兼容时抬高它
+  MIN_FROM_VERSION: ${{ vars.GALWORLD_MIN_FROM_VERSION || '0.0.1' }}
+
+jobs:
+  release:
+    name: 构建并发布
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: portal/frontend/package-lock.json
+
+      - name: 解析 tag 与版本
+        id: ver
+        run: |
+          TAG="${{ github.event.inputs.tag || github.ref_name }}"
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
+            echo "::error::tag 必须是 vX.Y.Z 形式，当前: $TAG"; exit 1; }
+          VERSION="${TAG#v}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "jar=gal-world-portal-$VERSION.jar" >> "$GITHUB_OUTPUT"
+
+      # 版本号唯一来源是 portal/pom.xml。忘了改就推 tag 的话，会发布一个「tag 说 0.0.2、
+      # jar 说 0.0.1」的包：更新器按 manifest 版本比对，版本偏低会被当成无需升级。
+      - name: 校验 pom 版本与 tag 一致
+        env:
+          TAG: ${{ steps.ver.outputs.tag }}
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          POM_VER="$(awk '
+            /<artifactId>[[:space:]]*gal-world-portal[[:space:]]*<\/artifactId>/ { found = 1; next }
+            found && /<version>/ {
+              sub(/^[[:space:]]*<version>[[:space:]]*/, "")
+              sub(/[[:space:]]*<\/version>.*$/, "")
+              print; exit
+            }
+          ' portal/pom.xml)"
+          [[ "$POM_VER" == "$VERSION" ]] || {
+            echo "::error::portal/pom.xml 的 <version>=$POM_VER 与 tag=$TAG 不一致"
+            echo "::error::版本号唯一来源是 portal/pom.xml；请先改 <version> 再推 tag"
+            exit 1; }
+          echo "pom 版本 $POM_VER 与 tag 一致"
+
+      - name: 构建前端
+        working-directory: portal/frontend
+        run: |
+          npm ci
+          npm run build
+
+      - name: 构建 jar
+        working-directory: portal
+        run: |
+          chmod +x ./mvnw
+          ./mvnw -q -B -DskipTests package
+
+      - name: 生成发布物
+        id: gen
+        env:
+          TAG: ${{ steps.ver.outputs.tag }}
+          VERSION: ${{ steps.ver.outputs.version }}
+          JAR: ${{ steps.ver.outputs.jar }}
+        run: |
+          set -euo pipefail
+          DIST="dist"; rm -rf "$DIST"; mkdir -p "$DIST"
+          cp "portal/target/$JAR" "$DIST/$JAR"
+          cp LICENSE "$DIST/LICENSE"
+          cp THIRD-PARTY-NOTICES.md "$DIST/THIRD-PARTY-NOTICES.md"
+          SIZE="$(stat -c %s "$DIST/$JAR")"
+          SHA="$(sha256sum "$DIST/$JAR" | awk '{print $1}')"
+          printf '%s  %s\n' "$SHA" "$JAR" > "$DIST/$JAR.sha256"
+          printf '{"schemaVersion":1,"version":"%s","tag":"%s","artifact":{"name":"%s","size":%s,"sha256":"%s"},"minFromVersion":"%s","dbSchema":1,"notes":"","rollbackNotes":"启动失败时恢复 pre-update 备份的 jar 与 H2"}\n' \
+            "$VERSION" "$TAG" "$JAR" "$SIZE" "$SHA" "$MIN_FROM_VERSION" > "$DIST/release-manifest.json"
+          {
+            echo "assets<<ASSETS"
+            printf '%s\n' "$JAR" "$JAR.sha256" release-manifest.json LICENSE THIRD-PARTY-NOTICES.md
+            echo "ASSETS"
+          } >> "$GITHUB_OUTPUT"
+
+      # 避免 pom 改了但资源过滤 / 前端产物没跟上，发布一个版本号对不上的包
+      - name: 校验 jar 内版本
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+          JAR: ${{ steps.ver.outputs.jar }}
+        run: |
+          EMBEDDED="$(unzip -p "dist/$JAR" BOOT-INF/classes/application.yml \
+            | awk '/^[[:space:]]+version:/ && !found { print $2; found = 1 }')"
+          [[ "$EMBEDDED" == "$VERSION" ]] || {
+            echo "::error::jar 内 galworld.version=${EMBEDDED:-<空>} 与 VERSION=$VERSION 不一致"; exit 1; }
+
+      - name: 创建 Release 并上传资产
+        env:
+          TAG: ${{ steps.ver.outputs.tag }}
+          JAR: ${{ steps.ver.outputs.jar }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "$TAG" \
+            --title "$TAG" \
+            --notes "发布 $TAG" \
+            --verify-tag \
+            "dist/$JAR" \
+            "dist/$JAR.sha256" \
+            dist/release-manifest.json \
+            dist/LICENSE \
+            dist/THIRD-PARTY-NOTICES.md
+
+      # 上传失败时 gh 会报错，这里再核一遍资产清单，防静默缺失
+      - name: 校验 Release 资产
+        env:
+          TAG: ${{ steps.ver.outputs.tag }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          LIST="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" --jq '.assets[].name')"
+          MISSING=""
+          while IFS= read -r f; do
+            echo "$LIST" | grep -qx "$f" || MISSING="$MISSING $f"
+          done <<< "${{ steps.gen.outputs.assets }}"
+          if [[ -n "$MISSING" ]]; then
+            echo "::error::Release 资产不完整，缺少:$MISSING"
+            exit 1
+          fi
+          echo "资产完整: $(echo "$LIST" | tr '\n' ' ')"
