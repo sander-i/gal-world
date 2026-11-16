@@ -7,6 +7,7 @@ package io.github.sander_i.web;
 
 import io.github.sander_i.domain.Game;
 import io.github.sander_i.platform.CommandRunner;
+import io.github.sander_i.platform.GameWindowProbe;
 import io.github.sander_i.repo.GameRepository;
 import io.github.sander_i.service.SessionDiagnosticsService;
 import io.github.sander_i.service.SessionService;
@@ -41,7 +42,7 @@ class SessionControllerTest {
                 "demo", SessionService.State.RUNNING, "active", null, false));
         when(runner.portOpen(9001)).thenReturn(true);
 
-        var controller = new SessionController(repo, sessions, diagnostics, runner);
+        var controller = new SessionController(repo, sessions, diagnostics, runner, mock(GameWindowProbe.class));
         var body = controller.session("demo").getBody();
 
         assertNotNull(body);
@@ -63,7 +64,7 @@ class SessionControllerTest {
                 "http://host/stream.html?appId=1", false));
 
         var controller = new SessionController(repo, sessions,
-                mock(SessionDiagnosticsService.class), runner);
+                mock(SessionDiagnosticsService.class), runner, mock(GameWindowProbe.class));
         var body = controller.session("demo").getBody();
 
         assertNotNull(body);
@@ -82,7 +83,7 @@ class SessionControllerTest {
                 "demo", SessionService.State.RUNNING, "active", null, false));
 
         var controller = new SessionController(repo, sessions,
-                mock(SessionDiagnosticsService.class), runner);
+                mock(SessionDiagnosticsService.class), runner, mock(GameWindowProbe.class));
         assertNotNull(controller.session("demo").getBody());
         verify(runner, never()).portOpen(anyInt());
     }
@@ -91,7 +92,7 @@ class SessionControllerTest {
     void sessionReturns404ForUnknownGame() {        GameRepository repo = mock(GameRepository.class);
         when(repo.findById("nope")).thenReturn(Optional.empty());
         var controller = new SessionController(repo, mock(SessionService.class),
-                mock(SessionDiagnosticsService.class), mock(CommandRunner.class));
+                mock(SessionDiagnosticsService.class), mock(CommandRunner.class), mock(GameWindowProbe.class));
         assertEquals(404, controller.session("nope").getStatusCode().value());
     }
 
@@ -110,7 +111,7 @@ class SessionControllerTest {
                 3, null, "游戏会话异常终止，退出码 3", List.of("boom"), "demo.log");
         when(diagnostics.of("demo", status)).thenReturn(diag);
 
-        var controller = new SessionController(repo, sessions, diagnostics, runner);
+        var controller = new SessionController(repo, sessions, diagnostics, runner, mock(GameWindowProbe.class));
         assertEquals(diag, controller.diagnostics("demo").getBody());
     }
 }

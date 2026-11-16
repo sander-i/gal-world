@@ -272,6 +272,36 @@ PIDS+=("$WINE_PID")
 ) &
 PIDS+=($!)
 
+# ---- 5a2. 补丁 / 汉化组的更新弹窗：自动选「否」 ----
+#
+# 部分汉化补丁的启动器开场会弹「检测到新版本，是否更新？」。这类弹窗挡在
+# 游戏前面，串流画面一直停在弹窗上，玩家在浏览器里也点不到它 —— 会话看起来
+# 像是卡死了。这里在启动阶段盯着窗口，标题命中更新类关键词就发 Esc
+# （Windows 对话框里 Esc 等价于「取消 / 否」）。
+#
+# 只在启动阶段盯，进画面后不再扫，避免误关游戏自己的窗口。
+# 需要关掉时设 GALWORLD_DISMISS_UPDATE_DIALOG=0。
+if [[ "${GALWORLD_DISMISS_UPDATE_DIALOG:-1}" != "0" ]] && command -v xdotool >/dev/null 2>&1; then
+  (
+    for _ in $(seq 1 60); do
+      sleep 2
+      for w in $(xdotool search --onlyvisible --name '.+' 2>/dev/null || true); do
+        name=$(xdotool getwindowname "$w" 2>/dev/null || true)
+        case "$name" in
+          *更新*|*升级*|*新版本*|*アップデート*|*バージョン*|*Update*|*update*)
+            echo "[$(date '+%F %T')] 自动取消更新弹窗: $name" >&2
+            # 没有窗口管理器，先显式聚焦再发键，保证 Esc 落在对话框上
+            xdotool windowfocus "$w" 2>/dev/null || true
+            xdotool key Escape 2>/dev/null || true
+            sleep 1
+            ;;
+        esac
+      done
+    done
+  ) &
+  PIDS+=($!)
+fi
+
 # ---- 5b. 窗口定位 ----
 # 把游戏主窗口居中到屏幕（屏幕 WIDTHxHEIGHT，窗口通常略小）。
 # 不移动到负坐标：窗口部分移出屏幕时游戏会判定不可见并暂停 BGM。

@@ -67,6 +67,12 @@ async function poll() {
     // 网络抖动不算结束，下一轮再看
     return
   }
+  // 游戏窗口没了就是没有画面可传，等价于已经彻底关闭；
+  // 比等 systemd 单元收尾更贴近真实状态（收尾还要关 Selkies、卸音频模块）
+  if (st?.gameAlive === false) {
+    finish()
+    return
+  }
   // UNKNOWN 是 systemd 停止过程中的瞬时值，继续等
   if (st?.state !== 'RUNNING' && st?.state !== 'UNKNOWN') {
     finish()

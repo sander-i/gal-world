@@ -6,6 +6,7 @@
 package io.github.sander_i.web;
 
 import io.github.sander_i.platform.CommandRunner;
+import io.github.sander_i.platform.GameWindowProbe;
 import io.github.sander_i.platform.OsKind;
 import io.github.sander_i.repo.GameRepository;
 import io.github.sander_i.service.SessionDiagnosticsService;
@@ -34,20 +35,24 @@ public class SessionController {
 
     /** 游玩页轮询用的最小状态 */
     public record SessionStatusView(String id, String state, boolean crashed,
-                                    String streamUrl, boolean streamReady) {
+                                    String streamUrl, boolean streamReady,
+                                    Boolean gameAlive) {
     }
 
     private final GameRepository games;
     private final SessionService sessions;
     private final SessionDiagnosticsService diagnostics;
     private final CommandRunner runner;
+    private final GameWindowProbe windowProbe;
 
     public SessionController(GameRepository games, SessionService sessions,
-                             SessionDiagnosticsService diagnostics, CommandRunner runner) {
+                             SessionDiagnosticsService diagnostics, CommandRunner runner,
+                             GameWindowProbe windowProbe) {
         this.games = games;
         this.sessions = sessions;
         this.diagnostics = diagnostics;
         this.runner = runner;
+        this.windowProbe = windowProbe;
     }
 
     @GetMapping("/{id}/session")
@@ -66,7 +71,7 @@ public class SessionController {
                             || portOk;
                     return ResponseEntity.ok(new SessionStatusView(
                             g.getId(), st.state().name(), st.crashed(), st.streamUrl(),
-                            streamReady));
+                            streamReady, windowProbe.present(g.getDisplayNum())));
                 })
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }

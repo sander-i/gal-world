@@ -176,8 +176,11 @@ export function useGameLaunch({ idOf = (g) => g.id ?? g.gameId, onError, onStart
         inflight = false
         if (done || !polls.has(id)) return
         setLaunch(id, stopPercent(performance.now() - startedAt, STOP_MS), 'stop', 'stop')
-        // UNKNOWN 是 systemd 停止过程中的瞬时值，继续等
-        if (st.state !== 'RUNNING' && st.state !== 'UNKNOWN') {
+        // 游戏窗口没了 = 没有画面可传，等价于已经关闭；
+        // 比等 systemd 单元收尾更贴近真实状态。
+        // UNKNOWN 是 systemd 停止过程中的瞬时值，继续等。
+        if (st.gameAlive === false
+            || (st.state !== 'RUNNING' && st.state !== 'UNKNOWN')) {
           done = true
           finish(id, 'stop', resolve)
         }
