@@ -77,6 +77,8 @@ class SaveServiceTest {
 
     @Test
     void deleteRemovesArchiveAndMetadata() throws Exception {
+        // 先留一份原始存档，否则最后一份备份不允许删（见下一个用例）
+        saves.backup("g1", "原始存档", "", SaveService.KIND_ORIGINAL);
         Path archive = saves.backup("g1", "t", "d", SaveService.KIND_MANUAL);
         Path meta = archive.resolveSibling(archive.getFileName() + ".json");
         assertTrue(Files.exists(archive));
@@ -86,7 +88,30 @@ class SaveServiceTest {
 
         assertFalse(Files.exists(archive));
         assertFalse(Files.exists(meta));
-        assertTrue(saves.list("g1").isEmpty());
+        assertEquals(1, saves.list("g1").size());
+    }
+
+    @Test
+    void refusesToDeleteLastBackupWhenNoOriginal() throws Exception {
+        Path only = saves.backup("g1", "仅此一份", "", SaveService.KIND_MANUAL);
+
+        IllegalStateException e = assertThrows(IllegalStateException.class,
+                () -> saves.delete("g1", only.getFileName().toString()));
+        assertTrue(e.getMessage().contains("至少要保留一份"), e.getMessage());
+        // 拒绝时不能留下副作用
+        assertTrue(Files.exists(only));
+        assertEquals(1, saves.list("g1").size());
+    }
+
+    @Test
+    void refusesToDeleteCurrentArchive() throws Exception {
+        saves.backup("g1", "原始存档", "", SaveService.KIND_ORIGINAL);
+        Path target = saves.backup("g1", "要玩的", "", SaveService.KIND_MANUAL);
+        saves.restore("g1", target.getFileName().toString(), false);
+
+        IllegalStateException e = assertThrows(IllegalStateException.class,
+                () -> saves.delete("g1", target.getFileName().toString()));
+        assertTrue(e.getMessage().contains("当前正在游玩"), e.getMessage());
     }
 
     @Test

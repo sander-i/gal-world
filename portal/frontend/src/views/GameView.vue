@@ -377,6 +377,22 @@ async function doRestoreOriginal() {
   }
 }
 
+/**
+ * 这份备份能不能删。
+ *
+ * 三类不可删：
+ *  - 原始存档：导入时留的底，存档全丢时靠它恢复；
+ *  - 当前正在游玩的那份：删掉它当前进度就失去了备份锚点；
+ *  - 没有原始存档时的最后一份：删了就再没有任何可回退的状态。
+ * 后端同样拦截，这里只是不给出按钮。
+ */
+function canDeleteBackup(b) {
+  if (b.kind === 'ORIGINAL') return false
+  if (b.name === saves.value.current) return false
+  if (!saves.value.original && (saves.value.backups || []).length <= 1) return false
+  return true
+}
+
 /** 下载某份备份：让浏览器直接 GET 备份文件 */
 function downloadSave(b) {
   window.location.href = api.saveFileUrl(props.id, b.name)
@@ -871,9 +887,9 @@ onMounted(load)
                     <button class="link-btn" :disabled="savesBusy" @click="downloadSave(b)">下载</button>
                     <button class="link-btn" :disabled="savesBusy" @click="doSwitch(b)">切换到此存档</button>
                     <button class="link-btn" :disabled="savesBusy" @click="startEdit(b)">编辑</button>
-                    <!-- 原始存档与当前正在游玩的那份都不可删：前者是兜底，后者会让当前进度失去备份锚点 -->
+                    <!-- 原始存档 / 当前游玩中 / 无原始时的最后一份 都不可删，后端也会拒绝 -->
                     <button
-                      v-if="b.kind !== 'ORIGINAL' && b.name !== saves.current"
+                      v-if="canDeleteBackup(b)"
                       class="link-btn danger"
                       :disabled="savesBusy"
                       @click="doDelete(b)"

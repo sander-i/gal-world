@@ -51,13 +51,17 @@ public class GameWindowProbe {
         if (OsKind.current() != OsKind.LINUX || displayNum <= 0) {
             return null;
         }
-        // 2 秒够用：xwininfo 只是读一次 X 属性；超时说明 X 已经没了，按「无窗口」之外的
-        // 情况处理会更危险，这里直接返回 null 让调用方退回 systemd 状态判断
+        // 2 秒够用：xwininfo 只是读一次 X 属性
         CommandRunner.Result r = runner.exec(
                 List.of("xwininfo", "-root", "-children", "-display", ":" + displayNum),
                 Duration.ofSeconds(2));
-        if (!r.ok()) {
+        if (r.exit() == -1) {
+            // 命令没跑起来（xwininfo 缺失 / 超时）：探测能力不足，交回调用方
             return null;
+        }
+        if (!r.ok()) {
+            // xwininfo 明确报错（显示号不存在）说明 Xvfb 都没了 —— 那就一定没有游戏窗口
+            return false;
         }
         return maxArea(r.output()) >= MIN_GAME_AREA;
     }

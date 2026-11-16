@@ -98,7 +98,56 @@ release_audio() {
       done
 }
 
+# ---- 优雅关闭：先请游戏自己退出，让它把存档写盘 ----
+#
+# 门户停止会话走 systemctl stop → SIGTERM → 本脚本的 trap，不走 stop-game.sh
+# （那个只有命令行 galworld stop 会用）。所以优雅关闭必须放在这里。
+# unit 配的是 KillMode=mixed + TimeoutStopSec=25：SIGTERM 只发给本脚本，
+# 我们等游戏退出后自己收尾；超过 25s systemd 才会整组 SIGKILL。
+#
+# 直接杀 wine 会丢掉未落盘的进度，所以先发 WM_DELETE_WINDOW，
+# 宽限期内每 3 秒重发（加载阶段会忽略关闭消息）。
+GRACE_SECONDS="${GALWORLD_STOP_GRACE_SECONDS:-15}"
+
+# 向所有「像游戏窗口」的窗口发关闭请求（面积 > 100000，排除光标/隐藏窗口）
+request_game_close() {
+  command -v xdotool >/dev/null 2>&1 || return 1
+  command -v xwininfo >/dev/null 2>&1 || return 1
+  local w area sent=1
+  for w in $(xwininfo -root -children 2>/dev/null | awk '/^ +0x[0-9a-f]+/ {print $1}'); do
+    area=$(xwininfo -id "$w" 2>/dev/null | awk '/Width:/{x=$2} /Height:/{y=$2} END{print (x&&y)?x*y:0}')
+    if [[ "${area:-0}" -gt 100000 ]]; then
+      xdotool windowclose "$w" 2>/dev/null || true
+      sent=0
+    fi
+  done
+  return $sent
+}
+
+graceful_close() {
+  # wine 已经退出（正常结束 / 启动失败）就不用再等
+  [[ -n "${WINE_PID:-}" ]] || return 0
+  kill -0 "$WINE_PID" 2>/dev/null || return 0
+  request_game_close || return 0
+  echo "[$(date '+%F %T')] 已请求游戏关闭，等待存盘退出" >&2
+  local i
+  for i in $(seq 1 "$GRACE_SECONDS"); do
+    sleep 1
+    if ! kill -0 "$WINE_PID" 2>/dev/null; then
+      echo "[$(date '+%F %T')] 游戏已正常退出" >&2
+      return 0
+    fi
+    # 加载阶段会忽略关闭消息，隔几秒重发一次
+    if [[ $((i % 3)) -eq 0 ]]; then
+      request_game_close || true
+    fi
+  done
+  echo "[$(date '+%F %T')] 游戏未在 ${GRACE_SECONDS}s 内退出，强制结束" >&2
+  return 0
+}
+
 cleanup() {
+  graceful_close
   local p
   for p in "${PIDS[@]}"; do kill "$p" 2>/dev/null || true; done
   release_audio
@@ -280,8 +329,11 @@ PIDS+=($!)
 # （Windows 对话框里 Esc 等价于「取消 / 否」）。
 #
 # 只在启动阶段盯，进画面后不再扫，避免误关游戏自己的窗口。
-# 需要关掉时设 GALWORLD_DISMISS_UPDATE_DIALOG=0。
-if [[ "${GALWORLD_DISMISS_UPDATE_DIALOG:-1}" != "0" ]] && command -v xdotool >/dev/null 2>&1; then
+#
+# 默认**关闭**（GALWORLD_DISMISS_UPDATE_DIALOG=1 才启用）：
+# Esc 是否真的落在「否」上取决于弹窗的按钮定义，实际用下来有误触风险，
+# 先停用。要试的话把环境变量设成 1。
+if [[ "${GALWORLD_DISMISS_UPDATE_DIALOG:-0}" == "1" ]] && command -v xdotool >/dev/null 2>&1; then
   (
     for _ in $(seq 1 60); do
       sleep 2

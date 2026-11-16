@@ -470,6 +470,14 @@ public class SaveService {
             throw new IllegalStateException("当前正在游玩的存档不可删除："
                     + "请先切换到其它存档，再删除这一份");
         }
+        // 没有原始存档兜底时，最后一份备份就是唯一能回退的东西，不能删
+        List<SaveArchive> all = list(gameId);
+        boolean hasOriginal = all.stream().anyMatch(a -> KIND_ORIGINAL.equals(a.kind()));
+        long remaining = all.stream().filter(a -> !a.name().equals(archiveName)).count();
+        if (!hasOriginal && remaining == 0) {
+            throw new IllegalStateException("至少要保留一份存档备份：这个游戏没有原始存档，"
+                    + "删掉最后一份就没有任何可回退的状态了");
+        }
         Files.deleteIfExists(archive);
         Files.deleteIfExists(metaPath(archive));
     }
