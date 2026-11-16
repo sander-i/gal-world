@@ -85,7 +85,7 @@ class GameImportServiceTest {
         return new GameImportService(new PathConfig(root.toString()), repo, scan, sessions,
                 runner, new GameExeScanner(), new GameSlotAllocator(),
                 new GameImportValidator(new PathConfig(root.toString()), repo),
-                new SaveService(new PathConfig(root.toString())),
+                new SaveService(new PathConfig(root.toString()), null),
                 fontPath, root.resolve("wine-fonts.sh").toString(), exec);
     }
 
@@ -100,7 +100,7 @@ class GameImportServiceTest {
     void importCreatesOriginalSaveBaselineOnce() throws Exception {
         Files.createDirectories(root.resolve("games/sample-game/savedata"));
         Files.writeString(root.resolve("games/sample-game/savedata/global.sav"), "orig");
-        SaveService saves = new SaveService(new PathConfig(root.toString()));
+        SaveService saves = new SaveService(new PathConfig(root.toString()), null);
 
         String runId = service.start("sample-game", "标题", "game.exe", 1280, 720, "30").runId();
         await(service.find(runId));

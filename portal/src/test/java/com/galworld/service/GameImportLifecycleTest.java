@@ -67,7 +67,7 @@ class GameImportLifecycleTest {
         return new GameImportService(new PathConfig(root.toString()), repo, scan, sessions,
                 runner, new GameExeScanner(), new GameSlotAllocator(),
                 new GameImportValidator(new PathConfig(root.toString()), repo),
-                new SaveService(new PathConfig(root.toString())),
+                new SaveService(new PathConfig(root.toString()), null),
                 root.resolve("missing-font.ttc").toString(),
                 root.resolve("wine-fonts.sh").toString(), exec);
     }

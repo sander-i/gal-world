@@ -110,6 +110,10 @@ public class Game {
     @Column(name = "media_mode", length = 8)
     private String mediaMode;
 
+    /** 用户手动指定的存档目录名（相对游戏目录），逗号分隔；留空则用默认约定 */
+    @Column(name = "save_dirs", length = 500)
+    private String saveDirs;
+
     private Instant createdAt;
     private Instant updatedAt;
 
@@ -216,6 +220,9 @@ public class Game {
 
     public String getMediaMode() { return mediaMode; }
     public void setMediaMode(String mediaMode) { this.mediaMode = mediaMode; }
+
+    public String getSaveDirs() { return saveDirs; }
+    public void setSaveDirs(String saveDirs) { this.saveDirs = saveDirs; }
 
     public Instant getCreatedAt() { return createdAt; }
     public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }

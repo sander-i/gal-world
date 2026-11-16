@@ -434,6 +434,18 @@ export const api = {
     req(`/api/games/${encodeURIComponent(id)}/saves/${encodeURIComponent(name)}`, {
       method: 'DELETE',
     }),
+  /** 下载某份备份（tar.gz）；浏览器直接 GET，不需要写令牌 */
+  saveFileUrl: (id, name) =>
+    `/api/games/${encodeURIComponent(id)}/saves/${encodeURIComponent(name)}/file`,
+  /** 浏览游戏目录下的内容（手动选择存档目录用） */
+  listSaveFiles: (id, path = '') =>
+    req(`/api/games/${encodeURIComponent(id)}/saves/files?path=${encodeURIComponent(path)}`),
+  /** 手动指定存档目录（相对游戏目录的路径列表）；传空数组回到默认约定 */
+  setSaveDirs: (id, dirs) =>
+    req(`/api/games/${encodeURIComponent(id)}/saves/dirs`, {
+      method: 'PUT',
+      body: JSON.stringify({ dirs }),
+    }),
 
   /** 第一步：异步打包游戏目录，返回可轮询的 job */
   packageGame: (id) =>

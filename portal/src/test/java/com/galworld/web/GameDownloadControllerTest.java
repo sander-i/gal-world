@@ -46,7 +46,7 @@ class GameDownloadControllerTest {
         when(sessions.status("demo", 9001)).thenReturn(new SessionService.SessionStatus(
                 "demo", SessionService.State.STOPPED, "inactive", null, false));
         var job = new GameDownloadService.JobView("dl-1", "demo", "QUEUED", "demo.zip",
-                0, 0, 0, 0, "", "2026-01-01T00:00:00Z");
+                0, 0, 0, 0, "", "2026-01-01T00:00:00Z", null, null, null);
         when(downloads.start("demo")).thenReturn(job);
 
         var controller = new GameDownloadController(downloads, repo, sessions);
@@ -77,7 +77,7 @@ class GameDownloadControllerTest {
         SessionService sessions = mock(SessionService.class);
         when(repo.findById("demo")).thenReturn(Optional.of(game("demo", 9001)));
         var job = new GameDownloadService.JobView("dl-1", "demo", "RUNNING", "demo.zip",
-                100, 40, 2, 1, "", "2026-01-01T00:00:00Z");
+                100, 40, 2, 1, "", "2026-01-01T00:00:00Z", null, null, null);
         when(downloads.current("demo")).thenReturn(job);
 
         var controller = new GameDownloadController(downloads, repo, sessions);

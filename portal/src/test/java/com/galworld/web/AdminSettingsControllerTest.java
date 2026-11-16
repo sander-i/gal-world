@@ -5,13 +5,16 @@
 
 package com.galworld.web;
 
+import com.galworld.config.PathConfig;
 import com.galworld.deploy.DeploySecurity;
 import com.galworld.service.SettingsService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.springframework.http.ResponseEntity;
 import org.springframework.mock.web.MockHttpServletRequest;
 
+import java.nio.file.Path;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -23,12 +26,16 @@ class AdminSettingsControllerTest {
     private AdminSettingsController controller;
     private MockHttpServletRequest withToken;
 
+    @TempDir
+    Path tempDir;
+
     @BeforeEach
     void setUp() {
         settings = mock(SettingsService.class);
         when(settings.all()).thenReturn(Map.of(
                 "coverMaxCount", "8", "switchMode", "page", "artifactMirrors", "https://x"));
-        controller = new AdminSettingsController(settings, new DeploySecurity("tok", "127.0.0.1/32"));
+        controller = new AdminSettingsController(settings,
+                new DeploySecurity(new PathConfig(tempDir.toString()), "tok", "127.0.0.1/32"));
         withToken = new MockHttpServletRequest();
         withToken.setRemoteAddr("127.0.0.1");
         withToken.addHeader(DeploySecurity.HEADER, "tok");

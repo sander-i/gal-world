@@ -5,11 +5,14 @@
 
 package com.galworld.web;
 
+import com.galworld.config.PathConfig;
 import com.galworld.deploy.DeploySecurity;
 import com.galworld.security.WriteSecurity;
 import com.galworld.service.SettingsService;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
+import java.nio.file.Path;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -17,6 +20,10 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 class HealthControllerTest {
+
+    /** 未配置令牌时 DeploySecurity 会生成并落盘，测试必须写到临时目录 */
+    @TempDir
+    static Path tempDir;
 
     private static HealthController controller(String deployToken, String writeToken) {
         return controller(deployToken, writeToken, true);
@@ -28,7 +35,7 @@ class HealthControllerTest {
         when(settings.repoUrl()).thenReturn("https://example.com/owner/gal-world");
         when(settings.repoUrlPublic()).thenReturn(repoUrlPublic);
         return new HealthController("0.1.4", settings,
-                new DeploySecurity(deployToken, "127.0.0.1/32"),
+                new DeploySecurity(new PathConfig(tempDir.toString()), deployToken, "127.0.0.1/32"),
                 new WriteSecurity(writeToken));
     }
 

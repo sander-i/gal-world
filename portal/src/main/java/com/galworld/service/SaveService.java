@@ -7,6 +7,8 @@ package com.galworld.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.galworld.config.PathConfig;
+import com.galworld.domain.Game;
+import com.galworld.repo.GameRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -14,15 +16,18 @@ import org.springframework.stereotype.Service;
 import java.io.IOException;
 import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.stream.Stream;
 
 /**
@@ -60,10 +65,12 @@ public class SaveService {
             List.of("savedata_cn", "savedata_jp", "savedata", "save");
 
     private final PathConfig paths;
+    private final GameRepository repo;
     private final ObjectMapper mapper = new ObjectMapper();
 
-    public SaveService(PathConfig paths) {
+    public SaveService(PathConfig paths, GameRepository repo) {
         this.paths = paths;
+        this.repo = repo;
     }
 
     public record SaveArchive(String name, String label, String description, String kind,
@@ -82,13 +89,74 @@ public class SaveService {
     public List<Path> saveDirs(String gameId) {
         Path work = paths.gameDir(gameId);
         List<Path> dirs = new ArrayList<>();
-        for (String name : SAVE_DIR_NAMES) {
+        for (String name : resolveSaveDirNames(gameId)) {
             Path p = work.resolve(name);
-            if (Files.isDirectory(p)) {
+            if (Files.isDirectory(p, LinkOption.NOFOLLOW_LINKS)) {
                 dirs.add(p);
             }
         }
         return dirs;
+    }
+
+    /** 生效的存档目录名（相对游戏目录）：用户配置优先，未配置时用默认约定 */
+    public List<String> saveDirNames(String gameId) {
+        return resolveSaveDirNames(gameId);
+    }
+
+    /** 设置存档目录名（相对游戏目录，逗号分隔）。空列表则清除配置，回到默认约定 */
+    public List<String> setSaveDirs(String gameId, List<String> dirs) {
+        Game game = repo.findById(gameId)
+                .orElseThrow(() -> new IllegalArgumentException("没有这个游戏: " + gameId));
+        String normalized = dirs == null ? "" : String.join(",", dirs.stream()
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .filter(s -> !s.contains("/") && !s.contains("\\") && !s.contains(".."))
+                .distinct()
+                .toList());
+        game.setSaveDirs(normalized.isEmpty() ? null : normalized);
+        repo.save(game);
+        return resolveSaveDirNames(gameId);
+    }
+
+    private static long sizeOf(Path p) {
+        try {
+            return Files.size(p);
+        } catch (IOException e) {
+            return 0;
+        }
+    }
+
+    /** 浏览游戏目录下的内容，供「手动选择存档目录」用。relPath 为空时列游戏根目录 */
+    public Map<String, Object> listFiles(String gameId, String relPath) throws IOException {
+        Path root = paths.gameDir(gameId).toAbsolutePath().normalize();
+        Path target = root.resolve(relPath == null ? "" : relPath).normalize();
+        if (!target.startsWith(root)
+                || !Files.isDirectory(target, LinkOption.NOFOLLOW_LINKS)) {
+            throw new IllegalArgumentException("目录不存在: " + relPath);
+        }
+        List<Map<String, Object>> entries = new ArrayList<>();
+        try (Stream<Path> s = Files.list(target)) {
+            for (Path p : s.sorted().toList()) {
+                entries.add(Map.of(
+                        "name", p.getFileName().toString(),
+                        "dir", Files.isDirectory(p, LinkOption.NOFOLLOW_LINKS),
+                        "size", sizeOf(p)
+                ));
+            }
+        }
+        return Map.of("path", relPath == null ? "" : relPath, "entries", entries);
+    }
+
+    private List<String> resolveSaveDirNames(String gameId) {
+        String configured = repo == null ? null
+                : repo.findById(gameId).map(Game::getSaveDirs).orElse(null);        if (configured == null || configured.isBlank()) {
+            return SAVE_DIR_NAMES;
+        }
+        List<String> names = Arrays.stream(configured.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .toList();
+        return names.isEmpty() ? SAVE_DIR_NAMES : names;
     }
 
     public Path backupRoot(String gameId) {
@@ -259,6 +327,11 @@ public class SaveService {
         Path archive = resolveArchive(backupRoot(gameId), archiveName);
         Files.deleteIfExists(archive);
         Files.deleteIfExists(metaPath(archive));
+    }
+
+    /** 备份文件路径；下载用。只做路径解析，不保证文件存在 */
+    public Path archiveOf(String gameId, String archiveName) {
+        return resolveArchive(backupRoot(gameId), archiveName);
     }
 
     // ---- helpers ----

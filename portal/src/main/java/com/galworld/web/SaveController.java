@@ -8,8 +8,12 @@ package com.galworld.web;
 import com.galworld.repo.GameRepository;
 import com.galworld.service.SaveService;
 import com.galworld.service.SessionService;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.core.io.FileSystemResource;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -18,9 +22,12 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
@@ -48,7 +55,29 @@ public class SaveController {
         List<String> dirs = saves.saveDirs(id).stream().map(p -> p.getFileName().toString()).toList();
         return Map.of(
                 "saveDirs", dirs,
+                "saveDirNames", saves.saveDirNames(id),
                 "backups", saves.list(id));
+    }
+
+    /** 浏览游戏目录内容，供「手动选择存档目录」用 */
+    @GetMapping("/files")
+    public Map<String, Object> files(@PathVariable String id,
+                                     @RequestParam(defaultValue = "") String path) throws IOException {
+        requireGame(id);
+        return saves.listFiles(id, path);
+    }
+
+    /** 手动指定存档目录（相对游戏目录）；传空数组则回到默认约定 */
+    @PutMapping("/dirs")
+    public Map<String, Object> setDirs(@PathVariable String id,
+                                       @RequestBody(required = false) DirsRequest req) {
+        requireGame(id);
+        List<String> dirs = req == null || req.dirs() == null ? List.of() : req.dirs();
+        return Map.of("saveDirNames", saves.setSaveDirs(id, dirs),
+                "saveDirs", saves.saveDirs(id).stream().map(p -> p.getFileName().toString()).toList());
+    }
+
+    public record DirsRequest(List<String> dirs) {
     }
 
     @PostMapping("/backup")
@@ -99,6 +128,23 @@ public class SaveController {
         requireGame(id);
         saves.delete(id, name);
         return Map.of("backups", saves.list(id));
+    }
+
+    /** 下载某份备份（tar.gz）。文件名用备份名，浏览器另存为 */
+    @GetMapping("/{name}/file")
+    public ResponseEntity<FileSystemResource> file(@PathVariable String id,
+                                                   @PathVariable String name) throws IOException {
+        requireGame(id);
+        Path archive = saves.archiveOf(id, name);
+        if (!Files.isRegularFile(archive)) {
+            throw new IllegalArgumentException("备份不存在: " + name);
+        }
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.attachment()
+                        .filename(archive.getFileName().toString(), StandardCharsets.UTF_8).build().toString())
+                .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                .contentLength(Files.size(archive))
+                .body(new FileSystemResource(archive));
     }
 
     @ExceptionHandler({IllegalArgumentException.class, IllegalStateException.class})
