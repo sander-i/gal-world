@@ -388,6 +388,11 @@ public class GameArchiveExtractor {
 
     /** 原子移动，不支持时退化为递归复制 + 删除。失败时尽量保证目标目录不残留半成品。 */
     public static void moveInto(Path source, Path target) throws IOException {
+        // 平台差异：Windows 上移动到已存在的目录会失败，Linux 的 rename(2) 却会把
+        // 空目标目录直接替换掉。显式拒绝，保证两端行为一致且不会静默覆盖。
+        if (Files.exists(target, LinkOption.NOFOLLOW_LINKS)) {
+            throw new IOException("目标已存在，拒绝覆盖: " + target);
+        }
         Files.createDirectories(target.getParent());
         try {
             Files.move(source, target, StandardCopyOption.ATOMIC_MOVE);
