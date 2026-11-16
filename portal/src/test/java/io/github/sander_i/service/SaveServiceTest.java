@@ -153,6 +153,26 @@ class SaveServiceTest {
     }
 
     @Test
+    void canSwitchBackToPreRestoreSnapshot() throws Exception {
+        Path archive = saves.backup("g1", "old", "", SaveService.KIND_MANUAL);
+        Path savedata = root.resolve("games/g1/savedata");
+        Files.writeString(savedata.resolve("global.sav"), "slot-2");
+
+        // 第一次切换会生成「切换前进度」快照（内容 slot-2）
+        saves.restore("g1", archive.getFileName().toString());
+        SaveService.SaveArchive pre = saves.list("g1").stream()
+                .filter(a -> SaveService.KIND_PRE_RESTORE.equals(a.kind()))
+                .findFirst().orElseThrow();
+
+        // 再切到别处，然后切回那份快照：
+        // 切换目标本身是 pre-restore，清理逻辑必须避开它，否则刚拍完就又删了
+        Files.writeString(savedata.resolve("global.sav"), "slot-3");
+        saves.restore("g1", pre.name());
+
+        assertEquals("slot-2", Files.readString(savedata.resolve("global.sav")));
+    }
+
+    @Test
     void rejectsPathTraversalNames() {
         assertThrows(IllegalArgumentException.class,
                 () -> saves.delete("g1", "../escape.tar.gz"));

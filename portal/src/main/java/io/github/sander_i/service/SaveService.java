@@ -340,7 +340,9 @@ public class SaveService {
         if (snapshotCurrent) {
             try {
                 backup(gameId, "切换前进度", "切换存档时自动保存的当前进度", KIND_PRE_RESTORE);
-                prunePreRestore(gameId);
+                // 清理时必须避开「本次要恢复的那份」—— 它本身也可能是一份 pre-restore，
+                // 不排除的话刚拍完快照就把恢复目标删了，切换直接失败。
+                prunePreRestore(gameId, archiveName);
             } catch (IllegalStateException e) {
                 log.warn("恢复前快照跳过: {}", e.getMessage());
             }
@@ -493,12 +495,15 @@ public class SaveService {
      *
      * 不走 {@link #delete}：那条路径有「当前游玩中不可删」「最后一份不可删」
      * 的业务约束，清理内部快照不该受它们影响（也不该因为约束失败而中断切换）。
+     *
+     * @param restoreTarget 本次正在恢复的备份名，无论如何都要保留
      */
-    private void prunePreRestore(String gameId) throws IOException {
+    private void prunePreRestore(String gameId, String restoreTarget) throws IOException {
         String current = currentArchive(gameId);
         List<SaveArchive> stale = list(gameId).stream()
                 .filter(a -> KIND_PRE_RESTORE.equals(a.kind()))
                 .filter(a -> !a.name().equals(current))
+                .filter(a -> !a.name().equals(restoreTarget))
                 .sorted(Comparator.comparing(SaveArchive::createdAt).reversed())
                 .skip(1)
                 .toList();
