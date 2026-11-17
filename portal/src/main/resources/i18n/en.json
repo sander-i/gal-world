@@ -40,6 +40,7 @@
     "GPU 直通需要额外驱动与配置": "GPU passthrough needs extra drivers and configuration",
     "GPU 硬件编码，延迟明显低于软编码": "GPU hardware encoding, much lower latency than software encoding",
     "GPU 编码": "GPU encoding",
+    "Gal 世界": "Gal World",
     "Guacamole 是标准 Web 网关，权限模型成熟": "Guacamole is a standard web gateway with a mature permission model",
     "Guacamole 需要额外 Java 运行环境与 guacd 服务": "Guacamole needs an extra Java runtime and the guacd service",
     "HTML5/WebSocket，断线重连与带宽占用更友好": "HTML5/WebSocket, friendlier reconnects and bandwidth use",

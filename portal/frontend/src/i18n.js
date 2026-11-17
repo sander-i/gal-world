@@ -125,9 +125,19 @@ export function i18nReady() {
   return !loading.value && !loadError.value
 }
 
+/**
+ * 把语言写到 <html lang> 与 <title>。
+ *
+ * index.html 里的 lang 与 title 是静态中文，切换语言时不更新的话，
+ * 浏览器会按错误语言做断行与朗读，标签页标题也一直是中文。
+ * 标题走语言包的「Gal 世界」键，缺译时回退原文。
+ */
 function applyDocumentLang(id) {
-  if (typeof document !== 'undefined') {
-    document.documentElement.lang = id
+  if (typeof document === 'undefined') return
+  document.documentElement.lang = id
+  const title = t('Gal 世界')
+  if (title && title !== 'Gal 世界') {
+    document.title = title
   }
 }
 
