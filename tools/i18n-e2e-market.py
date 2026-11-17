@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
-"""在已部署的实例上验证市场语言包：通过后台接口上传 .po / XLIFF / CSV，再查翻译。
+"""在已部署的实例上验证市场语言包：上传 .po / XLIFF / CSV，再查翻译。
 
-用法：python3 tools/i18n-e2e-market.py <base-url> <deploy-token> [--insecure]
+用法：python3 tools/i18n-e2e-market.py <base-url> <deploy-token> [--insecure] [--url-install <public-url>]
+
+`--url-install` 额外验证「从地址安装」：传一个公网可访问的语言包直链
+（如 GitHub raw 上的 .po），后端拉取后应得到与上传相同的导入结果。
+不给该参数时只验证默认的内网地址拒绝逻辑。
 
 只读 + 安装/删除语言包，不改其它配置。
 """
@@ -105,7 +109,28 @@ def main():
     st, r = install(blob, 'de2.po', {'id': 'de2'})
     check('导出的 PO 能再导入', st == 200 and r.get('imported', 0) > 30, r)
 
-    # 6) 请求头语言影响后端异常文案
+    # 6) 从地址安装：内网地址必须被拒
+    st, r = req('/api/admin/i18n', 'POST',
+                {'url': 'http://127.0.0.1:1/ko.po', 'id': 'ko2'}, auth=True)
+    msg = r.get('message', '') if isinstance(r, dict) else str(r)
+    check('内网地址被拒', st == 400 and ('内网' in msg or 'private' in msg.lower()), (st, msg))
+
+    st, r = req('/api/admin/i18n', 'POST', {'url': 'file:///etc/passwd'}, auth=True)
+    msg = r.get('message', '') if isinstance(r, dict) else str(r)
+    check('非 http 协议被拒', st == 400, (st, msg))
+
+    # 7) 从地址安装：公网直链（需要 --url-install 才验证）
+    url_idx = sys.argv.index('--url-install') if '--url-install' in sys.argv else -1
+    if url_idx > 0 and url_idx + 1 < len(sys.argv):
+        pub = sys.argv[url_idx + 1]
+        st, r = req('/api/admin/i18n', 'POST', {'url': pub}, auth=True)
+        check('从公网地址安装', st == 200 and r.get('imported', 0) > 0, (st, r))
+        if st == 200:
+            check('返回来源地址', r.get('sourceUrl') == pub, r.get('sourceUrl'))
+            check('返回文件名', bool(r.get('fileName')), r.get('fileName'))
+            req('/api/admin/i18n/' + r.get('id', ''), 'DELETE', auth=True)
+
+    # 8) 请求头语言影响后端异常文案
     def err_for(locale):
         h = {'X-GalWorld-Locale': locale}
         r = urllib.request.Request(base + '/api/admin/settings', headers=h)

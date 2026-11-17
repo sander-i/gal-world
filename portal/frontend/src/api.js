@@ -44,8 +44,9 @@ export function setWriteToken(token) {
 
 /** 给写请求补上令牌头；只读请求不加，避免无谓的请求头变化 */
 function writeHeaders(extra = {}) {
-  const t = getWriteToken()
-  return t ? { ...extra, [WRITE_HEADER]: t } : extra
+  // 变量名避开 t：与 i18n 的翻译函数同名会遮蔽，后者在本文件里也有使用
+  const token = getWriteToken()
+  return token ? { ...extra, [WRITE_HEADER]: token } : extra
 }
 
 // ---------------- 部署/维护期状态 ----------------
@@ -513,7 +514,8 @@ export const api = {
   /**
    * 安装或覆盖语言包。
    *
-   * 三种 body：{ file, fileName, id, keyMap }（按扩展名识别格式，推荐）、
+   * 四种 body：{ url, id, keyMap }（从地址下载，语言包市场直链）、
+   * { file, fileName, id, keyMap }（按扩展名识别格式，推荐）、
    * { json }（本项目 JSON）、{ id, name, messages }（直接给结构）。
    */
   installI18n: (body, token) =>

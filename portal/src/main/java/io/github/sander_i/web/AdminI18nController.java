@@ -7,6 +7,7 @@ package io.github.sander_i.web;
 
 import io.github.sander_i.deploy.DeploySecurity;
 import io.github.sander_i.i18n.I18nService;
+import io.github.sander_i.i18n.LocaleMarketClient;
 import io.github.sander_i.i18n.LocalePack;
 import io.github.sander_i.service.SettingsService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -37,21 +38,25 @@ public class AdminI18nController {
     private final I18nService i18n;
     private final SettingsService settings;
     private final DeploySecurity security;
+    private final LocaleMarketClient market;
 
     public AdminI18nController(I18nService i18n, SettingsService settings,
-                               DeploySecurity security) {
+                               DeploySecurity security, LocaleMarketClient market) {
         this.i18n = i18n;
         this.settings = settings;
         this.security = security;
+        this.market = market;
     }
 
     /**
      * 安装 / 覆盖语言包。
      *
-     * 请求体三种形态：
+     * 请求体四种形态：
      * <ul>
      *   <li>{@code {"file": "...", "fileName": "ko.po", "id": "ko", "keyMap": {...}}}
      *       —— 上传文件内容，按扩展名自动识别格式（推荐）</li>
+     *   <li>{@code {"url": "https://...", "id": "ko", "keyMap": {...}}}
+     *       —— 从地址下载（语言包市场直链），后端拉取后走同一条导入链路</li>
      *   <li>{@code {"json": "{\"id\":...}"}} —— 本项目 JSON</li>
      *   <li>{@code {"id": "...", "name": "...", "messages": {...}}} —— 直接给结构</li>
      * </ul>
@@ -70,6 +75,10 @@ public class AdminI18nController {
         try {
             Object file = body.get("file");
             Object json = body.get("json");
+            Object url = body.get("url");
+            if (url instanceof String s && !s.isBlank()) {
+                return ResponseEntity.ok(installFromUrl(s, body));
+            }
             if (file instanceof String s && !s.isBlank()) {
                 return ResponseEntity.ok(installFile(s, body));
             }
@@ -86,7 +95,7 @@ public class AdminI18nController {
             Object raw = body.get("messages");
             if (!(raw instanceof Map<?, ?> map)) {
                 return ResponseEntity.badRequest()
-                        .body(Map.of("message", "缺少 file / json / messages 字段"));
+                        .body(Map.of("message", "缺少 file / url / json / messages 字段"));
             }
             Map<String, String> msgs = new LinkedHashMap<>();
             for (Map.Entry<?, ?> e : map.entrySet()) {
@@ -110,6 +119,44 @@ public class AdminI18nController {
     /** 我们的 JSON 有 messages 对象；否则按第三方格式走导入器 */
     private static boolean looksLikeOurJson(String content) {
         return content.contains("\"messages\"");
+    }
+
+    /**
+     * 从地址下载并安装。
+     *
+     * 下载失败（网络、被安全策略拒绝、体积超限）走 400，与解析失败同一档：
+     * 对调用方来说都是「这个地址给不出可用的语言包」。
+     * 语言 id 优先取请求体里的 id，其次由文件名推断，最后用 URL 末段。
+     */
+    private Map<String, Object> installFromUrl(String url, Map<String, Object> body)
+            throws IOException {
+        LocaleMarketClient.Fetched fetched;
+        try {
+            fetched = market.fetch(url);
+        } catch (IOException e) {
+            // 下载阶段的失败与解析失败区分开：前者原因在网络或安全策略，后者在文件内容
+            throw new IllegalArgumentException("下载语言包失败: " + e.getMessage());
+        }
+        String fileName = fetched.fileName();
+        String id = String.valueOf(body.getOrDefault("id", "")).strip();
+        if (id.isBlank() && fileName.contains(".")) {
+            id = fileName.substring(0, fileName.lastIndexOf('.'));
+        }
+        if (id.isBlank()) {
+            id = url.substring(url.lastIndexOf('/') + 1);
+            int q = id.indexOf('?');
+            if (q >= 0) {
+                id = id.substring(0, q);
+            }
+        }
+        Map<String, Object> merged = new LinkedHashMap<>(body);
+        merged.put("file", fetched.content());
+        merged.put("fileName", fileName);
+        merged.put("id", id);
+        Map<String, Object> out = new LinkedHashMap<>(installFile(fetched.content(), merged));
+        out.put("sourceUrl", fetched.finalUrl());
+        out.put("fileName", fileName);
+        return out;
     }
 
     private Map<String, Object> installFile(String content, Map<String, Object> body)

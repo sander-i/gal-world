@@ -8,6 +8,11 @@
 
 ### 新增
 
+- **语言包市场直链安装**：后台「语言包」新增「从地址安装」，填 Crowdin / Weblate 导出链接、
+  GitHub / Gitee raw 或静态文件直链即可，服务器拉取后按扩展名走与上传相同的导入链路。
+  只接受 http / https 公网地址，回环与私网（含 CGNAT、保留段、IPv6 ULA）一律拒绝，
+  重定向自己跟且每跳重新校验，体积上限 2 MB。内网部署用
+  `galworld.i18n.market-allow-hosts` 或 `market-allow-private` 放行
 - **远程更新源可配置**：管理页新增「远程更新源」，可改发布接口根地址、仓库路径与仓库网页根地址
   （也可用 `GALWORLD_UPDATE_API_BASE` / `GALWORLD_UPDATE_REPO` / `GALWORLD_UPDATE_WEB_BASE`）。
   接口兼容 GitHub / Gitee 的 Release API，连不上默认站时可指向 Gitee、自建 Gitea / GitLab 或镜像；

@@ -694,8 +694,12 @@ const importReport = ref(null)
 /** 符号键格式的映射表（符号键 → 中文原文），文本形式供人工编辑 */
 const keyMapText = ref('')
 const sourceKeys = ref([])
+/** 语言包市场直链：填地址后从后端拉取，走与上传相同的导入链路 */
+const marketUrl = ref('')
 /** 输入框占位示例；写在脚本里避免模板属性里嵌引号 */
 const keyMapHint = '{"nav.library": "游戏库"}'
+/** 地址输入框示例；URL 本身不翻译 */
+const marketUrlHint = 'https://raw.githubusercontent.com/org/i18n/main/ko.po'
 
 async function loadLanguages() {
   try {
@@ -747,6 +751,36 @@ async function uploadLanguage() {
     await reloadI18n()
   } catch (e) {
     notify.error(t('上传语言包失败：{0}', e.message))
+  } finally {
+    langBusy.value = false
+  }
+}
+
+/**
+ * 从地址安装：市场里的语言包是一个直链（Crowdin / Weblate 导出链接、
+ * GitHub / Gitee raw、自建静态文件）。后端下载后按扩展名识别格式，
+ * 与手工上传走同一条链路，所以这里不需要前端先取内容。
+ */
+async function installFromUrl() {
+  const url = marketUrl.value.trim()
+  if (!url) {
+    notify.warning(t('请填写语言包地址'))
+    return
+  }
+  if (!/^https?:\/\//i.test(url)) {
+    notify.warning(t('地址必须以 http:// 或 https:// 开头'))
+    return
+  }
+  langBusy.value = true
+  try {
+    const result = await api.installI18n({ url, keyMap: parseKeyMap() }, token.value)
+    importReport.value = result && typeof result === 'object' ? result : null
+    notify.success(t('语言包已从地址安装'))
+    marketUrl.value = ''
+    await loadLanguages()
+    await reloadI18n()
+  } catch (e) {
+    notify.error(t('从地址安装失败：{0}', e.message))
   } finally {
     langBusy.value = false
   }
@@ -1482,6 +1516,23 @@ onBeforeUnmount(() => {
         </div>
         <p class="muted-sm" style="margin-top:10px">
           {{ t("支持 .json / .po / .xlf / .properties / .strings / .arb / Android .xml / .csv，按扩展名自动识别。源文即键的格式（.po、XLIFF、CSV）可直接导入；符号键格式需要 keyMap。") }}
+        </p>
+
+        <div class="backup-bar" style="margin-top:14px">
+          <input
+            v-model="marketUrl"
+            class="input mono"
+            type="url"
+            style="flex:1"
+            :placeholder="marketUrlHint"
+            @keyup.enter="installFromUrl"
+          />
+          <button class="btn primary sm" :disabled="langBusy || !marketUrl.trim()" @click="installFromUrl">
+            {{ langBusy ? t('下载中…') : t('从地址安装') }}
+          </button>
+        </div>
+        <p class="muted-sm" style="margin-top:10px">
+          {{ t("也可以直接填语言包市场里的下载地址（Crowdin / Weblate 导出链接、GitHub / Gitee raw、静态文件直链），由服务器拉取后按同一套格式导入。只接受 http / https 的公网地址。") }}
         </p>
 
         <div v-if="importReport" class="lang-report">
