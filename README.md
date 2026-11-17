@@ -25,6 +25,8 @@ commercial product; self-hosting, issues and PRs are welcome, but no out-of-the-
 - **Operations** — one-click deploy / uninstall with live logs, remote update with rollback,
   config snapshots, game package download
 - **Playback extras** — heartbeat playtime, idle stop, canvas calibration, latency display, telemetry
+- **Localization** — English / 简体中文 / 繁體中文 / 日本語 built in; UI and server messages share one
+  JSON pack format, so new languages are installed from the admin page or a file drop — no code changes
 
 ## Screenshots
 

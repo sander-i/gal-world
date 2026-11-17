@@ -39,3 +39,59 @@
 
 游玩页用 iframe 内嵌 Selkies，Selkies 客户端使用 WebCodecs，要求
 `window.isSecureContext === true`。HTTP 父页面里嵌 HTTPS iframe 仍判为非安全上下文。
+
+## 国际化与语言包
+
+界面与后端异常文案共用同一套语言包，键是**中文原文**，缺键时回退到原文，
+所以漏翻译只会显示中文，不会出现空白或键名。
+
+### 内置语言
+
+随 jar 分发四套：`en`（默认）、`zh-CN`、`zh-TW`、`ja`。
+源文件在 `portal/src/main/resources/i18n/<id>.json`。
+
+### 新增语言（不改代码）
+
+两种方式，都无需重启：
+
+1. 把 JSON 放进 `<GALWORLD_ROOT>/data/i18n/<id>.json`；
+2. 「后台管理 → 语言包」上传同一个 JSON。
+
+```json
+{
+  "id": "ko",
+  "name": "한국어",
+  "messages": {
+    "设置": "설정",
+    "没有这个游戏: {0}": "게임이 없습니다: {0}"
+  }
+}
+```
+
+- `id` 决定文件名，只能用字母数字与连字符（2–16 位）
+- `messages` 的键必须与源码里的中文原文逐字一致（含空格、标点、`{0}` 占位符）
+- 占位符编号必须与原文一致，否则运行时会显示原始 `{n}`
+- 外部包**整体替换**同 id 的内置包，不是逐键合并；没提供的键回退中文原文
+
+删除外部包会恢复内置版本（如有），内置语言本身不可删。
+
+### 语言选择顺序
+
+浏览器本机选择（`localStorage` 的 `galworld.locale`）→ `?lang=` 临时覆盖 →
+浏览器 `Accept-Language` → 站点默认语言（「设置 → 界面语言」，存 `setting` 表，默认 `en`）。
+
+后端按请求头 `X-GalWorld-Locale` 决定异常文案语言，前端所有请求自动带上；
+EventSource / 直链下载可用 `?lang=` 代替。
+
+### 工具
+
+| 脚本 | 用途 |
+|---|---|
+| `tools/i18n-chunk.py` | 从源码抽取全部键，写入 `tmp-i18n/keys.txt` |
+| `tools/i18n-check.py <pack.json>` | 校验缺失键、多余键、占位符不一致 |
+| `tools/i18n-wrap.py` / `i18n-wrap-fe.py` | 把中文字面量包进 `I18n.t()` / `t()`（改代码时用） |
+| `tools/i18n-e2e.py` | 起服务后验证语言接口与异常语言 |
+
+`i18n-extract*.py` / `i18n-keys.py` / `i18n-fixkey.py` 是抽取与改键的辅助脚本，
+功能已被 `i18n-chunk.py` 覆盖，保留作参考。
+
