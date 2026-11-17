@@ -3528,3 +3528,54 @@ tr[draggable="true"]:active { cursor: grabbing; }
 @keyframes maintenance-spin {
   to { transform: rotate(360deg); }
 }
+
+/* 语言包管理：行内按钮组与导入结果提示 */
+.lang-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.lang-report {
+  margin-top: 16px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+}
+
+.lang-report-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.lang-report code,
+.lang-keymap code {
+  display: inline-block;
+  margin: 2px 6px 2px 0;
+  padding: 1px 6px;
+  border-radius: var(--r-ctl);
+  background: var(--surface-3);
+  font-size: 12px;
+}
+
+.lang-warn {
+  color: var(--warn);
+}
+
+.lang-keymap {
+  margin-top: 16px;
+}
+
+.lang-keymap summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.lang-keymap summary:hover {
+  color: var(--text);
+}

@@ -686,6 +686,16 @@ const languagePacks = ref([])
 const languageDir = ref('')
 const langBusy = ref(false)
 const langFileInput = ref(null)
+/** 导出格式；各语言共用同一个选择，避免每行都放一个下拉 */
+const exportFormat = ref('json')
+const exportFormats = ['json', 'po', 'xliff', 'csv', 'properties']
+/** 最近一次导入的结果，含跳过数与占位符提示 */
+const importReport = ref(null)
+/** 符号键格式的映射表（符号键 → 中文原文），文本形式供人工编辑 */
+const keyMapText = ref('')
+const sourceKeys = ref([])
+/** 输入框占位示例；写在脚本里避免模板属性里嵌引号 */
+const keyMapHint = '{"nav.library": "游戏库"}'
 
 async function loadLanguages() {
   try {
@@ -698,17 +708,38 @@ async function loadLanguages() {
 }
 
 /** 上传 JSON：后端解析并落盘，同 id 覆盖 */
+/** 解析 keyMap 输入框：JSON 对象，解析失败返回 null 表示「不用 keyMap」 */
+function parseKeyMap() {
+  const text = keyMapText.value.trim()
+  if (!text) return {}
+  try {
+    const obj = JSON.parse(text)
+    if (!obj || typeof obj !== 'object' || Array.isArray(obj)) {
+      throw new Error('not an object')
+    }
+    return obj
+  } catch {
+    notify.warning(t('keyMap 不是合法的 JSON 对象，已按无 keyMap 导入'))
+    return {}
+  }
+}
+
 async function uploadLanguage() {
   const input = langFileInput.value
   const file = input && input.files && input.files[0]
   if (!file) {
-    notify.warning(t('请选择语言包 JSON 文件'))
+    notify.warning(t('请选择语言包文件'))
     return
   }
   langBusy.value = true
   try {
     const text = await file.text()
-    await api.installI18n({ json: text }, token.value)
+    const result = await api.installI18n({
+      file: text,
+      fileName: file.name,
+      keyMap: parseKeyMap(),
+    }, token.value)
+    importReport.value = result && typeof result === 'object' ? result : null
     notify.success(t('语言包已安装'))
     input.value = ''
     await loadLanguages()
@@ -716,6 +747,40 @@ async function uploadLanguage() {
     await reloadI18n()
   } catch (e) {
     notify.error(t('上传语言包失败：{0}', e.message))
+  } finally {
+    langBusy.value = false
+  }
+}
+
+/** 导出为指定格式；带令牌的接口不能直接给 <a href>，走 fetch + Blob */
+async function exportLanguage(id) {
+  langBusy.value = true
+  try {
+    const blob = await api.exportI18n(id, exportFormat.value, token.value)
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${id}.${exportFormat.value === 'xliff' ? 'xlf' : exportFormat.value}`
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    URL.revokeObjectURL(url)
+  } catch (e) {
+    notify.error(t('导出失败：{0}', e.message))
+  } finally {
+    langBusy.value = false
+  }
+}
+
+/** 源文键清单：符号键格式要人工建映射时用 */
+async function loadSourceKeys() {
+  langBusy.value = true
+  try {
+    const data = await api.i18nSourceKeys(token.value)
+    sourceKeys.value = data.keys || []
+    notify.success(t('已加载 {0} 条源文', sourceKeys.value.length))
+  } catch (e) {
+    notify.error(t('加载源文清单失败：{0}', e.message))
   } finally {
     langBusy.value = false
   }
@@ -1374,7 +1439,7 @@ onBeforeUnmount(() => {
           <span class="muted-sm">{{ t("安装后全站可用，无需重启") }}</span>
         </div>
         <p class="muted-sm" style="margin-bottom:14px">
-          {{ t("内置 4 套语言（简体中文、繁體中文、English、日本語）。新增语言只需放一个 JSON 到服务器目录 {0}，或在下面上传；同 id 的外部文件会覆盖内置版本。", languageDir) }}
+          {{ t("内置 4 套语言（简体中文、繁體中文、English、日本語）。新增语言放一个文件到服务器目录 {0}，或在下面上传；同 id 的外部文件会覆盖内置版本。", languageDir) }}
         </p>
         <div class="setting-row" v-for="p in languagePacks" :key="p.id">
           <span class="mono">{{ p.id }}</span>
@@ -1383,27 +1448,84 @@ onBeforeUnmount(() => {
             · {{ t("{0} 条", p.keyCount) }}
             · {{ p.builtin ? t("内置") : t("外部") }}
           </span>
-          <button
-            v-if="!p.builtin"
-            class="btn compact"
-            :disabled="langBusy"
-            @click="removeLanguage(p.id)"
-          >{{ t("删除") }}</button>
+          <span class="lang-actions">
+            <select
+              class="input"
+              style="width:110px"
+              :value="exportFormat"
+              @change="exportFormat = $event.target.value"
+            >
+              <option v-for="f in exportFormats" :key="f" :value="f">{{ f }}</option>
+            </select>
+            <button class="btn compact" :disabled="langBusy" @click="exportLanguage(p.id)">
+              {{ t("导出") }}
+            </button>
+            <button
+              v-if="!p.builtin"
+              class="btn compact"
+              :disabled="langBusy"
+              @click="removeLanguage(p.id)"
+            >{{ t("删除") }}</button>
+          </span>
         </div>
+
         <div class="backup-bar" style="margin-top:14px">
           <input
             ref="langFileInput"
             class="input"
             type="file"
-            accept="application/json,.json"
+            accept=".json,.po,.pot,.xlf,.xliff,.properties,.strings,.arb,.xml,.csv,.tsv"
           />
           <button class="btn primary sm" :disabled="langBusy" @click="uploadLanguage">
             {{ langBusy ? t('上传中…') : t('上传语言包') }}
           </button>
         </div>
         <p class="muted-sm" style="margin-top:10px">
-          {{ t("JSON 格式：{ id, name, messages }，其中 messages 的键是中文原文、值是译文；缺的键回退到原文。") }}
+          {{ t("支持 .json / .po / .xlf / .properties / .strings / .arb / Android .xml / .csv，按扩展名自动识别。源文即键的格式（.po、XLIFF、CSV）可直接导入；符号键格式需要 keyMap。") }}
         </p>
+
+        <div v-if="importReport" class="lang-report">
+          <div class="lang-report-head">
+            <strong>{{ t("导入结果") }}</strong>
+            <button class="link-btn" @click="importReport = null">{{ t("关闭") }}</button>
+          </div>
+          <p class="muted-sm">
+            {{ t("格式 {0} · 导入 {1} 条 · 跳过 {2} 条", importReport.format,
+                 importReport.imported, importReport.skipped) }}
+          </p>
+          <p v-if="importReport.placeholderMismatches?.length" class="muted-sm lang-warn">
+            {{ t("占位符不一致 {0} 条，页面上会显示原始占位符：", importReport.placeholderMismatches.length) }}
+            <code v-for="k in importReport.placeholderMismatches" :key="k">{{ k }}</code>
+          </p>
+          <p v-if="importReport.skippedSample?.length" class="muted-sm">
+            {{ t("跳过的键（示例）：") }}
+            <code v-for="k in importReport.skippedSample" :key="k">{{ k }}</code>
+          </p>
+          <p v-if="importReport.missingSample?.length" class="muted-sm">
+            {{ t("未翻译的键（示例，其余回退中文原文）：") }}
+            <code v-for="k in importReport.missingSample" :key="k">{{ k }}</code>
+          </p>
+        </div>
+
+        <details class="lang-keymap">
+          <summary>{{ t("符号键格式的 keyMap") }}</summary>
+          <p class="muted-sm">
+            {{ t("properties / Android XML / .arb / .strings / i18next 嵌套 JSON 的键是 nav.library 这类符号名，不是中文原文。用下面的清单生成映射表，格式 {\"符号键\": \"中文原文\"}。") }}
+          </p>
+          <div class="backup-bar">
+            <button class="btn sm" :disabled="langBusy" @click="loadSourceKeys">
+              {{ t("加载源文清单") }}
+            </button>
+            <span v-if="sourceKeys.length" class="muted-sm">{{ t("共 {0} 条", sourceKeys.length) }}</span>
+          </div>
+          <textarea
+            v-model="keyMapText"
+            class="input mono"
+            rows="6"
+            style="width:100%;margin-top:10px"
+            :placeholder="keyMapHint"
+          ></textarea>
+        </details>
       </section>
 
       <section id="update" class="panel">

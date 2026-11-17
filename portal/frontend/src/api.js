@@ -510,7 +510,12 @@ export const api = {
 
   /** 语言清单（公开接口）：id / 名称 / 是否内置 / 键数 */
   i18nList: () => req('/api/i18n'),
-  /** 安装或覆盖语言包；body 为 { json } 或 { id, name, messages } */
+  /**
+   * 安装或覆盖语言包。
+   *
+   * 三种 body：{ file, fileName, id, keyMap }（按扩展名识别格式，推荐）、
+   * { json }（本项目 JSON）、{ id, name, messages }（直接给结构）。
+   */
   installI18n: (body, token) =>
     req('/api/admin/i18n', {
       method: 'POST',
@@ -523,6 +528,27 @@ export const api = {
       method: 'DELETE',
       headers: { [DEPLOY_HEADER]: token },
     }),
+  /** 支持的导入格式与各自是否需要 keyMap */
+  i18nFormats: () => req('/api/admin/i18n/formats'),
+  /** 源文键清单，用于人工建 keyMap */
+  i18nSourceKeys: (token) =>
+    req('/api/admin/i18n/source-keys', { headers: { [DEPLOY_HEADER]: token } }),
+  /**
+   * 导出语言包为指定格式，返回 Blob。
+   *
+   * 导出接口要部署令牌，不能直接给 <a href>，所以走 fetch 再手动触发下载。
+   */
+  exportI18n: async (id, format, token) => {
+    const res = await guardedFetch(
+      `/api/admin/i18n/${encodeURIComponent(id)}/export?format=${encodeURIComponent(format)}`,
+      { headers: { [DEPLOY_HEADER]: token } },
+    )
+    if (!res.ok) {
+      const text = await res.text().catch(() => '')
+      throw new Error(`${res.status} ${res.statusText}${text ? ' — ' + text : ''}`)
+    }
+    return res.blob()
+  },
 
   // ---------------- 后台管理 ----------------
   adminSettings: (token) =>

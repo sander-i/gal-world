@@ -118,7 +118,9 @@ docs/                         环境搭建与各模块方案（接入、媒体�
 2. 键与前端共用一套语言包；新键要补 `portal/src/main/resources/i18n/*.json`
 3. **别用 message 文本做逻辑判断**（`msg.contains("...")`）——消息会按请求语言翻译。
    需要区分状态时用专门的异常子类，参考 `DeployService.ConfirmRequiredException`
-4. 后台线程（部署 / 接入 / 上传）提交任务时用 `I18n.runAs(locale, ...)` 固定语言，
+4. 外部语言包可来自 .po / XLIFF / CSV / properties / Android XML / .arb / .strings，
+   解析在 `i18n/LocaleImporter`。源文即键的格式可直接映射；符号键格式靠 keyMap
+5. 后台线程（部署 / 接入 / 上传）提交任务时用 `I18n.runAs(locale, ...)` 固定语言，
    否则日志会落到站点默认语言
 
 ### 改更新流程

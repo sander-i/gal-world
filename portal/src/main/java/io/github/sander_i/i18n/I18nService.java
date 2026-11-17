@@ -119,30 +119,36 @@ public class I18nService {
 
     // ---------------- 翻译 ----------------
 
-    /** 当前语言翻译；{@code locale} 为空时用站点默认语言 */
+    /**
+     * 当前语言翻译。
+     *
+     * 兜底分两种，不能混：
+     * <ul>
+     *   <li>语言包不存在（请求了一个没装的语言）→ 用站点默认语言</li>
+     *   <li>语言包存在但缺这个键（外部包常见）→ 回退中文原文</li>
+     * </ul>
+     * 后者不回退英文：这个项目的用户以中文玩家为主，缺译处显示原文比显示
+     * 英文更好读，也便于一眼看出哪些还没翻译。
+     */
     public String translate(String locale, String key, Object... args) {
-        String msg = lookup(LocalePack.normalize(locale), key);
-        if (msg == null) {
-            msg = lookup(defaultLocale, key);
+        Map<String, String> pack = packMessages(LocalePack.normalize(locale));
+        if (pack == null) {
+            pack = packMessages(defaultLocale);
         }
-        if (msg == null) {
-            msg = lookup(DEFAULT_LOCALE, key);
+        if (pack == null) {
+            pack = builtin.get(DEFAULT_LOCALE);
         }
+        String msg = pack == null ? null : pack.get(key);
         if (msg == null) {
             return key;
         }
         return format(msg, args);
     }
 
-    private String lookup(String locale, String key) {
+    private Map<String, String> packMessages(String locale) {
         if (locale == null || locale.isEmpty()) {
             return null;
         }
-        Map<String, String> pack = packMessages(locale);
-        return pack == null ? null : pack.get(key);
-    }
-
-    private Map<String, String> packMessages(String locale) {
         LocalePack ext = externalPack(locale);
         if (ext != null) {
             return ext.messagesOrEmpty();
@@ -328,6 +334,195 @@ public class I18nService {
         }
         return save(parsed.id(), parsed.name(), parsed.messagesOrEmpty());
     }
+
+    // ---------------- 第三方格式导入 ----------------
+
+    /** 项目已知的全部源文键（中文原文），由内置包定义 */
+    public java.util.Set<String> sourceKeys() {
+        Map<String, String> zh = builtin.get("zh-CN");
+        if (zh != null) {
+            return zh.keySet();
+        }
+        // 内置包缺失时退回英文包：键相同，只是值是译文
+        Map<String, String> en = builtin.get(DEFAULT_LOCALE);
+        return en == null ? java.util.Set.of() : en.keySet();
+    }
+
+    /** 导入结果：装了哪些、跳过了多少、占位符对不上的键 */
+    public record ImportResult(LocalePack pack, String format, int imported, int skipped,
+                               java.util.List<String> skippedSample,
+                               java.util.List<String> missingSample,
+                               java.util.List<String> placeholderMismatches) {
+    }
+
+    /**
+     * 从市面通用格式导入语言包。
+     *
+     * <p>格式按扩展名与内容嗅探（见 {@link LocaleImporter#detect}）。符号键格式
+     * （i18next 嵌套 JSON、properties、Android XML、.arb、.strings）需要 keyMap
+     * 把符号键映射到中文原文；源文即键的格式（.po、XLIFF、CSV）不需要。
+     *
+     * <p>装进来的键做占位符校验：编号对不上会让页面上直接显示 {@code {0}}，
+     * 但不会因此拒绝安装——译者可能只是漏了一处，其余几百条仍可用。
+     *
+     * @param keyMap 符号键 → 中文原文；可为 null
+     */
+    public ImportResult importAny(String content, String fileName, String fallbackId,
+                                  Map<String, String> keyMap) throws IOException {
+        byte[] bytes = content == null ? new byte[0] : content.getBytes(StandardCharsets.UTF_8);
+        if (bytes.length > MAX_PACK_BYTES) {
+            throw new IllegalArgumentException(
+                    "语言包文件超过 " + (MAX_PACK_BYTES / 1024) + " KB");
+        }
+        String format = LocaleImporter.detect(fileName, content);
+        LocaleImporter.Parsed parsed = LocaleImporter.parse(format, content, fallbackId);
+        String id = parsed.id() == null || parsed.id().isBlank() ? fallbackId : parsed.id();
+        if (!LocalePack.isValidId(LocalePack.normalize(id))) {
+            throw new IllegalArgumentException(
+                    "语言包 id 非法: " + id + "（文件名或包内 id 需要是 2-16 位字母数字）");
+        }
+        LocaleImporter.Resolved resolved = LocaleImporter.resolve(
+                parsed.entries(), keyMap, sourceKeys());
+        if (resolved.messages().isEmpty()) {
+            throw new IllegalArgumentException(
+                    "没有可用的条目：这个文件的键与项目源文对不上。"
+                            + "符号键格式需要提供 keyMap（符号键 → 中文原文）");
+        }
+        java.util.List<String> mismatches =
+                LocaleImporter.placeholderMismatches(resolved.messages());
+        LocalePack saved = save(LocalePack.normalize(id), parsed.name(), resolved.messages());
+        int imported = resolved.messages().size();
+        int skipped = parsed.entries().size() - imported;
+        log.info("语言包导入：{}（{}）{} 条，跳过 {} 条，占位符不一致 {} 条",
+                saved.id(), format, imported, skipped, mismatches.size());
+        return new ImportResult(saved, format, imported, skipped,
+                resolved.skippedSample(), resolved.missingSample(), mismatches);
+    }
+
+    /**
+     * 导出为某格式，供译者在市场工具里编辑后导回。
+     *
+     * @param format json / po / xliff / csv / properties
+     */
+    public String export(String locale, String format) {
+        String id = LocalePack.normalize(locale);
+        Map<String, String> msgs = messages(id);
+        if (msgs.isEmpty()) {
+            throw new IllegalArgumentException("没有这个语言包: " + locale);
+        }
+        String name = displayName(id);
+        return switch (format == null ? "json" : format) {
+            case "po" -> exportPo(msgs);
+            case "xliff" -> exportXliff(msgs, id, name);
+            case "csv" -> exportCsv(msgs);
+            case "properties" -> exportProperties(msgs);
+            default -> exportJson(msgs, id, name);
+        };
+    }
+
+    private static String exportJson(Map<String, String> msgs, String id, String name) {
+        try {
+            com.fasterxml.jackson.databind.node.ObjectNode root =
+                    com.fasterxml.jackson.databind.json.JsonMapper.builder().build()
+                            .createObjectNode();
+            root.put("id", id);
+            root.put("name", name);
+            com.fasterxml.jackson.databind.node.ObjectNode m = root.putObject("messages");
+            new java.util.TreeMap<>(msgs).forEach(m::put);
+            return com.fasterxml.jackson.databind.json.JsonMapper.builder().build()
+                    .writerWithDefaultPrettyPrinter().writeValueAsString(root) + "\n";
+        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    /** PO：msgid 是中文原文，msgstr 是译文；头部写语言与字符集 */
+    private static String exportPo(Map<String, String> msgs) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("msgid \"\"\n");
+        sb.append("msgstr \"\"\n");
+        sb.append("\"Content-Type: text/plain; charset=UTF-8\\n\"\n\n");
+        new java.util.TreeMap<>(msgs).forEach((k, v) -> {
+            sb.append("msgid \"").append(escapePo(k)).append("\"\n");
+            sb.append("msgstr \"").append(escapePo(v)).append("\"\n\n");
+        });
+        return sb.toString();
+    }
+
+    private static String escapePo(String s) {
+        return s.replace("\\", "\\\\").replace("\"", "\\\"")
+                .replace("\n", "\\n").replace("\t", "\\t").replace("\r", "\\r");
+    }
+
+    /** XLIFF 1.2：Crowdin / Weblate / Lokalise / Transifex 都能读 */
+    private static String exportXliff(Map<String, String> msgs, String id, String name) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
+        sb.append("<xliff version=\"1.2\" xmlns=\"urn:oasis:names:tc:xliff:document:1.2\">\n");
+        sb.append("  <file source-language=\"zh-CN\" target-language=\"").append(id)
+                .append("\" original=\"gal-world\" datatype=\"plaintext\">\n");
+        sb.append("    <header><tool tool-id=\"gal-world\" tool-name=\"Gal World\"/></header>\n");
+        sb.append("    <body>\n");
+        int i = 0;
+        for (Map.Entry<String, String> e : new java.util.TreeMap<>(msgs).entrySet()) {
+            sb.append("      <trans-unit id=\"").append(++i).append("\">\n");
+            sb.append("        <source>").append(escapeXml(e.getKey())).append("</source>\n");
+            sb.append("        <target>").append(escapeXml(e.getValue())).append("</target>\n");
+            sb.append("      </trans-unit>\n");
+        }
+        sb.append("    </body>\n  </file>\n</xliff>\n");
+        return sb.toString();
+    }
+
+    private static String escapeXml(String s) {
+        return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+                .replace("\"", "&quot;");
+    }
+
+    /** CSV：两列「原文,译文」，RFC 4180 引号规则 */
+    private static String exportCsv(Map<String, String> msgs) {
+        StringBuilder sb = new StringBuilder("source,target\n");
+        new java.util.TreeMap<>(msgs).forEach((k, v) ->
+                sb.append(csvCell(k)).append(',').append(csvCell(v)).append('\n'));
+        return sb.toString();
+    }
+
+    private static String csvCell(String s) {
+        if (s.contains(",") || s.contains("\"") || s.contains("\n") || s.contains("\r")) {
+            return '"' + s.replace("\"", "\"\"") + '"';
+        }
+        return s;
+    }
+
+    /** properties：非 ASCII 转义成反斜杠 u 加四位十六进制，Java 各版本都能读 */
+    private static String exportProperties(Map<String, String> msgs) {
+        StringBuilder sb = new StringBuilder();
+        new java.util.TreeMap<>(msgs).forEach((k, v) ->
+                sb.append(escapeProp(k)).append('=').append(escapeProp(v)).append('\n'));
+        return sb.toString();
+    }
+
+    private static String escapeProp(String s) {
+        StringBuilder sb = new StringBuilder();
+        for (char c : s.toCharArray()) {
+            switch (c) {
+                case '\\' -> sb.append("\\\\");
+                case '\n' -> sb.append("\\n");
+                case '\t' -> sb.append("\\t");
+                case '\r' -> sb.append("\\r");
+                case '=', ':', '#' -> sb.append('\\').append(c);
+                default -> {
+                    if (c < 0x20 || c > 0x7e) {
+                        sb.append(String.format("\\u%04x", (int) c));
+                    } else {
+                        sb.append(c);
+                    }
+                }
+            }
+        }
+        return sb.toString();
+    }
+
 
     /** 删除外部语言包；内置语言不可删，删了只会移除同 id 的外部覆盖 */
     public void delete(String locale) throws IOException {

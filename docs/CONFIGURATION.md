@@ -54,8 +54,10 @@
 
 两种方式，都无需重启：
 
-1. 把 JSON 放进 `<GALWORLD_ROOT>/data/i18n/<id>.json`；
-2. 「后台管理 → 语言包」上传同一个 JSON。
+1. 把语言包文件放进 `<GALWORLD_ROOT>/data/i18n/`；
+2. 「后台管理 → 语言包」上传。
+
+两种都支持下面的通用格式，按扩展名自动识别。
 
 ```json
 {
@@ -75,6 +77,44 @@
 
 删除外部包会恢复内置版本（如有），内置语言本身不可删。
 
+### 通用格式支持
+
+| 格式 | 扩展名 | 键的来源 | 需要 keyMap |
+|---|---|---|---|
+| 本项目 JSON | `.json` | `messages` 的键（中文原文） | 否 |
+| gettext | `.po` / `.pot` | `msgid` 即中文原文 | 否 |
+| XLIFF 1.2 | `.xlf` / `.xliff` | `<source>` 即中文原文 | 否 |
+| CSV / TSV | `.csv` / `.tsv` | 两列「原文,译文」；表头含 `source` 时按表头定位 | 否 |
+| Java properties | `.properties` | 符号键 | 是 |
+| Android | `.xml` | `<string name>` 符号键 | 是 |
+| Flutter | `.arb` | 符号键 | 是 |
+| Apple | `.strings` | 符号键 | 是 |
+| i18next / vue-i18n | `.json`（嵌套） | 展开成 `nav.library` 符号键 | 是 |
+
+**源文即键**的格式（.po / XLIFF / CSV）能直接导入，这是 Crowdin、Weblate、
+Lokalise、Transifex 共同支持的导出格式，推荐走这条路。
+
+**符号键**格式的键是 `nav.library` 这类符号名，与项目的中文原文键对不上，
+必须提供 keyMap：
+
+```json
+{ "nav.library": "← 游戏库", "error.notFound": "Release 不存在: {0}" }
+```
+
+后台管理页有「加载源文清单」按钮，列出全部 1423 条源文键，用于人工建映射表。
+
+### 导出
+
+后台管理页可按语言导出 `json` / `po` / `xliff` / `csv` / `properties`，
+交给译者在对应工具里编辑后导回。导出的 PO 与 XLIFF 都能原样再导入（往返无损）。
+
+### 导入结果的提示
+
+导入后页面显示：导入条数、跳过条数、跳过的键示例、未翻译的键示例、
+以及**占位符编号不一致**的键。最后一项最关键——译文的 `{1}` 对不上原文的 `{0}` 时，
+页面上会直接显示原始占位符，所以单独列出来。占位符不一致不会导致导入失败，
+其余几百条仍可用。
+
 ### 语言选择顺序
 
 浏览器本机选择（`localStorage` 的 `galworld.locale`）→ `?lang=` 临时覆盖 →
@@ -91,6 +131,7 @@ EventSource / 直链下载可用 `?lang=` 代替。
 | `tools/i18n-check.py <pack.json>` | 校验缺失键、多余键、占位符不一致 |
 | `tools/i18n-wrap.py` / `i18n-wrap-fe.py` | 把中文字面量包进 `I18n.t()` / `t()`（改代码时用） |
 | `tools/i18n-e2e.py` | 起服务后验证语言接口与异常语言 |
+| `tools/i18n-e2e-import.py` | 起服务后验证各格式导入、keyMap、导出往返 |
 
 `i18n-extract*.py` / `i18n-keys.py` / `i18n-fixkey.py` 是抽取与改键的辅助脚本，
 功能已被 `i18n-chunk.py` 覆盖，保留作参考。
