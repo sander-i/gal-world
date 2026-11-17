@@ -1512,7 +1512,7 @@ onBeforeUnmount(() => {
         <div class="setting-row" v-for="p in languagePacks" :key="p.id">
           <span class="mono">{{ p.id }}</span>
           <span class="muted-sm">
-            {{ p.name }}
+            {{ p.nativeName || p.name }}
             · {{ t("{0} 条", p.keyCount) }}
             · {{ p.builtin ? t("内置") : t("外部") }}
           </span>

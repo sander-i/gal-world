@@ -47,9 +47,16 @@ const loading = ref(false)
 /** 语言包加载失败时的提示，供设置页展示 */
 const loadError = ref('')
 
+/**
+ * 当前语言的自称。
+ *
+ * 用 nativeName 而非 name：语言包的 name 是「给界面看的标题」，
+ * nativeName 才是这门语言自己的写法。二者分开才够用——按钮与
+ * 「当前」行都必须让用户认得出自己的语言。
+ */
 const currentName = computed(() => {
   const hit = languages.value.find((l) => l.id === locale.value)
-  return hit ? hit.name || hit.id : locale.value
+  return hit ? (hit.nativeName || hit.name || hit.id) : locale.value
 })
 
 /** 归一化语言标签：zh-hant→zh-TW、en-US→en 等，与后端 LocalePack.normalize 一致 */

@@ -88,11 +88,16 @@ final class PackJson {
         if (!LocalePack.isValidId(id)) {
             throw new IOException("语言包 id 非法: " + id);
         }
+        // 名称缺失时用该语言的自称，不用裸 id：.po / CSV 导入与手工放文件
+        // 都可能不带 name，按钮上显示「ko」对用户没有意义
         String name = root.path("name").asText("").trim();
         if (name.isEmpty()) {
-            name = id;
+            name = LocaleNames.of(id);
         }
         String nativeName = root.path("nativeName").asText("").trim();
+        if (nativeName.isEmpty()) {
+            nativeName = name;
+        }
         return new LocalePack(LocalePack.normalize(id), name, nativeName, builtin, source,
                 parseMessages(json));
     }

@@ -14,6 +14,17 @@ import ThemePicker from '../components/ThemePicker.vue'
 /** 语言切换：写 localStorage 并重新拉取消息表，页面即时生效 */
 const { locale, languages, currentName, loading: i18nLoading, loadError, setLocale } = useI18n()
 
+/**
+ * 语言按钮上的文字。
+ *
+ * 必须用该语言自己的写法（nativeName），不能跟着当前界面语言翻译：
+ * 界面已是日文时，「简体中文」按钮若显示成「簡体字中国語」，看不懂日文
+ * 的中文用户就找不到自己的语言了。回退顺序 nativeName → name → id。
+ */
+function languageLabel(l) {
+  return (l && (l.nativeName || l.name || l.id)) || ''
+}
+
 function switchLocale(id) {
   setLocale(id)
 }
@@ -240,8 +251,9 @@ onBeforeUnmount(() => {
             :key="l.id"
             :class="{ on: locale === l.id }"
             :disabled="i18nLoading"
+            :title="l.id"
             @click="switchLocale(l.id)"
-          >{{ l.name || l.id }}</button>
+          >{{ languageLabel(l) }}</button>
         </div>
         <p v-if="loadError" class="muted-sm" style="margin-top:12px;color:var(--err)">
           {{ t("语言包加载失败：{0}", loadError) }}

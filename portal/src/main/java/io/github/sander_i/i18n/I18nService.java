@@ -221,14 +221,14 @@ public class I18nService {
         return builtinName(id);
     }
 
+    /**
+     * 语言代码 → 该语言的自称。
+     *
+     * 对照表在 {@link LocaleNames}，与外部包读取路径共用同一份，
+     * 避免「手工放文件」与「页面导入」两条路给出不同的名字。
+     */
     private String builtinName(String id) {
-        return switch (id) {
-            case "en" -> "English";
-            case "zh-CN" -> "简体中文";
-            case "zh-TW" -> "繁體中文";
-            case "ja" -> "日本語";
-            default -> id;
-        };
+        return LocaleNames.of(id);
     }
 
     // ---------------- 外部包读写 ----------------
@@ -304,7 +304,9 @@ public class I18nService {
             }
             clean.put(k, v);
         }
-        String display = name == null || name.isBlank() ? norm : name.trim();
+        // 没给显示名时用该语言的自称（不是裸 id）：.po / CSV 这类格式不带元数据，
+        // 按钮上显示「ko」对用户没有意义
+        String display = name == null || name.isBlank() ? builtinName(norm) : name.trim();
         Path file = packDir().resolve(norm + ".json");
         PackJson.write(file, norm, display, display, clean);
         external.remove(norm);
