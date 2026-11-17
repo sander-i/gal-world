@@ -4,8 +4,8 @@
 -->
 
 <script setup>
-import { t } from '../i18n.js'
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { onLocaleChange, t } from '../i18n.js'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { api } from '../api'
 import { notify } from '../feedback'
@@ -225,6 +225,30 @@ async function quickToggle(g, ev) {
 let sentinel = null
 let observer = null
 
+/**
+ * 量出最宽的筛选标签，写进 CSS 变量让三行 chip 左边缘对齐。
+ *
+ * 中文标签 2–3 字、英文 Company / Localization group 差一倍，
+ * 不统一宽度的话切语言后每行 chip 起点都不一样。
+ * 语言切换、公司/汉化组开关变化都会改标签文字，所以这几个时机都要重量。
+ */
+const filterRowsEl = ref(null)
+let filterResizeObserver = null
+
+function syncFilterLabelWidth() {
+  const box = filterRowsEl.value
+  if (!box) return
+  let max = 0
+  for (const el of box.querySelectorAll('.filter-label')) {
+    // 量文字本身宽度：scrollWidth 会把已设置的 min-width 算进去
+    const range = document.createRange()
+    range.selectNodeContents(el)
+    const w = range.getBoundingClientRect().width
+    if (w > max) max = w
+  }
+  box.style.setProperty('--filter-label-w', `${Math.ceil(max)}px`)
+}
+
 onMounted(async () => {
   try {
     const [t, c, g, s] = await Promise.all([
@@ -246,11 +270,27 @@ onMounted(async () => {
     }, { rootMargin: '200px' })
     observer.observe(sentinel)
   }
+
+  await nextTick()
+  syncFilterLabelWidth()
+  // 字体加载完成或窗口缩放都会改变文字宽度
+  if (filterRowsEl.value && typeof ResizeObserver !== 'undefined') {
+    filterResizeObserver = new ResizeObserver(syncFilterLabelWidth)
+    filterResizeObserver.observe(filterRowsEl.value)
+  }
+})
+
+// 切换语言后标签文字变了，宽度要重量
+const stopLocaleWatch = onLocaleChange(async () => {
+  await nextTick()
+  syncFilterLabelWidth()
 })
 
 onBeforeUnmount(() => {
   clearTimeout(queryTimer)
   observer?.disconnect()
+  filterResizeObserver?.disconnect()
+  stopLocaleWatch()
 })
 
 function hostOf(url) {
@@ -298,7 +338,7 @@ function hostOf(url) {
           <span v-else class="filter-collapsed-hint is-empty">{{ t("未设置") }}</span>
         </button>
 
-        <div v-show="!filtersCollapsed" class="filter-rows">
+        <div v-show="!filtersCollapsed" ref="filterRowsEl" class="filter-rows">
           <div v-if="companyEnabled" class="filter-row">
             <span class="filter-label">{{ t("公司") }}</span>
             <button
