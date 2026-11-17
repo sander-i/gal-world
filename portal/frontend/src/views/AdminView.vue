@@ -12,7 +12,7 @@ import { formatBytes } from '../format'
 import { releasesUrl, tagUrl } from '../repo-links'
 import { runUninstallSteps, uninstallSequence } from '../uninstall-sequence'
 import { installSequence, runInstallSteps } from '../install-sequence'
-import { canApply, canOverride, confirmText, isActivePhase, overrideConfirmText, phaseLabel } from '../update'
+import { canApply, canOverride, confirmText, isActivePhase, overrideConfirmText, phaseLabel, updateMessage } from '../update'
 
 const TOKEN_KEY = 'galworld.adminToken'
 const token = ref(sessionStorage.getItem(TOKEN_KEY) || '')
@@ -24,6 +24,15 @@ const authed = computed(() => settings.value !== null)
 /** 写接口令牌：存本机 localStorage；后台是唯一允许修改的位置 */
 const savedWriteToken = ref(getWriteToken())
 const writeTokenSaved = computed(() => !!savedWriteToken.value.trim())
+/**
+ * 区块是否显示：与设置页同一条件。
+ *
+ * 服务端已配置部署令牌时不再显示「写接口令牌」——运维已有统一入口。
+ * 例外是服务端确实启用了写接口保护（writeTokenConfigured），那时不填
+ * 令牌所有写操作都会 403，必须留着入口。
+ */
+const showWriteToken = computed(() => !about.value.deployTokenConfigured
+  || about.value.writeTokenConfigured)
 /** 输入框不预填旧令牌：预填会让占位文案永远不可见，直接输入还会拼成旧+新 */
 const writeToken = ref('')
 /**
@@ -387,6 +396,15 @@ function commandsOf(step) {
   return lines.length ? lines.join('\n') : t('该步骤没有可直接展示的命令')
 }
 
+/**
+ * 更新状态里的说明文字。
+ *
+ * 这段话是 deploy/bin/updater.sh 直接写进 update-status.json 的中文原文，
+ * 后端只做透传、不经 I18n，切语言后仍是中文。映射规则放在 update.js，
+ * 便于 node --test 直接覆盖。
+ */
+const updateMessageText = computed(() => updateMessage(updateStatus.value))
+
 /** 部署步骤状态文案：computed 而非常量 */
 const deployLabel = computed(() => ({
   READY: t('已就绪'), NOT_READY: t('待执行'), BLOCKED: t('等待前置'), QUEUED: t('排队中'),
@@ -706,6 +724,13 @@ const languagePacks = ref([])
 const languageDir = ref('')
 const langBusy = ref(false)
 const langFileInput = ref(null)
+/**
+ * 已选文件名。
+ *
+ * 原生 <input type="file"> 的「选择文件 / 未选择任何文件」由浏览器界面语言
+ * 渲染，不读站点语言包，切语言也不会变。所以控件本身隐藏，文案自己画。
+ */
+const langFileName = ref('')
 /** 导出格式；各语言共用同一个选择，避免每行都放一个下拉 */
 const exportFormat = ref('json')
 const exportFormats = ['json', 'po', 'xliff', 'csv', 'properties']
@@ -769,6 +794,7 @@ async function uploadLanguage() {
     importReport.value = result && typeof result === 'object' ? result : null
     notify.success(t('语言包已安装'))
     input.value = ''
+    langFileName.value = ''
     await loadLanguages()
     // 界面可能正在使用这个语言：重新拉一次消息表
     await reloadI18n()
@@ -777,6 +803,12 @@ async function uploadLanguage() {
   } finally {
     langBusy.value = false
   }
+}
+
+/** 选文件后只记文件名，实际上传仍由「上传语言包」按钮触发 */
+function pickLanguageFile() {
+  const input = langFileInput.value
+  langFileName.value = input?.files?.[0]?.name || ''
 }
 
 /**
@@ -930,7 +962,7 @@ onBeforeUnmount(() => {
     </section>
 
     <template v-else>
-      <section id="write-token" class="panel">
+      <section v-if="showWriteToken" id="write-token" class="panel">
         <div class="panel-head">
           <h2>{{ t("写接口令牌") }}</h2>
           <span class="muted-sm">{{ t("与部署令牌不同 · 仅本机浏览器") }}</span>
@@ -1106,7 +1138,7 @@ onBeforeUnmount(() => {
             class="env-account-check"
             :class="{ ok: c.ok }"
           >
-            {{ c.name }}：{{ c.detail }}
+            {{ t("{0}：{1}", c.name, c.detail) }}
           </span>
         </div>
 
@@ -1542,8 +1574,13 @@ onBeforeUnmount(() => {
             ref="langFileInput"
             class="input"
             type="file"
+            hidden
             accept=".json,.po,.pot,.xlf,.xliff,.properties,.strings,.arb,.xml,.csv,.tsv"
+            @change="pickLanguageFile"
           />
+          <button class="btn" :disabled="langBusy" @click="langFileInput?.click()">
+            {{ t("选择文件") }}</button>
+          <span class="muted-sm">{{ langFileName || t("未选择任何文件") }}</span>
           <button class="btn primary sm" :disabled="langBusy" @click="uploadLanguage">
             {{ langBusy ? t('上传中…') : t('上传语言包') }}
           </button>
@@ -1668,7 +1705,7 @@ onBeforeUnmount(() => {
           {{ t("覆盖更新允许降级与同版本重装；目标版本必须自带更新接口，否则更新器会在停服前拒绝。") }}</p>
         <div v-if="updateStatus.phase !== 'idle'" class="update-actions">
           <span class="muted-sm">
-            {{ phaseLabel(updateStatus.phase) }} {{ updateStatus.message }}
+            {{ phaseLabel(updateStatus.phase) }} {{ updateMessageText }}
           </span>
         </div>
         <div class="setting-row">

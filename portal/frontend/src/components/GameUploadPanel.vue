@@ -98,6 +98,19 @@ const etaText = computed(() => {
 })
 const busy = computed(() => state.value === 'uploading' || state.value === 'extracting')
 
+/**
+ * 选择框旁的状态文字。
+ *
+ * 原生 <input type="file"> 的「选择文件 / 未选择任何文件」由浏览器界面语言
+ * 渲染，不读站点语言包，切语言也不会变。所以控件本身隐藏，文案自己画。
+ */
+const pickLabel = computed(() => {
+  if (tab.value === 'archive') return archiveFile.value?.name || t('未选择任何文件')
+  return folderFiles.value.length
+    ? folderRootName(folderFiles.value) || t('文件夹')
+    : t('未选择任何文件')
+})
+
 // ---------------- 选择 ----------------
 
 function resetSamples() {
@@ -570,23 +583,24 @@ onBeforeUnmount(() => {
     >
       <input
         ref="archiveInput"
-        v-show="tab === 'archive'"
         type="file"
         accept=".zip,.7z"
+        hidden
         :disabled="busy || !supported"
         @change="onArchiveChange"
       />
       <input
         ref="folderInput"
-        v-show="tab === 'folder'"
         type="file"
         webkitdirectory
         multiple
+        hidden
         :disabled="busy || !supported"
         @change="onFolderChange"
       />
       <button class="btn sm" :disabled="busy || !supported" @click="openPicker">
         {{ t("选择{0}", tab === 'archive' ? t('压缩包（.zip / .7z）') : t('文件夹')) }}</button>
+      <span class="upload-drop-hint">{{ pickLabel }}</span>
       <span class="upload-drop-hint">{{ t("或直接拖入这里") }}</span>
     </div>
 

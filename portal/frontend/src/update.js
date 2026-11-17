@@ -72,3 +72,23 @@ export function phaseLabel(phase) {
     failed: t('更新失败'),
   }[phase] || phase || ''
 }
+
+/**
+ * 更新状态里的说明文字。
+ *
+ * 这段由 deploy/bin/updater.sh 直接写进 update-status.json，后端只透传、
+ * 不经 I18n，切语言后仍是中文。已知的固定句式在这里按当前语言重排；
+ * 认不出来的（更新器里的各类失败原因）原样显示——那些是排障线索，
+ * 猜着翻译反而更糟。
+ */
+export function updateMessage(status) {
+  const raw = String(status?.message || '').trim()
+  if (!raw) return ''
+  let m = /^更新完成\s+(\S+)\s*->\s*(\S+)$/.exec(raw)
+  if (m) return t("更新完成 {0} -> {1}", m[1], m[2])
+  m = /^已回滚到\s+(\S+)$/.exec(raw)
+  if (m) return t("已回滚到 {0}", m[1])
+  m = /^当前\s+(\S+)，目标\s+(\S+)$/.exec(raw)
+  if (m) return t("当前 {0}，目标 {1}", m[1], m[2])
+  return raw
+}

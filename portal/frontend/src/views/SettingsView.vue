@@ -65,9 +65,19 @@ const baseNavItems = computed(() => [
   { id: 'access', label: t('写接口令牌') },
   { id: 'about', label: t('关于') },
 ])
-/** 令牌一旦填写，修改入口只保留在后台管理页 */
+/**
+ * 写接口令牌区块是否显示。
+ *
+ * 服务端已配置部署令牌（GALWORLD_DEPLOY_TOKEN / galworld.deploy.token）时
+ * 不再显示：运维已经有一道统一入口，不该再让人填第二个令牌。
+ * 例外是服务端确实启用了写接口保护（writeTokenConfigured）——那时不填
+ * 令牌所有写操作都会 403，区块必须留着。
+ * 本机填过令牌后同样隐藏，修改入口只保留在后台管理页。
+ */
+const showWriteToken = computed(() => !writeTokenSaved.value
+  && (!about.value.deployTokenConfigured || about.value.writeTokenConfigured))
 const navItems = computed(() =>
-  baseNavItems.value.filter((n) => n.id !== 'access' || !writeTokenSaved.value))
+  baseNavItems.value.filter((n) => n.id !== 'access' || showWriteToken.value))
 const activeNav = ref('switch-mode')
 
 /** 仓库地址由后台管理配置；开关关闭时 /api/health 不下发该字段 */
@@ -543,7 +553,7 @@ onBeforeUnmount(() => {
           {{ t("首页固定推荐 10 款，推荐位高度不再随游戏数量变化。") }}</p>
       </section>
 
-      <section v-if="!writeTokenSaved" id="access" class="panel">
+      <section v-if="showWriteToken" id="access" class="panel">
         <div class="panel-head">
           <h2>{{ t("写接口令牌") }}</h2>
           <span class="muted-sm">{{ t("仅本机浏览器") }}</span>
