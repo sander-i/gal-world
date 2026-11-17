@@ -105,17 +105,25 @@ export function formatMessage(template, args) {
 /**
  * 翻译。
  *
+ * 参数与后端 `I18n.t(String key, Object... args)` 对齐，是可变参数：
+ * `t('已删除 {0}', name)`、`t('{0} 分 {1} 秒', m, s)` 都行。
+ *
+ * 早先这里只接一个参数，`t('…{1}…', a, b)` 的第二个实参被丢掉，
+ * `{1}` 就原样显示在页面上——后端可变参数掩盖了这个不一致。
+ *
  * 兜底链：当前语言 → 键名（中文原文）。
  *
  * 缺键时直接给原文，不落到英文：与后端 I18nService.translate 一致——
  * 这个项目的用户以中文玩家为主，缺译处显示原文比显示英文更好读，
  * 也便于一眼看出哪些还没翻译。FALLBACK 只覆盖启动期与语言包加载失败。
  */
-export function t(key, args) {
+export function t(key, ...rest) {
   const msg = messages.value[key]
-  if (msg != null) return formatMessage(msg, args)
-  const fallback = FALLBACK[key]
-  return fallback != null ? formatMessage(fallback, args) : key
+  const template = msg != null ? msg
+    : (FALLBACK[key] != null ? FALLBACK[key] : key)
+  if (rest.length === 0) return formatMessage(template, null)
+  // 单参数时保持原语义：数组按位置、对象按名、标量只填 {0}
+  return formatMessage(template, rest.length === 1 ? rest[0] : rest)
 }
 
 /** 供 `useI18n()` 之外的地方读取当前语言（api.js 拼请求头用） */

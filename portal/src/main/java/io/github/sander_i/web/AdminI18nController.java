@@ -6,6 +6,7 @@
 package io.github.sander_i.web;
 
 import io.github.sander_i.deploy.DeploySecurity;
+import io.github.sander_i.i18n.I18n;
 import io.github.sander_i.i18n.I18nService;
 import io.github.sander_i.i18n.LocaleMarketClient;
 import io.github.sander_i.i18n.LocalePack;
@@ -70,7 +71,7 @@ public class AdminI18nController {
             return ResponseEntity.status(403).body(Map.of("message", e.getMessage()));
         }
         if (body == null) {
-            return ResponseEntity.badRequest().body(Map.of("message", "请求体为空"));
+            return ResponseEntity.badRequest().body(Map.of("message", I18n.t("请求体为空")));
         }
         try {
             Object file = body.get("file");
@@ -95,7 +96,7 @@ public class AdminI18nController {
             Object raw = body.get("messages");
             if (!(raw instanceof Map<?, ?> map)) {
                 return ResponseEntity.badRequest()
-                        .body(Map.of("message", "缺少 file / url / json / messages 字段"));
+                        .body(Map.of("message", I18n.t("缺少 file / url / json / messages 字段")));
             }
             Map<String, String> msgs = new LinkedHashMap<>();
             for (Map.Entry<?, ?> e : map.entrySet()) {
@@ -112,7 +113,7 @@ public class AdminI18nController {
             return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
         } catch (IOException e) {
             return ResponseEntity.badRequest()
-                    .body(Map.of("message", "语言包解析失败: " + e.getMessage()));
+                    .body(Map.of("message", I18n.t("语言包解析失败: {0}", e.getMessage())));
         }
     }
 
@@ -135,7 +136,7 @@ public class AdminI18nController {
             fetched = market.fetch(url);
         } catch (IOException e) {
             // 下载阶段的失败与解析失败区分开：前者原因在网络或安全策略，后者在文件内容
-            throw new IllegalArgumentException("下载语言包失败: " + e.getMessage());
+            throw new IllegalArgumentException(I18n.t("下载语言包失败: {0}", e.getMessage()));
         }
         String fileName = fetched.fileName();
         String id = String.valueOf(body.getOrDefault("id", "")).strip();
@@ -244,22 +245,22 @@ public class AdminI18nController {
                 "import", java.util.List.of(
                         Map.of("format", "json", "ext", ".json",
                                 "needsKeyMap", false,
-                                "note", "本项目格式；i18next / vue-i18n 嵌套 JSON 需要 keyMap"),
+                                "note", I18n.t("本项目格式；i18next / vue-i18n 嵌套 JSON 需要 keyMap")),
                         Map.of("format", "po", "ext", ".po",
-                                "needsKeyMap", false, "note", "msgid 即中文原文"),
+                                "needsKeyMap", false, "note", I18n.t("msgid 即中文原文")),
                         Map.of("format", "xliff", "ext", ".xlf/.xliff",
-                                "needsKeyMap", false, "note", "source 即中文原文"),
+                                "needsKeyMap", false, "note", I18n.t("source 即中文原文")),
                         Map.of("format", "csv", "ext", ".csv/.tsv",
                                 "needsKeyMap", false,
-                                "note", "两列 原文,译文；表头含 source 时按表头定位"),
+                                "note", I18n.t("两列 原文,译文；表头含 source 时按表头定位")),
                         Map.of("format", "properties", "ext", ".properties",
-                                "needsKeyMap", true, "note", "符号键，需 keyMap"),
+                                "needsKeyMap", true, "note", I18n.t("符号键，需 keyMap")),
                         Map.of("format", "android", "ext", ".xml",
-                                "needsKeyMap", true, "note", "strings.xml，符号键，需 keyMap"),
+                                "needsKeyMap", true, "note", I18n.t("strings.xml，符号键，需 keyMap")),
                         Map.of("format", "arb", "ext", ".arb",
-                                "needsKeyMap", true, "note", "Flutter，符号键，需 keyMap"),
+                                "needsKeyMap", true, "note", I18n.t("Flutter，符号键，需 keyMap")),
                         Map.of("format", "strings", "ext", ".strings",
-                                "needsKeyMap", true, "note", "Apple，符号键，需 keyMap")),
+                                "needsKeyMap", true, "note", I18n.t("Apple，符号键，需 keyMap"))),
                 "export", java.util.List.of("json", "po", "xliff", "csv", "properties"));
     }
 
@@ -284,11 +285,11 @@ public class AdminI18nController {
         boolean builtin = I18nService.BUILTIN_IDS.contains(id);
         if (builtin && !force) {
             return ResponseEntity.badRequest()
-                    .body(Map.of("message", "内置语言包不能删除: " + id));
+                    .body(Map.of("message", I18n.t("内置语言包不能删除: {0}", id)));
         }
         if (!i18n.isExternal(id)) {
             return ResponseEntity.status(404)
-                    .body(Map.of("message", "没有这个外部语言包: " + id));
+                    .body(Map.of("message", I18n.t("没有这个外部语言包: {0}", id)));
         }
         try {
             i18n.delete(id);
@@ -299,7 +300,7 @@ public class AdminI18nController {
             return ResponseEntity.ok(Map.of("deleted", id, "restoredBuiltin", builtin));
         } catch (IOException e) {
             return ResponseEntity.badRequest()
-                    .body(Map.of("message", "删除失败: " + e.getMessage()));
+                    .body(Map.of("message", I18n.t("删除失败: {0}", e.getMessage())));
         }
     }
 }

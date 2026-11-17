@@ -10,7 +10,7 @@ import { useRouter } from 'vue-router'
 import { api, getWriteToken } from '../api'
 import GameUploadPanel from '../components/GameUploadPanel.vue'
 import { notify } from '../feedback'
-import { canSubmit, mergeEvent, runPhase, stepOf, formatBytes, altOptions } from '../game-import'
+import { canSubmit, mergeEvent, runPhase, stepOf, stepStateLabel, formatBytes, altOptions } from '../game-import'
 import { playLink } from '../play-origin'
 
 const router = useRouter()
@@ -357,7 +357,7 @@ onBeforeUnmount(() => {
       <h2>{{ t("3. 执行接入") }}</h2>
       <ol class="import-steps">
         <li v-for="s in stepsView" :key="s.id" :class="'state-' + s.state.toLowerCase()">
-          {{ stepTitles[s.id] || s.title }} — {{ s.state }}
+          {{ stepTitles[s.id] || s.title }} — {{ stepStateLabel(s.state) }}
         </li>
       </ol>
       <pre class="import-log">{{ run.lines.join('\n') }}</pre>

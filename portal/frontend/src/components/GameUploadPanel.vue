@@ -8,7 +8,7 @@ import { t } from '../i18n.js'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { api, getWriteToken } from '../api'
 import { notify } from '../feedback'
-import { formatBytes } from '../game-import'
+import { formatBytes, stepStateLabel } from '../game-import'
 import {
   canStartUpload,
   fingerprintSelection,
@@ -616,7 +616,7 @@ onBeforeUnmount(() => {
 
     <ol v-if="steps.length" class="import-steps">
       <li v-for="s in steps" :key="s.id" :class="'state-' + String(s.state).toLowerCase()">
-        {{ s.title }} — {{ s.state }}
+        {{ s.title }} — {{ stepStateLabel(s.state) }}
       </li>
     </ol>
     <pre v-if="logLines.length" class="import-log">{{ logLines.join('\n') }}</pre>

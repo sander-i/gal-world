@@ -398,6 +398,17 @@ const DEPLOY_BADGE = {
   BLOCKED: 'warn', NEED_ELEVATION: 'warn', FAILED: 'bad', CANCELLED: 'bad',
 }
 
+/**
+ * 部署步骤类型文案。
+ *
+ * 后端下发的是 DeployStep.Kind 枚举名（PREFLIGHT / DOWNLOAD / EXEC / CONFIG / CHECK），
+ * 直接渲染会把英文常量露在页面上。computed 而非常量，否则切语言不更新。
+ */
+const deployKindLabel = computed(() => ({
+  PREFLIGHT: t('预检'), DOWNLOAD: t('下载'), EXEC: t('执行'),
+  CONFIG: t('配置'), CHECK: t('检查'),
+}))
+
 async function loadDeployStatus() {
   const tk = token.value.trim()
   if (!tk) {
@@ -1240,7 +1251,7 @@ onBeforeUnmount(() => {
                   <span class="deploy-badge" :class="DEPLOY_BADGE[s.state]">
                     {{ deployLabel[s.state] || s.state }}
                   </span>
-                  <span class="deploy-badge kind">{{ s.kind }}</span>
+                  <span class="deploy-badge kind">{{ deployKindLabel[s.kind] || s.kind }}</span>
                   <span v-if="s.destructive" class="deploy-badge bad">{{ t("破坏性") }}</span>
                 </div>
                 <p class="muted-sm">{{ s.summary }}</p>

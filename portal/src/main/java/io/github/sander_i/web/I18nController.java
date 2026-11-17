@@ -5,6 +5,7 @@
 
 package io.github.sander_i.web;
 
+import io.github.sander_i.i18n.I18n;
 import io.github.sander_i.i18n.I18nService;
 import io.github.sander_i.i18n.LocalePack;
 import io.github.sander_i.service.SettingsService;
@@ -57,7 +58,7 @@ public class I18nController {
     public ResponseEntity<?> messages(@PathVariable String locale) {
         if (!i18n.exists(locale)) {
             return ResponseEntity.status(404)
-                    .body(Map.of("message", "没有这个语言包: " + locale));
+                    .body(Map.of("message", I18n.t("没有这个语言包: {0}", locale)));
         }
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("id", LocalePack.normalize(locale));

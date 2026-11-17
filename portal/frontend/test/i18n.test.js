@@ -89,3 +89,17 @@ test('整包拉不到时退到站点默认语言', async () => {
   await setLocale('ja')
   assert.equal(t('保存'), 'Save')
 })
+
+test('t() 支持可变参数，与后端 I18n.t 对齐', () => {
+  // 直接验证格式化层：多参数按位置填 {0} {1} {2}
+  assert.equal(formatMessage('{0} 分 {1} 秒', [3, 2]), '3 分 2 秒')
+  assert.equal(formatMessage('格式 {0} · 导入 {1} 条 · 跳过 {2} 条', ['po', 5, 1]),
+    '格式 po · 导入 5 条 · 跳过 1 条')
+})
+
+test('t() 传多个实参时全部参与插值', async () => {
+  stubApi({ en: { '格式 {0} · 导入 {1} 条 · 跳过 {2} 条': 'format {0} · {1} imported · {2} skipped' } })
+  await loadI18n()
+  assert.equal(t('格式 {0} · 导入 {1} 条 · 跳过 {2} 条', 'po', 5, 1),
+    'format po · 5 imported · 1 skipped')
+})
