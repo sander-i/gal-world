@@ -5,6 +5,7 @@
 
 package io.github.sander_i.service;
 
+import io.github.sander_i.i18n.I18n;
 import org.apache.commons.compress.PasswordRequiredException;
 import org.apache.commons.compress.archivers.sevenz.SevenZArchiveEntry;
 import org.apache.commons.compress.archivers.sevenz.SevenZFile;
@@ -109,7 +110,7 @@ public class GameArchiveExtractor {
         } else if (KIND_7Z.equals(kind)) {
             extract7z(archive, target, limits, log, cancelled);
         } else {
-            throw new GameUploadService.UnsupportedArchive("不是可识别的 zip / 7z 文件");
+            throw new GameUploadService.UnsupportedArchive(I18n.t("不是可识别的 zip / 7z 文件"));
         }
     }
 
@@ -131,22 +132,25 @@ public class GameArchiveExtractor {
 
         void checkCancelled() {
             if (cancelled != null && cancelled.getAsBoolean()) {
-                throw new GameUploadService.Cancelled("已取消");
+                throw new GameUploadService.Cancelled(I18n.t("已取消"));
             }
         }
 
         void countEntry(long size) {
             checkCancelled();
             if (++files > limits.maxFiles()) {
-                throw new IllegalArgumentException("压缩包条目数超过上限 " + limits.maxFiles());
+                throw new IllegalArgumentException(
+                        I18n.t("压缩包条目数超过上限 {0}", limits.maxFiles()));
             }
             if (size >= 0) {
                 if (size > limits.maxFileBytes()) {
-                    throw new IllegalArgumentException("压缩包内单文件超过 " + limits.maxFileBytes() + " 字节");
+                    throw new IllegalArgumentException(
+                            I18n.t("压缩包内单文件超过 {0} 字节", limits.maxFileBytes()));
                 }
                 total += size;
                 if (total > limits.maxExtractedBytes()) {
-                    throw new IllegalArgumentException("解压后总体积超过上限 " + limits.maxExtractedBytes() + " 字节");
+                    throw new IllegalArgumentException(
+                            I18n.t("解压后总体积超过上限 {0} 字节", limits.maxExtractedBytes()));
                 }
             }
         }
@@ -164,7 +168,7 @@ public class GameArchiveExtractor {
             while (entries.hasMoreElements()) {
                 ZipArchiveEntry e = entries.nextElement();
                 if (e.getGeneralPurposeBit() != null && e.getGeneralPurposeBit().usesEncryption()) {
-                    throw new GameUploadService.UnsupportedArchive("不支持带密码的压缩包");
+                    throw new GameUploadService.UnsupportedArchive(I18n.t("不支持带密码的压缩包"));
                 }
                 String name = e.getName();
                 if (isGarbage(name)) {
@@ -175,18 +179,19 @@ public class GameArchiveExtractor {
 
                 int mode = e.getUnixMode();
                 if (e.isUnixSymlink() || (mode & S_IFMT) == 0120000) {
-                    throw new IllegalArgumentException("压缩包含符号链接，已拒绝: " + name);
+                    throw new IllegalArgumentException(I18n.t("压缩包含符号链接，已拒绝: {0}", name));
                 }
                 int type = mode & S_IFMT;
                 if (type != 0 && type != S_IFREG && type != S_IFDIR) {
-                    throw new IllegalArgumentException("压缩包含非普通文件条目，已拒绝: " + name);
+                    throw new IllegalArgumentException(
+                            I18n.t("压缩包含非普通文件条目，已拒绝: {0}", name));
                 }
                 long compressed = e.getCompressedSize();
                 checkRatio(e.getSize(), compressed, limits, name);
 
                 Path out = target.resolve(rel).normalize();
                 if (!out.startsWith(target)) {
-                    throw new IllegalArgumentException("压缩包条目越界: " + name);
+                    throw new IllegalArgumentException(I18n.t("压缩包条目越界: {0}", name));
                 }
                 if (e.isDirectory()) {
                     Files.createDirectories(out);
@@ -197,14 +202,14 @@ public class GameArchiveExtractor {
                 maybeCheckDisk(ctx, written);
             }
         } catch (PasswordRequiredException e) {
-            throw new GameUploadService.UnsupportedArchive("不支持带密码的压缩包");
+            throw new GameUploadService.UnsupportedArchive(I18n.t("不支持带密码的压缩包"));
         } catch (GameUploadService.Cancelled | IllegalArgumentException e) {
             throw e;
         } catch (IOException e) {
             // 加密 / 分卷 / 损坏都落到这里，给出可读原因
-            throw new IllegalArgumentException("解压失败: " + e.getMessage(), e);
+            throw new IllegalArgumentException(I18n.t("解压失败: {0}", e.getMessage()), e);
         }
-        log.accept("已解压 " + ctx.files + " 个文件，共 " + ctx.total + " 字节");
+        log.accept(I18n.t("已解压 {0} 个文件，共 {1} 字节", ctx.files, ctx.total));
     }
 
     private void extract7z(Path archive, Path target, GameUploadLimits limits,
@@ -215,7 +220,8 @@ public class GameArchiveExtractor {
             SevenZArchiveEntry e;
             while ((e = zf.getNextEntry()) != null) {
                 if (e.isAntiItem()) {
-                    throw new IllegalArgumentException("压缩包含反条目，已拒绝: " + e.getName());
+                    throw new IllegalArgumentException(
+                            I18n.t("压缩包含反条目，已拒绝: {0}", e.getName()));
                 }
                 String name = e.getName();
                 if (isGarbage(name)) {
@@ -224,11 +230,11 @@ public class GameArchiveExtractor {
                 String rel = validateRelative(name, limits.maxDepth());
                 ctx.countEntry(e.getSize());
                 if ((e.getWindowsAttributes() & FILE_ATTRIBUTE_REPARSE_POINT) != 0) {
-                    throw new IllegalArgumentException("压缩包含符号链接，已拒绝: " + name);
+                    throw new IllegalArgumentException(I18n.t("压缩包含符号链接，已拒绝: {0}", name));
                 }
                 Path out = target.resolve(rel).normalize();
                 if (!out.startsWith(target)) {
-                    throw new IllegalArgumentException("压缩包条目越界: " + name);
+                    throw new IllegalArgumentException(I18n.t("压缩包条目越界: {0}", name));
                 }
                 if (e.isDirectory()) {
                     Files.createDirectories(out);
@@ -242,11 +248,11 @@ public class GameArchiveExtractor {
             throw e;
         } catch (IOException e) {
             if (e instanceof PasswordRequiredException) {
-                throw new GameUploadService.UnsupportedArchive("不支持带密码的压缩包");
+                throw new GameUploadService.UnsupportedArchive(I18n.t("不支持带密码的压缩包"));
             }
-            throw new IllegalArgumentException("解压失败: " + e.getMessage(), e);
+            throw new IllegalArgumentException(I18n.t("解压失败: {0}", e.getMessage()), e);
         }
-        log.accept("已解压 " + ctx.files + " 个文件，共 " + ctx.total + " 字节");
+        log.accept(I18n.t("已解压 {0} 个文件，共 {1} 字节", ctx.files, ctx.total));
     }
 
     /**
@@ -264,11 +270,12 @@ public class GameArchiveExtractor {
                 ctx.checkCancelled();
                 written += n;
                 if (written > ctx.limits.maxFileBytes()) {
-                    throw new IllegalArgumentException("解压后单文件超过上限: " + out.getFileName());
+                    throw new IllegalArgumentException(
+                            I18n.t("解压后单文件超过上限: {0}", out.getFileName()));
                 }
                 ctx.total += n;
                 if (ctx.total > ctx.limits.maxExtractedBytes()) {
-                    throw new IllegalArgumentException("解压后总体积超过上限");
+                    throw new IllegalArgumentException(I18n.t("解压后总体积超过上限"));
                 }
                 dst.write(buf, 0, n);
             }
@@ -283,7 +290,7 @@ public class GameArchiveExtractor {
         }
         FileStore store = Files.getFileStore(ctx.root);
         if (store.getUsableSpace() < ctx.limits.diskReserveBytes()) {
-            throw new IllegalArgumentException("磁盘剩余空间不足，解压已中止");
+            throw new IllegalArgumentException(I18n.t("磁盘剩余空间不足，解压已中止"));
         }
     }
 
@@ -292,7 +299,7 @@ public class GameArchiveExtractor {
             return;
         }
         if (size > 100L * 1024 * 1024 && size / compressed > limits.maxRatio()) {
-            throw new IllegalArgumentException("压缩比异常，疑似压缩炸弹: " + name);
+            throw new IllegalArgumentException(I18n.t("压缩比异常，疑似压缩炸弹: {0}", name));
         }
     }
 
@@ -318,16 +325,16 @@ public class GameArchiveExtractor {
     public static String validateRelative(String name, int maxDepth) {
         String raw = name == null ? "" : name.replace('\\', '/');
         if (raw.isEmpty()) {
-            throw new IllegalArgumentException("压缩包条目名为空");
+            throw new IllegalArgumentException(I18n.t("压缩包条目名为空"));
         }
         if (raw.indexOf('\0') >= 0) {
-            throw new IllegalArgumentException("压缩包条目名包含非法字符");
+            throw new IllegalArgumentException(I18n.t("压缩包条目名包含非法字符"));
         }
         if (raw.startsWith("/")) {
-            throw new IllegalArgumentException("压缩包包含绝对路径: " + name);
+            throw new IllegalArgumentException(I18n.t("压缩包包含绝对路径: {0}", name));
         }
         if (raw.length() >= 2 && Character.isLetter(raw.charAt(0)) && raw.charAt(1) == ':') {
-            throw new IllegalArgumentException("压缩包包含盘符路径: " + name);
+            throw new IllegalArgumentException(I18n.t("压缩包包含盘符路径: {0}", name));
         }
         List<String> parts = new ArrayList<>();
         for (String seg : raw.split("/")) {
@@ -335,15 +342,16 @@ public class GameArchiveExtractor {
                 continue;
             }
             if (seg.equals("..")) {
-                throw new IllegalArgumentException("压缩包包含上级目录引用: " + name);
+                throw new IllegalArgumentException(I18n.t("压缩包包含上级目录引用: {0}", name));
             }
             parts.add(seg);
         }
         if (parts.isEmpty()) {
-            throw new IllegalArgumentException("压缩包条目名为空");
+            throw new IllegalArgumentException(I18n.t("压缩包条目名为空"));
         }
         if (parts.size() > maxDepth) {
-            throw new IllegalArgumentException("压缩包路径层数超过 " + maxDepth + ": " + name);
+            throw new IllegalArgumentException(
+                    I18n.t("压缩包路径层数超过 {0}: {1}", maxDepth, name));
         }
         return String.join("/", parts);
     }
@@ -391,7 +399,7 @@ public class GameArchiveExtractor {
         // 平台差异：Windows 上移动到已存在的目录会失败，Linux 的 rename(2) 却会把
         // 空目标目录直接替换掉。显式拒绝，保证两端行为一致且不会静默覆盖。
         if (Files.exists(target, LinkOption.NOFOLLOW_LINKS)) {
-            throw new IOException("目标已存在，拒绝覆盖: " + target);
+            throw new IOException(I18n.t("目标已存在，拒绝覆盖: {0}", target));
         }
         Files.createDirectories(target.getParent());
         try {
@@ -416,7 +424,7 @@ public class GameArchiveExtractor {
         }
         for (Path p : paths) {
             if (Files.isSymbolicLink(p)) {
-                throw new IllegalArgumentException("目录含符号链接，已拒绝: " + p);
+                throw new IllegalArgumentException(I18n.t("目录含符号链接，已拒绝: {0}", p));
             }
             Path rel = source.relativize(p);
             Path out = target.resolve(rel.toString());

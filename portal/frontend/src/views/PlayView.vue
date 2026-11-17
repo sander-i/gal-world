@@ -4,6 +4,7 @@
 -->
 
 <script setup>
+import { t } from '../i18n.js'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { api, inMaintenanceWindow, isMaintenanceError } from '../api'
@@ -110,12 +111,12 @@ function rewriteLoopback(url) {
 }
 
 const stateText = computed(() => ({
-  booting: '启动中',
-  playing: '运行中',
-  'not-started': '未启动',
-  stopped: '已停止',
-  crashed: '异常终止',
-  error: '连接失败',
+  booting: t('启动中'),
+  playing: t('运行中'),
+  'not-started': t('未启动'),
+  stopped: t('已停止'),
+  crashed: t('异常终止'),
+  error: t('连接失败'),
 }[view.value] || '—'))
 
 const stateTone = computed(() => ({
@@ -129,30 +130,30 @@ const CARD = {
   'not-started': {
     tone: 'muted',
     icon: '⏸',
-    title: '游戏未启动',
-    desc: '当前会话没有在运行。启动后即可进入游戏，或先回详情页查看状态。',
-    primary: '立即启动',
+    title: t('游戏未启动'),
+    desc: t('当前会话没有在运行。启动后即可进入游戏，或先回详情页查看状态。'),
+    primary: t('立即启动'),
   },
   stopped: {
     tone: 'muted',
     icon: '⏹',
-    title: '游戏已停止',
-    desc: '会话已结束，可能是空闲超时自动停止，或已在其它页面停止。',
-    primary: '重新启动',
+    title: t('游戏已停止'),
+    desc: t('会话已结束，可能是空闲超时自动停止，或已在其它页面停止。'),
+    primary: t('重新启动'),
   },
   crashed: {
     tone: 'error',
     icon: '!',
-    title: '游戏异常终止',
-    desc: '游戏自己退出或崩溃了。未存档的游戏进度可能丢失，存档可在详情页恢复。',
-    primary: '重新启动',
+    title: t('游戏异常终止'),
+    desc: t('游戏自己退出或崩溃了。未存档的游戏进度可能丢失，存档可在详情页恢复。'),
+    primary: t('重新启动'),
   },
   error: {
     tone: 'error',
     icon: '!',
-    title: '无法进入游戏',
+    title: t('无法进入游戏'),
     desc: '',
-    primary: '重试',
+    primary: t('重试'),
   },
 }
 
@@ -160,9 +161,9 @@ const CARD = {
 const CLEAN_EXIT_CARD = {
   tone: 'muted',
   icon: '⏹',
-  title: '游戏已退出',
-  desc: '游戏已正常退出，未检测到崩溃。存档可在详情页管理。',
-  primary: '重新启动',
+  title: t('游戏已退出'),
+  desc: t('游戏已正常退出，未检测到崩溃。存档可在详情页管理。'),
+  primary: t('重新启动'),
 }
 
 const card = computed(() => {
@@ -359,7 +360,7 @@ async function startBoot(startedByUser = false) {
       continue
     }
     if (decision === 'crashed') {
-      await haltNotRunning(token, st, '游戏在启动过程中异常终止。')
+      await haltNotRunning(token, st, t('游戏在启动过程中异常终止。'))
       return
     }
     if (decision === 'halt') {
@@ -515,7 +516,7 @@ async function loadDiagnostics() {
   try {
     diagnostics.value = await api.sessionDiagnostics(props.id)
   } catch (e) {
-    diagnostics.value = { summary: '读取会话日志失败：' + e.message, logTail: [] }
+    diagnostics.value = { summary: t('读取会话日志失败：') + e.message, logTail: [] }
   } finally {
     diagLoading.value = false
   }
@@ -528,7 +529,7 @@ async function load() {
   try {
     game.value = await api.getGame(props.id)
   } catch (e) {
-    cardMessage.value = '读取游戏信息失败：' + e.message
+    cardMessage.value = t('读取游戏信息失败：') + e.message
     view.value = 'error'
     return
   }
@@ -541,7 +542,7 @@ async function launch() {
     await api.startGame(props.id)
   } catch (e) {
     busy.value = false
-    cardMessage.value = '启动失败：' + e.message
+    cardMessage.value = t('启动失败：') + e.message
     view.value = 'error'
     return
   }
@@ -560,7 +561,7 @@ async function restart() {
     await api.startGame(props.id)
   } catch (e) {
     busy.value = false
-    cardMessage.value = '重新启动失败：' + e.message
+    cardMessage.value = t('重新启动失败：') + e.message
     view.value = 'error'
     return
   }
@@ -590,7 +591,7 @@ async function maybeAutoCalibrate() {
     const r = await api.calibrateCanvas(props.id, false)
     if (pageGone) return
     if (r.status === 'restarted') {
-      notify.info(`正在按实际窗口校准画布：${r.canvasWidth}×${r.canvasHeight}`)
+      notify.info(t("正在按实际窗口校准画布：{0}×{1}", r.canvasWidth, r.canvasHeight))
       await rebootStream()
     } else if (r.status === 'failed') {
       notify.warning(r.message)
@@ -610,7 +611,7 @@ async function calibrateManual() {
   try {
     const r = await api.calibrateCanvas(props.id, true)
     if (r.status === 'restarted') {
-      notify.success(`${r.message}，正在重新进入游戏`)
+      notify.success(t("{0}，正在重新进入游戏", r.message))
       await rebootStream()
     } else if (r.status === 'ok') {
       notify.success(r.message)
@@ -618,7 +619,7 @@ async function calibrateManual() {
       notify.warning(r.message)
     }
   } catch (e) {
-    notify.error('校准失败：' + e.message)
+    notify.error(t("校准失败：{0}", e.message))
   } finally {
     calibrating.value = false
   }
@@ -698,7 +699,7 @@ async function closeGame() {
   if (!canHeartbeat()) return
   beginClose(props.id, game.value?.name)
   // 不等待：请求照常走完，服务端会等游戏自己退出后再收拾串流
-  api.stopGame(props.id).catch((e) => notify.error('关闭失败：' + e.message))
+  api.stopGame(props.id).catch((e) => notify.error(t("关闭失败：{0}", e.message)))
   stopPolling()
   stopHeartbeat()
   leave()
@@ -958,27 +959,27 @@ onBeforeUnmount(() => {
       <button class="ghost-btn" @click="backToSource">{{ back.label }}</button>
       <span class="title">{{ game?.name || id }}</span>
       <span class="play-state" :class="stateTone">{{ stateText }}</span>
-      <span class="title">累计 {{ formatPlaytime(playedSeconds) }}</span>
+      <span class="title">{{ t("累计 {0}", formatPlaytime(playedSeconds)) }}</span>
       <span
         v-if="playing && latency != null"
         class="play-latency"
         :class="latencyTone(latency)"
-      >时延 {{ latency }} ms</span>
+      >{{ t("时延 {0} ms", latency) }}</span>
       <div class="spacer" />
       <button
         v-if="playing"
         class="ghost-btn"
         :disabled="calibrating || autoCalibrating"
         @click="calibrateManual"
-      >{{ calibrating || autoCalibrating ? '校准中…' : '校准分辨率' }}</button>
+      >{{ calibrating || autoCalibrating ? t('校准中…') : t('校准分辨率') }}</button>
       <button
         v-if="view === 'playing' || view === 'booting'"
         class="ghost-btn danger"
         @click="closeGame"
-      >关闭游戏</button>
-      <button class="ghost-btn" @click="router.push(`/game/${id}`)">会话管理</button>
+      >{{ t("关闭游戏") }}</button>
+      <button class="ghost-btn" @click="router.push(`/game/${id}`)">{{ t("会话管理") }}</button>
       <button class="ghost-btn" @click="toggleFullscreen">
-        {{ fullscreenActive ? '⤢ 退出全屏' : '⛶ 全屏' }}
+        {{ fullscreenActive ? t('⤢ 退出全屏') : t('⛶ 全屏') }}
       </button>
     </div>
 
@@ -998,9 +999,9 @@ onBeforeUnmount(() => {
       <button
         v-if="fullscreenActive"
         class="play-fs-exit"
-        title="退出全屏（Esc）"
+        :title="t('退出全屏（Esc）')"
         @click="exitFullscreen"
-      >⤢ 退出全屏</button>
+      >{{ t("⤢ 退出全屏") }}</button>
 
       <transition name="play-fade">
         <div v-if="view === 'booting'" class="play-overlay">
@@ -1019,7 +1020,7 @@ onBeforeUnmount(() => {
                 :class="{ done: stepDone(p), on: p === phase }"
               >{{ PHASE_LABELS[p] }}</li>
             </ol>
-            <button class="link-btn" @click="cancelBoot">取消并返回详情</button>
+            <button class="link-btn" @click="cancelBoot">{{ t("取消并返回详情") }}</button>
           </div>
         </div>
       </transition>
@@ -1030,7 +1031,7 @@ onBeforeUnmount(() => {
           <h1>{{ card.title }}</h1>
           <p class="play-card-desc">{{ cardDesc }}</p>
 
-          <div v-if="diagLoading" class="play-diag-loading">正在读取游戏日志…</div>
+          <div v-if="diagLoading" class="play-diag-loading">{{ t("正在读取游戏日志…") }}</div>
 
           <div v-if="diagnostics?.summary" class="play-diag">
             <div class="play-diag-line">{{ diagnostics.summary }}</div>
@@ -1039,10 +1040,10 @@ onBeforeUnmount(() => {
               class="play-diag-facts"
             >
               <div v-if="diagnostics.exitCode != null">
-                <dt>退出码</dt><dd>{{ diagnostics.exitCode }}</dd>
+                <dt>{{ t("退出码") }}</dt><dd>{{ diagnostics.exitCode }}</dd>
               </div>
               <div v-if="diagnostics.signal">
-                <dt>终止信号</dt><dd>{{ diagnostics.signal }}</dd>
+                <dt>{{ t("终止信号") }}</dt><dd>{{ diagnostics.signal }}</dd>
               </div>
             </dl>
           </div>

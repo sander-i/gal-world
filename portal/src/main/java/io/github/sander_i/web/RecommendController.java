@@ -6,6 +6,7 @@
 package io.github.sander_i.web;
 
 import io.github.sander_i.domain.Game;
+import io.github.sander_i.i18n.I18n;
 import io.github.sander_i.service.CompanyService;
 import io.github.sander_i.service.GameMediaService;
 import io.github.sander_i.service.PlaytimeService;
@@ -79,8 +80,8 @@ public class RecommendController {
     }
 
     private String reasonOf(long totalSeconds, String state) {
-        if ("RUNNING".equals(state)) return "正在游玩";
-        if (totalSeconds > 0) return "继续游玩";
-        return "新加入";
+        if ("RUNNING".equals(state)) return I18n.t("正在游玩");
+        if (totalSeconds > 0) return I18n.t("继续游玩");
+        return I18n.t("新加入");
     }
 }

@@ -18,6 +18,7 @@
  *  - 视频同时只挂一个 <video>，切换时复用并换 src
  *  - 任一媒体失败 → 跳过，全失败退回占位
  */
+import { t } from '../i18n.js'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { acquirePreloadSlot, releasePreloadSlot } from '../media-preload.js'
 import { srcsetOf } from '../media-srcset.js'

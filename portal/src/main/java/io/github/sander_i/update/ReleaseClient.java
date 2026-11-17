@@ -7,6 +7,7 @@ package io.github.sander_i.update;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.sander_i.i18n.I18n;
 import io.github.sander_i.service.SettingsService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -160,7 +161,7 @@ public class ReleaseClient {
     public String assetText(String url, int maxBytes) throws IOException {
         HttpResponse<String> res = send(url, maxBytes);
         if (res.statusCode() != 200) {
-            throw new IOException("下载资产失败: HTTP " + res.statusCode());
+            throw new IOException(I18n.t("下载资产失败: HTTP {0}", res.statusCode()));
         }
         return res.body();
     }
@@ -173,7 +174,7 @@ public class ReleaseClient {
             return null;
         }
         if (res.statusCode() != 200) {
-            throw new IOException("更新源返回 " + res.statusCode());
+            throw new IOException(I18n.t("更新源返回 {0}", res.statusCode()));
         }
         return mapper.readTree(res.body());
     }
@@ -185,9 +186,9 @@ public class ReleaseClient {
             return;
         }
         if (status == 404 || status == 401 || status == 403) {
-            throw new IOException("仓库不存在或不可见（私有仓库需公开或配置更新源 token）");
+            throw new IOException(I18n.t("仓库不存在或不可见（私有仓库需公开或配置更新源 token）"));
         }
-        throw new IOException("更新源返回 " + status);
+        throw new IOException(I18n.t("更新源返回 {0}", status));
     }
 
     HttpResponse<String> send(String url, int maxBytes) throws IOException {
@@ -201,12 +202,12 @@ public class ReleaseClient {
             HttpResponse<String> res = http.send(b.build(),
                     HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
             if (res.body().length() > maxBytes) {
-                throw new IOException("响应超过 " + maxBytes + " 字节");
+                throw new IOException(I18n.t("响应超过 {0} 字节", maxBytes));
             }
             return res;
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            throw new IOException("请求中断", e);
+            throw new IOException(I18n.t("请求中断"), e);
         }
     }
 

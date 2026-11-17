@@ -5,6 +5,7 @@
 
 package io.github.sander_i.service;
 
+import io.github.sander_i.i18n.I18n;
 import io.github.sander_i.domain.Game;
 import io.github.sander_i.domain.PlaySession;
 import io.github.sander_i.repo.GameRepository;
@@ -77,7 +78,7 @@ public class HeroService {
             Game g = recent.get();
             Instant last = sessions.findFirstByGameIdAndEndedAtIsNotNullOrderByEndedAtDesc(g.getId())
                     .map(PlaySession::getEndedAt).orElse(null);
-            return Optional.of(hero(g, "最近游玩", last));
+            return Optional.of(hero(g, I18n.t("最近游玩"), last));
         }
 
         // 2) 时长最高
@@ -85,13 +86,13 @@ public class HeroService {
                 .filter(g -> playtime.summary(g.getId()).totalSeconds() > 0)
                 .max(Comparator.comparingLong(g -> playtime.summary(g.getId()).totalSeconds()));
         if (most.isPresent()) {
-            return Optional.of(hero(most.get(), "游玩时间最长", null));
+            return Optional.of(hero(most.get(), I18n.t("游玩时间最长"), null));
         }
 
         // 3) 最近添加
         Optional<Game> newest = all.stream()
                 .max(Comparator.comparing(g -> g.getCreatedAt() == null ? Instant.EPOCH : g.getCreatedAt()));
-        return newest.map(g -> hero(g, "新加入", null));
+        return newest.map(g -> hero(g, I18n.t("新加入"), null));
     }
 
     private Hero hero(Game g, String reason, Instant lastPlayed) {

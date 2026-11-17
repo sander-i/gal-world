@@ -14,6 +14,7 @@
  *  - 加载/播放失败一律静默降级，不抛错、不弹窗
  *  - 档位选择：网络省流或小屏时自动降到低档；用户也可手动切换
  */
+import { t } from '../i18n.js'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 const props = defineProps({
@@ -100,8 +101,8 @@ function cycleQuality() {
 }
 
 const qualityLabel = computed(() => {
-  if (quality.value === 'auto') return '自动'
-  return { high: '高清', mid: '标准', low: '流畅' }[quality.value] || quality.value
+  if (quality.value === 'auto') return t('自动')
+  return { high: t('高清'), mid: t('标准'), low: t('流畅') }[quality.value] || quality.value
 })
 
 onMounted(() => {
@@ -146,7 +147,7 @@ onBeforeUnmount(() => {
         v-else
         :key="activeSrc"
         :src="activeSrc"
-        :alt="name + ' 宣传图'"
+        :alt="name + t(' 宣传图')"
         class="cg-media"
         loading="lazy"
         decoding="async"
@@ -160,7 +161,7 @@ onBeforeUnmount(() => {
         <button
           v-if="available.length > 1"
           class="cg-btn"
-          :title="'画质：' + qualityLabel + '（点击切换）'"
+          :title="t('画质：{0}（点击切换）', qualityLabel)"
           @click.stop="cycleQuality"
         >{{ qualityLabel }}</button>
       </div>

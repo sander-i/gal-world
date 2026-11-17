@@ -5,6 +5,7 @@
 
 package io.github.sander_i.web;
 
+import io.github.sander_i.i18n.I18n;
 import io.github.sander_i.platform.OsKind;
 import io.github.sander_i.security.WriteSecurity;
 import io.github.sander_i.service.GameUploadService;
@@ -114,7 +115,7 @@ public class GameUploadController {
 
     private void requireLinux() {
         if (os != OsKind.LINUX) {
-            throw new UnsupportedOperationException("当前平台不支持上传接入（仅 Linux）");
+            throw new UnsupportedOperationException(I18n.t("当前平台不支持上传接入（仅 Linux）"));
         }
     }
 

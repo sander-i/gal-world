@@ -29,6 +29,8 @@ public class DeploySteps {
     private final List<DeployStep> all;
 
     public DeploySteps() {
+        // 标题 / 摘要 / 成功提示一律存中文原文，由 {@link DeployService#status()}
+        // 在请求期用 I18n.t 翻译。这里在类初始化期执行，那时还没有请求语言。
         this.all = List.of(
                 // ================= Windows =================
                 new DeployStep("win.preflight", "系统前置检查",

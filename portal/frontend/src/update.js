@@ -10,6 +10,8 @@
  * 这里只做映射，不碰 DOM 与网络，便于 node --test 直接覆盖。
  */
 
+import { t } from './i18n.js'
+
 export function confirmText(version) {
   // 与后端 Version.normalize 一致：去 v 前缀，并截掉 - 后缀（v0.1.4-pr7 → 0.1.4）
   const v = String(version || '').trim().replace(/^v/i, '').split('-')[0]
@@ -56,17 +58,17 @@ export function canOverride(enabled, ref, status) {
 
 export function phaseLabel(phase) {
   return {
-    idle: '空闲',
-    queued: '排队中',
-    precheck: '预检',
-    downloading: '下载更新包',
-    verifying: '校验更新包',
-    backing_up: '备份数据库',
-    stopping: '停止服务',
-    replacing: '替换版本',
-    starting: '启动服务',
-    success: '更新完成',
-    rolled_back: '已回滚',
-    failed: '更新失败',
+    idle: t('空闲'),
+    queued: t('排队中'),
+    precheck: t('预检'),
+    downloading: t('下载更新包'),
+    verifying: t('校验更新包'),
+    backing_up: t('备份数据库'),
+    stopping: t('停止服务'),
+    replacing: t('替换版本'),
+    starting: t('启动服务'),
+    success: t('更新完成'),
+    rolled_back: t('已回滚'),
+    failed: t('更新失败'),
   }[phase] || phase || ''
 }

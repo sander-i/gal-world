@@ -7,6 +7,7 @@ package io.github.sander_i.service;
 
 import io.github.sander_i.domain.Game;
 import io.github.sander_i.domain.GameMedia;
+import io.github.sander_i.i18n.I18n;
 import io.github.sander_i.repo.GameMediaRepository;
 import io.github.sander_i.repo.GameRepository;
 import org.slf4j.Logger;
@@ -158,7 +159,7 @@ public class GameMediaService {
     MediaView uploadLocked(String gameId, String kind, String originalName, InputStream in)
             throws IOException {
         Game g = games.findById(gameId).orElseThrow(
-                () -> new IllegalArgumentException("没有这个游戏: " + gameId));
+                () -> new IllegalArgumentException(I18n.t("没有这个游戏: {0}", gameId)));
 
         if (kind.equals("icon")) {
             // 图标单张：直接覆盖
@@ -172,8 +173,8 @@ public class GameMediaService {
             int limit = kind.equals("cover") ? media.coverMaxCount() : media.cgMaxCount();
             long count = repo.countByGameIdAndKind(gameId, kind);
             if (count >= limit) {
-                throw new IllegalArgumentException(
-                        (kind.equals("cover") ? "封面" : "宣传 CG") + "最多 " + limit + " 个");
+                throw new IllegalArgumentException(I18n.t("{0}最多 {1} 个",
+                        kind.equals("cover") ? I18n.t("封面") : I18n.t("宣传 CG"), limit));
             }
 
             int seq = (int) count;
@@ -198,7 +199,7 @@ public class GameMediaService {
     public void delete(String gameId, long mediaId) throws IOException {
         GameMedia m = repo.findById(mediaId).orElse(null);
         if (m == null || !m.getGameId().equals(gameId)) {
-            throw new IllegalArgumentException("媒体不存在: " + mediaId);
+            throw new IllegalArgumentException(I18n.t("媒体不存在: {0}", mediaId));
         }
         if (m.getKind().equals("icon")) {
             media.deleteFile(gameId, "icon", 0);

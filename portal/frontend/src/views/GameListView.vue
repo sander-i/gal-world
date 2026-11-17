@@ -4,6 +4,7 @@
 -->
 
 <script setup>
+import { t } from '../i18n.js'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { api } from '../api'
@@ -43,9 +44,9 @@ const busyId = ref('')
 const rotationEnabled = ref(true)
 
 const DENSITIES = [
-  { id: 'cozy', label: '标准' },
-  { id: 'compact', label: '紧凑' },
-  { id: 'list', label: '列表' },
+  { id: 'cozy', label: t('标准') },
+  { id: 'compact', label: t('紧凑') },
+  { id: 'list', label: t('列表') },
 ]
 
 /** 超出这个数量就折叠成「前 N 个 + 更多」，避免筛选区被撑成多行 */
@@ -90,10 +91,10 @@ const filtersCollapsed = ref(false)
 const activeFilterSummary = computed(() => {
   const parts = []
   if (activeCompany.value != null) {
-    parts.push(companies.value.find((c) => c.id === activeCompany.value)?.name || '公司')
+    parts.push(companies.value.find((c) => c.id === activeCompany.value)?.name || t('公司'))
   }
   if (activeLocalization.value != null) {
-    parts.push(localizations.value.find((g) => g.id === activeLocalization.value)?.name || '汉化组')
+    parts.push(localizations.value.find((g) => g.id === activeLocalization.value)?.name || t('汉化组'))
   }
   if (activeTag.value) parts.push(activeTag.value)
   if (query.value.trim()) parts.push(`“${query.value.trim()}”`)
@@ -214,7 +215,7 @@ async function quickToggle(g, ev) {
     const i = games.value.findIndex((x) => x.id === g.id)
     if (i >= 0) games.value[i] = updated
   } catch (e) {
-    notify.error('操作失败：' + e.message)
+    notify.error(t("操作失败：{0}", e.message))
   } finally {
     busyId.value = ''
   }
@@ -265,10 +266,10 @@ function hostOf(url) {
   <div class="shell">
     <div class="list-fixed">
       <header class="topbar">
-        <router-link to="/" class="ghost-btn">← 首页</router-link>
+        <router-link to="/" class="ghost-btn">{{ t("← 首页") }}</router-link>
         <div class="spacer" />
-        <input v-model="query" class="search" placeholder="搜索游戏名 / 简介" />
-        <router-link to="/settings" class="ghost-btn">设置</router-link>
+        <input v-model="query" class="search" :placeholder="t('搜索游戏名 / 简介')" />
+        <router-link to="/settings" class="ghost-btn">{{ t("设置") }}</router-link>
       </header>
 
       <div class="filter-panel" :class="{ 'is-collapsed': filtersCollapsed }">
@@ -276,10 +277,10 @@ function hostOf(url) {
           type="button"
           class="filter-collapse"
           :aria-expanded="filtersCollapsed ? 'false' : 'true'"
-          :title="filtersCollapsed ? '展开筛选条件' : '收起筛选条件'"
+          :title="filtersCollapsed ? t('展开筛选条件') : t('收起筛选条件')"
           @click="filtersCollapsed = !filtersCollapsed"
         >
-          <span>{{ filtersCollapsed ? '展开' : '收起' }}</span>
+          <span>{{ filtersCollapsed ? t('展开') : t('收起') }}</span>
           <span class="filter-caret" :class="{ up: !filtersCollapsed }">▾</span>
         </button>
 
@@ -289,21 +290,21 @@ function hostOf(url) {
           class="filter-collapsed-bar"
           @click="filtersCollapsed = false"
         >
-          <span class="filter-collapsed-title">筛选条件</span>
+          <span class="filter-collapsed-title">{{ t("筛选条件") }}</span>
           <span v-if="activeFilterCount" class="filter-collapsed-hint">
             {{ activeFilterSummary }}
           </span>
-          <span v-else class="filter-collapsed-hint is-empty">未设置</span>
+          <span v-else class="filter-collapsed-hint is-empty">{{ t("未设置") }}</span>
         </button>
 
         <div v-show="!filtersCollapsed" class="filter-rows">
           <div v-if="companyEnabled" class="filter-row">
-            <span class="filter-label">公司</span>
+            <span class="filter-label">{{ t("公司") }}</span>
             <button
               class="tag-chip company"
               :class="{ active: activeCompany == null }"
               @click="activeCompany = null"
-            >全部</button>
+            >{{ t("全部") }}</button>
             <button
               v-for="c in visibleCompanies"
               :key="c.id"
@@ -319,19 +320,18 @@ function hostOf(url) {
               v-if="hasMoreCompanies"
               class="tag-chip more"
               @click="companiesOpen = !companiesOpen"
-            >{{ companiesOpen ? '收起 ▴' : `更多 ${companyChips.length - CHIP_LIMIT} ▾` }}</button>
+            >{{ companiesOpen ? t('收起 ▴') : t("更多 {0} ▾", companyChips.length - CHIP_LIMIT) }}</button>
             <span v-if="!companies.length" class="filter-hint">
-              还没有公司，可在「公司维护」里添加
-            </span>
+              {{ t("还没有公司，可在「公司维护」里添加") }}</span>
           </div>
 
           <div v-if="localizationEnabled" class="filter-row">
-            <span class="filter-label">汉化组</span>
+            <span class="filter-label">{{ t("汉化组") }}</span>
             <button
               class="tag-chip company"
               :class="{ active: activeLocalization == null }"
               @click="activeLocalization = null"
-            >全部</button>
+            >{{ t("全部") }}</button>
             <button
               v-for="g in visibleLocalizations"
               :key="g.id"
@@ -347,30 +347,29 @@ function hostOf(url) {
               v-if="hasMoreLocalizations"
               class="tag-chip more"
               @click="localizationsOpen = !localizationsOpen"
-            >{{ localizationsOpen ? '收起 ▴' : `更多 ${localizationChips.length - CHIP_LIMIT} ▾` }}</button>
+            >{{ localizationsOpen ? t('收起 ▴') : t("更多 {0} ▾", localizationChips.length - CHIP_LIMIT) }}</button>
             <span v-if="!localizations.length" class="filter-hint">
-              还没有汉化组，可在「汉化组维护」里添加
-            </span>
+              {{ t("还没有汉化组，可在「汉化组维护」里添加") }}</span>
           </div>
 
           <div class="filter-row">
-            <span class="filter-label">标签</span>
-            <button class="tag-chip" :class="{ active: !activeTag }" @click="activeTag = ''">全部</button>
+            <span class="filter-label">{{ t("标签") }}</span>
+            <button class="tag-chip" :class="{ active: !activeTag }" @click="activeTag = ''">{{ t("全部") }}</button>
             <button
-              v-for="t in tagChips"
-              :key="t.id"
+              v-for="tag in tagChips"
+              :key="tag.id"
               class="tag-chip"
-              :class="{ active: activeTag === t.name }"
-              @click="activeTag = activeTag === t.name ? '' : t.name"
-            >{{ t.name }}</button>
-            <span v-if="!tags.length" class="filter-hint">还没有标签</span>
+              :class="{ active: activeTag === tag.name }"
+              @click="activeTag = activeTag === tag.name ? '' : tag.name"
+            >{{ tag.name }}</button>
+            <span v-if="!tags.length" class="filter-hint">{{ t("还没有标签") }}</span>
           </div>
         </div>
       </div>
 
       <div class="section-head">
-        <h2>全部游戏</h2>
-        <span class="muted-sm">共 {{ total }} 款 · 已显示 {{ games.length }}</span>
+        <h2>{{ t("全部游戏") }}</h2>
+        <span class="muted-sm">{{ t("共 {0} 款 · 已显示 {1}", total, games.length) }}</span>
         <div class="spacer" />
         <div class="seg density-seg">
           <button
@@ -383,9 +382,9 @@ function hostOf(url) {
       </div>
     </div>
 
-    <div v-if="error" class="empty">加载失败：{{ error }}</div>
+    <div v-if="error" class="empty">{{ t("加载失败：{0}", error) }}</div>
     <div v-else-if="!loading && !games.length" class="empty">
-      {{ hasFilter ? '没有符合筛选条件的游戏。' : '游戏库为空。用 galworld add 注册游戏后刷新。' }}
+      {{ hasFilter ? t('没有符合筛选条件的游戏。') : t('游戏库为空。用 galworld add 注册游戏后刷新。') }}
     </div>
     <template v-else>
       <div class="grid list-grid" :data-density="density">
@@ -406,7 +405,7 @@ function hostOf(url) {
       </div>
 
       <div id="listSentinel" class="load-more" :class="{ done }">
-        {{ done ? '已经到底了' : loading ? '加载中…' : '继续滚动加载…' }}
+        {{ done ? t('已经到底了') : loading ? t('加载中…') : t('继续滚动加载…') }}
       </div>
     </template>
   </div>

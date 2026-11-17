@@ -5,6 +5,7 @@
 
 package io.github.sander_i.service;
 
+import io.github.sander_i.i18n.I18n;
 import io.github.sander_i.config.PathConfig;
 import jakarta.annotation.PreDestroy;
 import org.slf4j.Logger;
@@ -70,7 +71,7 @@ public class ImageVariantBackfill implements ApplicationRunner {
     @Override
     public void run(ApplicationArguments args) {
         // 启动只投递任务，不再同步跑完整扫描
-        triggerAsync("启动");
+        triggerAsync(I18n.t("启动"));
     }
 
     /** 投递一次后台回填；已有任务在跑时直接跳过 */
@@ -95,7 +96,7 @@ public class ImageVariantBackfill implements ApplicationRunner {
     @EventListener
     public void onEnabled(ImageVariantEnabledEvent e) {
         if (e.enabled()) {
-            triggerAsync("开关开启");
+            triggerAsync(I18n.t("开关开启"));
         }
     }
 
@@ -149,7 +150,7 @@ public class ImageVariantBackfill implements ApplicationRunner {
             // 先放开标记再重投，否则 compareAndSet 必然失败
             running.set(false);
             if (rerunRequested.getAndSet(false) && settings.imageVariantEnabled()) {
-                triggerAsync("补跑");
+                triggerAsync(I18n.t("补跑"));
             }
         }
     }

@@ -32,7 +32,7 @@ class SettingsServiceRepoUrlTest {
     private static final String REPO = "https://example.com/owner/gal-world";
 
     private SettingsService service(SettingRepository repo) {
-        SettingsService s = new SettingsService(repo, e -> { });
+        SettingsService s = new SettingsService(repo, e -> { }, i18n());
         s.setConfiguredRepoUrl(REPO);
         return s;
     }
@@ -53,7 +53,7 @@ class SettingsServiceRepoUrlTest {
         SettingRepository repo = mock(SettingRepository.class);
         when(repo.findAll()).thenReturn(List.of());
         when(repo.findById(anyString())).thenReturn(Optional.empty());
-        SettingsService s = new SettingsService(repo, e -> { });
+        SettingsService s = new SettingsService(repo, e -> { }, i18n());
         s.setConfiguredRepoUrl(REPO + "/");
 
         assertEquals(REPO, s.repoUrl());
@@ -109,5 +109,18 @@ class SettingsServiceRepoUrlTest {
 
         assertThrows(IllegalArgumentException.class,
                 () -> s.update(Map.of(SettingsService.KEY_REPO_URL_PUBLIC, "yes")));
+    }
+
+    /** 语言服务：测试只关心消息模板，translate 原样返回键 */
+    private static io.github.sander_i.i18n.I18nService i18n() {
+        io.github.sander_i.i18n.I18nService s =
+                org.mockito.Mockito.mock(io.github.sander_i.i18n.I18nService.class);
+        org.mockito.Mockito.when(s.exists(org.mockito.ArgumentMatchers.anyString()))
+                .thenReturn(true);
+        org.mockito.Mockito.when(s.translate(
+                        org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyString(),
+                        org.mockito.ArgumentMatchers.any(Object[].class)))
+                .thenAnswer(inv -> inv.getArgument(1));
+        return s;
     }
 }

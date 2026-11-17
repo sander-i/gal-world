@@ -3,6 +3,8 @@
  * Copyright (c) 2026 sander
  */
 
+import { t } from './i18n.js'
+
 export const THEME_STORAGE_KEY = 'galworld.theme'
 
 const BASE_VARS = {
@@ -13,11 +15,11 @@ const BASE_VARS = {
 /** 内置主题：深色三套 + 浅色一套。vars 为完整覆盖，保证与现有视觉一致 */
 export const BUILTIN_THEMES = [
   {
-    id: 'obsidian', name: '黑曜石', base: 'dark', builtin: true,
+    id: 'obsidian', nameKey: '黑曜石', base: 'dark', builtin: true,
     vars: {}, // 空表示使用 styles.css 的 :root 默认值
   },
   {
-    id: 'midnight', name: '深海', base: 'dark', builtin: true,
+    id: 'midnight', nameKey: '深海', base: 'dark', builtin: true,
     vars: deriveVars({
       bg: '#0b1119', surface: '#121a24', line: '#1e2a38', text: '#e2ecf5',
       muted: '#7d8fa3', accent: '#4fa8c8', ok: '#5ec49a', warn: '#d99a5c', err: '#d96c7c',
@@ -28,7 +30,7 @@ export const BUILTIN_THEMES = [
     // 原配色的问题：底色与表面几乎同明度（#140f14 / #1d1620），卡片浮不起来；
     // 强调色 #e08aa8 与错误色 #e07a8a 只差一点，删除按钮和主按钮看着一样红。
     // 现在拉开三层明度，强调色提亮到浅樱粉，错误色改向正红并压暗。
-    id: 'sakura', name: '樱', base: 'dark', builtin: true,
+    id: 'sakura', nameKey: '樱', base: 'dark', builtin: true,
     vars: deriveVars({
       bg: '#16111a',          // 底色略微提亮、偏紫，与纯黑拉开
       surface: '#221a28',     // 表面比底色亮一档，卡片能浮起来
@@ -46,7 +48,7 @@ export const BUILTIN_THEMES = [
     // 原配色的问题：底 #f6f2ea 与表面 #fffdf8 差异太小，卡片边界几乎看不见；
     // 强调色 #a0682c 在浅底上偏浑，主按钮不突出。
     // 现在加深底色分层、边框更实、强调色更饱和。
-    id: 'paper', name: '素纸', base: 'light', builtin: true,
+    id: 'paper', nameKey: '素纸', base: 'light', builtin: true,
     vars: deriveVars({
       bg: '#efe9dd',          // 底色加深一档，与白卡片形成对比
       surface: '#fffcf5',     // 表面近白，卡片能看清边界
@@ -99,6 +101,13 @@ export function deriveVars(seed) {
     '--shadow': '0 10px 30px color-mix(in srgb, #000 45%, transparent)',
   }
   return { ...BASE_VARS, ...v, _base: seed.base }
+}
+
+/** 内置主题的显示名：按当前界面语言现取，避免模块导入期冻结语言 */
+export function themeName(theme) {
+  if (!theme) return ''
+  if (theme.nameKey) return t(theme.nameKey)
+  return theme.name || theme.id || ''
 }
 
 export function resolveTheme(id, customThemes = []) {

@@ -20,6 +20,8 @@
  */
 
 /** 详情页链接：带上来源页的筛选与密度 */
+import { t } from './i18n.js'
+
 export function gameLink(gameId, listState) {
   if (!listState) {
     return `/game/${encodeURIComponent(gameId)}`
@@ -47,9 +49,9 @@ export function backTarget(route) {
     if (q.localization != null && q.localization !== '') query.localization = String(q.localization)
     if (q.q) query.q = String(q.q)
     if (q.density) query.density = String(q.density)
-    return { path: '/games', query, label: '← 全部游戏' }
+    return { path: '/games', query, label: t('← 全部游戏') }
   }
-  return { path: '/', query: {}, label: '← 游戏库' }
+  return { path: '/', query: {}, label: t('← 游戏库') }
 }
 
 /** 列表页从 URL 读回筛选状态（首次进入或从详情页返回时都走这里） */

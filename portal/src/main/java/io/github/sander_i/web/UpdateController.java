@@ -5,6 +5,7 @@
 
 package io.github.sander_i.web;
 
+import io.github.sander_i.i18n.I18n;
 import io.github.sander_i.platform.OsKind;
 import io.github.sander_i.update.UpdateService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -65,7 +66,7 @@ public class UpdateController {
     @PostMapping("/apply")
     public ResponseEntity<?> apply(@RequestBody ApplyRequest body) {
         if (os == OsKind.OTHER) {
-            throw new UnsupportedOperationException("当前平台不支持远程更新: " + os);
+            throw new UnsupportedOperationException(I18n.t("当前平台不支持远程更新: {0}", os));
         }
         String jobId = service.apply(body.version(), body.confirm(), body.override());
         return ResponseEntity.status(202).body(Map.of(

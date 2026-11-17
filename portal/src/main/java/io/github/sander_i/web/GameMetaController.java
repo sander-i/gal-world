@@ -7,6 +7,7 @@ package io.github.sander_i.web;
 
 import io.github.sander_i.config.PathConfig;
 import io.github.sander_i.domain.Game;
+import io.github.sander_i.i18n.I18n;
 import io.github.sander_i.repo.GameRepository;
 import io.github.sander_i.service.CompanyService;
 import io.github.sander_i.service.LocalizationGroupService;
@@ -166,11 +167,11 @@ public class GameMetaController {
         // 画布范围与接入校验保持一致，防止前端绕过限制写入越界值
         if (req.width() != null && (req.width() < 640 || req.width() > 3840)) {
             return ResponseEntity.badRequest()
-                    .body(Map.of("message", "画布宽度需在 640–3840 之间"));
+                    .body(Map.of("message", I18n.t("画布宽度需在 640–3840 之间")));
         }
         if (req.height() != null && (req.height() < 480 || req.height() > 2160)) {
             return ResponseEntity.badRequest()
-                    .body(Map.of("message", "画布高度需在 480–2160 之间"));
+                    .body(Map.of("message", I18n.t("画布高度需在 480–2160 之间")));
         }
         // 名称改存 DB：扫描只对新游戏读 GAME_NAME，不会覆盖这里的修改
         if (req.name() != null && !req.name().isBlank()) {
@@ -233,7 +234,7 @@ public class GameMetaController {
                             ? ""
                             : io.github.sander_i.service.GameExePaths.resolve(dir, req.exeAlt()));
             if (!alt.isEmpty() && alt.equals(active)) {
-                throw new IllegalArgumentException("备用启动程序不能与当前启动程序相同");
+                throw new IllegalArgumentException(I18n.t("备用启动程序不能与当前启动程序相同"));
             }
             if (!active.equals(g.getExe() == null ? "" : g.getExe())
                     || !alt.equals(g.getExeAlt() == null ? "" : g.getExeAlt())) {
@@ -258,7 +259,7 @@ public class GameMetaController {
                 scanWriter.writeEnv(g);
             } catch (IOException e) {
                 return ResponseEntity.status(500)
-                        .body(Map.of("message", "写入 game.env 失败: " + e.getMessage()));
+                        .body(Map.of("message", I18n.t("写入 game.env 失败: {0}", e.getMessage())));
             }
         }
         return ResponseEntity.ok(Map.of(
@@ -296,7 +297,7 @@ public class GameMetaController {
             return ResponseEntity.notFound().build();
         }
         if (file == null || file.isEmpty()) {
-            return ResponseEntity.badRequest().body(Map.of("message", "没有收到文件"));
+            return ResponseEntity.badRequest().body(Map.of("message", I18n.t("没有收到文件")));
         }
         try (var in = file.getInputStream()) {
             GameMediaService.MediaView saved =
@@ -321,7 +322,8 @@ public class GameMetaController {
             return ResponseEntity.notFound().build();
         }
         if (!kind.equals("cover") && !kind.equals("cg")) {
-            return ResponseEntity.badRequest().body(Map.of("message", "kind 必须是 cover 或 cg"));
+            return ResponseEntity.badRequest()
+                    .body(Map.of("message", I18n.t("kind 必须是 cover 或 cg")));
         }
         return ResponseEntity.ok(gameMedia.ofGame(id, kind));
     }
@@ -391,9 +393,9 @@ public class GameMetaController {
     public ResponseEntity<?> tooLarge(
             org.springframework.web.multipart.MaxUploadSizeExceededException e) {
         return ResponseEntity.status(413)
-                .body(Map.of("message", "文件过大：图片上限 "
-                        + (media.imageMaxBytes() / 1024 / 1024) + " MB，视频上限 "
-                        + (media.videoMaxBytes() / 1024 / 1024) + " MB"));
+                .body(Map.of("message", I18n.t("文件过大：图片上限 {0} MB，视频上限 {1} MB",
+                        media.imageMaxBytes() / 1024 / 1024,
+                        media.videoMaxBytes() / 1024 / 1024)));
     }
 
     /** 保存公司关联后，若游戏没有图标则抓取首个有网址公司的站点图标 */
@@ -449,7 +451,7 @@ public class GameMetaController {
             if (ids == null) meta.resetOrderForGame(id);
             else meta.reorderForGame(id, ids);
         } else {
-            throw new IllegalArgumentException("未知维度: " + kind);
+            throw new IllegalArgumentException(I18n.t("未知维度: {0}", kind));
         }
     }
 

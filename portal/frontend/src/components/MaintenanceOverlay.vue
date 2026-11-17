@@ -7,13 +7,14 @@
   <div v-if="visible" class="maintenance-mask" role="alert" aria-live="assertive">
     <div class="maintenance-card">
       <span class="maintenance-spinner" aria-hidden="true"></span>
-      <h1>正在更新维护中</h1>
-      <p>门户正在部署新版本，恢复后页面会自动刷新，无需手动操作。</p>
+      <h1>{{ t("正在更新维护中") }}</h1>
+      <p>{{ t("门户正在部署新版本，恢复后页面会自动刷新，无需手动操作。") }}</p>
     </div>
   </div>
 </template>
 
 <script setup>
+import { t } from '../i18n.js'
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { onMaintenance, probeHealth } from '../api'
 

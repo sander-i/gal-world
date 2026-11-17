@@ -10,6 +10,7 @@
  * 关闭要等游戏自己存盘退出（10~15s），此时用户已经不在游玩页了，
  * 所以横幅挂在 App 上，任何页面都能看到进度。
  */
+import { t } from '../i18n.js'
 import { closing } from '../closing'
 </script>
 
@@ -17,14 +18,14 @@ import { closing } from '../closing'
   <div v-if="closing.active || closing.done" class="closing-banner" role="status" aria-live="polite">
     <div class="closing-head">
       <span class="closing-text">
-        {{ closing.done ? '游戏已关闭' : `正在关闭「${closing.name}」` }}
+        {{ closing.done ? t('游戏已关闭') : t("正在关闭「{0}」", closing.name) }}
       </span>
       <span class="closing-percent">{{ closing.done ? '' : closing.percent + '%' }}</span>
     </div>
     <div class="closing-track">
       <span class="closing-fill" :class="{ done: closing.done }" :style="{ width: closing.percent + '%' }" />
     </div>
-    <p v-if="!closing.done" class="closing-hint">等待游戏保存存档后退出，请不要关闭页面</p>
+    <p v-if="!closing.done" class="closing-hint">{{ t("等待游戏保存存档后退出，请不要关闭页面") }}</p>
   </div>
 </template>
 

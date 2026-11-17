@@ -8,6 +8,7 @@ package io.github.sander_i.service;
 import io.github.sander_i.config.PathConfig;
 import io.github.sander_i.deploy.DeployRun;
 import io.github.sander_i.domain.Game;
+import io.github.sander_i.i18n.I18n;
 import io.github.sander_i.platform.CommandRunner;
 import io.github.sander_i.platform.OsKind;
 import io.github.sander_i.repo.GameRepository;
@@ -95,6 +96,7 @@ public class GameImportService {
 
     private static Map<String, String> stepTitles() {
         Map<String, String> m = new LinkedHashMap<>();
+        // 存中文原文、输出时翻译：这个 Map 在类初始化期构造，那时还没有请求语言
         m.put("validate", "校验参数与目录");
         m.put("allocate", "分配显示号 / 端口 / 槽位");
         m.put("register", "写入 game.env 并入库");
@@ -166,7 +168,7 @@ public class GameImportService {
             this.req = req;
             this.slots = slots;
             for (String id : STEP_IDS) {
-                steps.add(new StepState(id, STEP_TITLES.get(id), "PENDING"));
+                steps.add(new StepState(id, I18n.t(STEP_TITLES.get(id)), "PENDING"));
             }
         }
     }
@@ -210,7 +212,7 @@ public class GameImportService {
                         }
                     });
         } catch (IOException e) {
-            warnings.add("扫描 games 目录失败: " + e.getMessage());
+            warnings.add(I18n.t("扫描 games 目录失败: {0}", e.getMessage()));
         }
         return new Candidates(dir.toString(), OsKind.current() == OsKind.LINUX, warnings, out);
     }
@@ -265,7 +267,7 @@ public class GameImportService {
         // register 步骤才写盘；先校验会把「正在执行」误报成「项目未注册」。
         // 改名与校验都必须在持锁状态下做，否则两个请求可能同时改同一个目录。
         if (!busy.compareAndSet(false, true)) {
-            throw new IllegalStateException("已有接入任务在执行，请稍后");
+            throw new IllegalStateException(I18n.t("已有接入任务在执行，请稍后"));
         }
         boolean renamed = false;
         // run 创建成功后改名即交接给后台任务，不再回滚；busy 也由队列任务释放。
@@ -280,7 +282,7 @@ public class GameImportService {
             raw = id == null ? "" : id;
             if (raw.isEmpty() || raw.contains("/") || raw.contains("\\")
                     || raw.equals(".") || raw.equals("..")) {
-                throw new IllegalArgumentException("目录名不合法：必须是 games 下的直接子目录");
+                throw new IllegalArgumentException(I18n.t("目录名不合法：必须是 games 下的直接子目录"));
             }
             rawDir = paths.gameDir(raw);
             Path gamesDir = paths.gamesDir();
@@ -288,7 +290,7 @@ public class GameImportService {
             // 否则 "../data" 之类会把 games 外的目录搬进来。
             Path rawAbs = rawDir.toAbsolutePath().normalize();
             if (!gamesDir.toAbsolutePath().normalize().equals(rawAbs.getParent())) {
-                throw new IllegalArgumentException("目录名不合法：必须是 games 下的直接子目录");
+                throw new IllegalArgumentException(I18n.t("目录名不合法：必须是 games 下的直接子目录"));
             }
             // 已合法的 id 保持原样：normalize 会把 a--b 折成 a-b 等，贸然改名会动用户的目录。
             // 合法 id 的重名交给 validator.validate 报「游戏已存在」，语义不变。
@@ -313,7 +315,7 @@ public class GameImportService {
                     .equals(targetDir.toAbsolutePath().normalize());
             if (!gid.equals(raw) && !sameDir && Files.isDirectory(rawDir, LinkOption.NOFOLLOW_LINKS)) {
                 if (Files.exists(targetDir)) {
-                    throw new IllegalArgumentException("目标目录已存在: " + gid);
+                    throw new IllegalArgumentException(I18n.t("目标目录已存在: {0}", gid));
                 }
                 Files.move(rawDir, targetDir);
                 renamed = true;
@@ -332,7 +334,7 @@ public class GameImportService {
             throw e;
         } catch (java.io.IOException e) {
             IllegalArgumentException wrapped = new IllegalArgumentException(
-                    "目录改名失败: " + e.getMessage(), e);
+                    I18n.t("目录改名失败: {0}", e.getMessage()), e);
             if (renamed) {
                 rollbackRename(wrapped, targetDir, rawDir, gid);
             }
@@ -360,7 +362,8 @@ public class GameImportService {
         } catch (java.io.IOException re) {
             cause.addSuppressed(re);
             throw new IllegalStateException(
-                    "目录改名回滚失败，目录现为 games/" + gid + "，请手动改回: " + cause.getMessage(),
+                    I18n.t("目录改名回滚失败，目录现为 games/{0}，请手动改回: {1}",
+                            gid, cause.getMessage()),
                     cause);
         }
     }
@@ -393,18 +396,18 @@ public class GameImportService {
     public String retry(String runId) {
         DeployRun old = find(runId);
         if (old.state() != DeployRun.State.FAILED) {
-            throw new IllegalStateException("只有失败的接入任务可以重试");
+            throw new IllegalStateException(I18n.t("只有失败的接入任务可以重试"));
         }
         Ctx ctx = contexts.get(runId);
         if (ctx == null) {
-            throw new IllegalStateException("没有该 run 的上下文");
+            throw new IllegalStateException(I18n.t("没有该 run 的上下文"));
         }
         return createAndRun(ctx.req, ctx.slots, failedStepIndex(ctx));
     }
 
     private String createAndRun(GameImportValidator.Normalized req, Slots slots, int fromIndex) {
         if (!busy.compareAndSet(false, true)) {
-            throw new IllegalStateException("已有接入任务在执行，请稍后");
+            throw new IllegalStateException(I18n.t("已有接入任务在执行，请稍后"));
         }
         try {
             return createAndRunLocked(req, slots, fromIndex, null);
@@ -425,10 +428,12 @@ public class GameImportService {
         runs.put(runId, run);
         contexts.put(runId, ctx);
         if (renamedFrom != null) {
-            run.log("目录改名: " + renamedFrom + " -> " + req.id());
+            run.log(I18n.t("目录改名: {0} -> {1}", renamedFrom, req.id()));
         }
+        // 后台线程没有请求上下文：固定提交时的语言，日志才会跟界面一致
+        String locale = I18n.locale();
         try {
-            queue.submit(() -> {
+            queue.submit(() -> I18n.runAs(locale, () -> {
                 try {
                     execute(run, ctx, fromIndex);
                 } catch (Exception e) {
@@ -437,7 +442,7 @@ public class GameImportService {
                 } finally {
                     busy.set(false);
                 }
-            });
+            }));
         } catch (RuntimeException e) {
             // 提交失败：清掉半成品，调用方回滚改名并释放 busy
             runs.remove(runId);
@@ -459,24 +464,25 @@ public class GameImportService {
                 String id = STEP_IDS.get(i);
                 if (i < fromIndex) {
                     setStep(ctx, id, "SUCCESS");
-                    run.log("[" + id + "] 已完成，跳过");
+                    run.log(I18n.t("[{0}] 已完成，跳过", id));
                     continue;
                 }
                 if (ctx.cancelled) {
-                    throw new IllegalStateException("已取消");
+                    throw new IllegalStateException(I18n.t("已取消"));
                 }
                 step(run, ctx, id);
                 switch (id) {
                     case "validate" ->
-                            run.log("校验通过: id=" + ctx.req.id() + ", exe=" + ctx.req.exe());
-                    case "allocate" -> run.log(String.format(
-                            "分配 display=:%d port=%d card=%d slot=%d",
+                            run.log(I18n.t("校验通过: id={0}, exe={1}",
+                                    ctx.req.id(), ctx.req.exe()));
+                    case "allocate" -> run.log(I18n.t(
+                            "分配 display=:{0} port={1} card={2} slot={3}",
                             ctx.slots.displayNum(), ctx.slots.port(),
                             ctx.slots.loopbackCard(), ctx.slots.loopbackSlot()));
                     case "register" -> register(run, ctx);
                     case "wineboot" -> wineboot(run, ctx);
                     case "fonts" -> fonts(run, ctx);
-                    default -> throw new IllegalStateException("未知步骤: " + id);
+                    default -> throw new IllegalStateException(I18n.t("未知步骤: {0}", id));
                 }
                 done(run, ctx, id);
             }
@@ -484,7 +490,7 @@ public class GameImportService {
                 run.state(DeployRun.State.CANCELLED);
                 return;
             }
-            run.log("接入完成");
+            run.log(I18n.t("接入完成"));
             run.state(DeployRun.State.SUCCESS);
         } catch (Exception e) {
             String stepId = ctx.current.get();
@@ -521,7 +527,7 @@ public class GameImportService {
             throw e;
         }
         ctx.registered = true;
-        run.log("已写入 " + paths.gameEnv(ctx.req.id()));
+        run.log(I18n.t("已写入 {0}", paths.gameEnv(ctx.req.id())));
         snapshotOriginalSaves(run, ctx.req.id());
     }
 
@@ -534,18 +540,18 @@ public class GameImportService {
     private void snapshotOriginalSaves(DeployRun run, String id) {
         try {
             if (saves.hasOriginal(id)) {
-                run.log("已有原始存档备份，跳过");
+                run.log(I18n.t("已有原始存档备份，跳过"));
                 return;
             }
             if (saves.saveDirs(id).isEmpty()) {
-                run.log("未发现存档目录，跳过原始存档备份");
+                run.log(I18n.t("未发现存档目录，跳过原始存档备份"));
                 return;
             }
-            Path archive = saves.backup(id, "原始存档",
-                    "导入游戏时自动留存的原始存档", SaveService.KIND_ORIGINAL);
-            run.log("已备份原始存档: " + archive.getFileName());
+            Path archive = saves.backup(id, I18n.t("原始存档"),
+                    I18n.t("导入游戏时自动留存的原始存档"), SaveService.KIND_ORIGINAL);
+            run.log(I18n.t("已备份原始存档: {0}", archive.getFileName()));
         } catch (IOException | RuntimeException e) {
-            run.log("WARN: 原始存档备份失败，继续: " + e.getMessage());
+            run.log(I18n.t("WARN: 原始存档备份失败，继续: {0}", e.getMessage()));
         }
     }
 
@@ -560,7 +566,7 @@ public class GameImportService {
                 List.of("xvfb-run", "-a", "wineboot", "-u"), env, WINEBOOT_TIMEOUT);
         if (exit != 0) {
             throw new IllegalStateException(
-                    "wineboot 失败（exit=" + exit + "）；请确认已安装 wine 与 xvfb-run");
+                    I18n.t("wineboot 失败（exit={0}）；请确认已安装 wine 与 xvfb-run", exit));
         }
     }
 
@@ -569,14 +575,14 @@ public class GameImportService {
         Path dst = prefix.resolve("drive_c/windows/Fonts");
         Path src = Path.of(fontPath);
         if (!Files.isRegularFile(src)) {
-            run.log("WARN: 字体文件不存在，跳过: " + src);
+            run.log(I18n.t("WARN: 字体文件不存在，跳过: {0}", src));
         } else {
             try {
                 Files.createDirectories(dst);
                 Files.copy(src, dst.resolve(src.getFileName()), StandardCopyOption.REPLACE_EXISTING);
-                run.log("已安装字体: " + src.getFileName());
+                run.log(I18n.t("已安装字体: {0}", src.getFileName()));
             } catch (IOException e) {
-                run.log("WARN: 字体安装失败，继续: " + e.getMessage());
+                run.log(I18n.t("WARN: 字体安装失败，继续: {0}", e.getMessage()));
             }
         }
 
@@ -585,7 +591,7 @@ public class GameImportService {
         // wine-fonts.sh 生成 family 名匹配的字体并写入注册表（幂等）。
         Path script = Path.of(fontScript);
         if (!Files.isRegularFile(script)) {
-            run.log("WARN: 字体注册脚本不存在，跳过: " + script);
+            run.log(I18n.t("WARN: 字体注册脚本不存在，跳过: {0}", script));
             return;
         }
         Map<String, String> env = new LinkedHashMap<>();
@@ -595,7 +601,7 @@ public class GameImportService {
         int exit = exec.streaming(run, List.of("bash", script.toString(), prefix.toString()),
                 env, FONTS_TIMEOUT);
         if (exit != 0) {
-            run.log("WARN: 字体注册脚本退出码 " + exit + "（不阻塞接入）");
+            run.log(I18n.t("WARN: 字体注册脚本退出码 {0}（不阻塞接入）", exit));
         }
     }
 
@@ -623,7 +629,7 @@ public class GameImportService {
 
     private static String stepJson(String id, String state) {
         return "{\"id\":\"" + id + "\",\"state\":\"" + state
-                + "\",\"title\":\"" + STEP_TITLES.get(id) + "\"}";
+                + "\",\"title\":\"" + I18n.t(STEP_TITLES.get(id)) + "\"}";
     }
 
     private static void setStep(Ctx ctx, String id, String state) {
@@ -650,9 +656,16 @@ public class GameImportService {
     public DeployRun find(String runId) {
         DeployRun run = runs.get(runId);
         if (run == null) {
-            throw new IllegalArgumentException("没有这个 run: " + runId);
+            throw new RunNotFoundException(I18n.t("没有这个 run: {0}", runId));
         }
         return run;
+    }
+
+    /** run 不存在；控制器据此回 404 而不是 400 */
+    public static class RunNotFoundException extends IllegalArgumentException {
+        public RunNotFoundException(String message) {
+            super(message);
+        }
     }
 
     public RunSnapshot snapshot(String runId) {
@@ -669,7 +682,7 @@ public class GameImportService {
     public void cancel(String runId) {
         DeployRun run = find(runId);
         if (run.terminal()) {
-            throw new IllegalStateException("任务已结束，无法取消");
+            throw new IllegalStateException(I18n.t("任务已结束，无法取消"));
         }
         Ctx ctx = contexts.get(runId);
         if (ctx != null) {
@@ -683,7 +696,7 @@ public class GameImportService {
             deleteRegistration(ctx.req.id());
             ctx.registered = false;
         }
-        run.log("已取消");
+        run.log(I18n.t("已取消"));
         run.state(DeployRun.State.CANCELLED);
     }
 
@@ -696,7 +709,7 @@ public class GameImportService {
         }
         deleteRegistration(ctx.req.id());
         ctx.registered = false;
-        runs.get(runId).log("已回滚注册: " + ctx.req.id());
+        runs.get(runId).log(I18n.t("已回滚注册: {0}", ctx.req.id()));
     }
 
     private void deleteRegistration(String id) {

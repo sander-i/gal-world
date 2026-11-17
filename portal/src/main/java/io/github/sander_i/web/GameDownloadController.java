@@ -5,6 +5,7 @@
 
 package io.github.sander_i.web;
 
+import io.github.sander_i.i18n.I18n;
 import io.github.sander_i.repo.GameRepository;
 import io.github.sander_i.service.GameDownloadService;
 import io.github.sander_i.service.SessionService;
@@ -56,7 +57,7 @@ public class GameDownloadController {
         if (st.state() == SessionService.State.RUNNING) {
             return ResponseEntity.status(HttpStatus.CONFLICT)
                     .body(Map.of("code", "SESSION_RUNNING",
-                            "message", "游戏正在运行，请先关闭游戏再打包下载"));
+                            "message", I18n.t("游戏正在运行，请先关闭游戏再打包下载")));
         }
         return ResponseEntity.status(HttpStatus.ACCEPTED).body(downloads.start(id));
     }
@@ -102,7 +103,8 @@ public class GameDownloadController {
 
     private io.github.sander_i.domain.Game requireGame(String id) {
         return repo.findById(id)
-                .orElseThrow(() -> new GameDownloadService.NotFound("没有这个游戏: " + id));
+                .orElseThrow(() -> new GameDownloadService.NotFound(
+                        I18n.t("没有这个游戏: {0}", id)));
     }
 
     @ExceptionHandler(GameDownloadService.NotFound.class)

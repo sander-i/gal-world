@@ -11,14 +11,16 @@
  *   stream 55-95  等待串流
  *   done   100    就绪
  */
+import { t } from './i18n.js'
+
 export const LAUNCH_STEPS = ['start', 'stream', 'done']
 
 export const LAUNCH_LABELS = {
-  start: '正在启动游戏…',
-  stream: '连接串流服务…',
-  done: '已启动',
-  stop: '正在关闭游戏…',
-  closed: '已关闭',
+  start: t('正在启动游戏…'),
+  stream: t('连接串流服务…'),
+  done: t('已启动'),
+  stop: t('正在关闭游戏…'),
+  closed: t('已关闭'),
 }
 
 const RANGES = {

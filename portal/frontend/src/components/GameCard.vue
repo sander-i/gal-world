@@ -10,6 +10,7 @@
  * 首页传 recommend 接口的条目、列表页传 GameView，两者字段并集覆盖本组件所需；
  * 首页条目没有 width/height/iconPath 时对应位置留空，不报错。
  */
+import { t } from '../i18n.js'
 import MediaRotator from './MediaRotator.vue'
 import { formatPlaytimeShort } from '../format'
 import { latencyTone } from '../latency'
@@ -30,11 +31,11 @@ defineProps({
 defineEmits(['toggle', 'open'])
 
 const STATE_TEXT = {
-  RUNNING: '运行中',
-  STOPPED: '已停止',
-  FAILED: '异常',
-  UNKNOWN: '未知',
-  UNSUPPORTED: '不支持',
+  RUNNING: t('运行中'),
+  STOPPED: t('已停止'),
+  FAILED: t('异常'),
+  UNKNOWN: t('未知'),
+  UNSUPPORTED: t('不支持'),
 }
 </script>
 
@@ -75,17 +76,17 @@ const STATE_TEXT = {
       {{ game.localizations.map((g) => g.name).join(' × ') }}
     </div>
     <div class="card-tags">
-      <span v-for="t in (game.tags || [])" :key="t" class="mini-tag">{{ t }}</span>
+      <span v-for="tag in (game.tags || [])" :key="tag" class="mini-tag">{{ tag }}</span>
     </div>
     <div v-if="game.width && game.height" class="card-meta">
       {{ game.width }}×{{ game.height }}
       <span class="dot-sep">·</span>
-      <span :title="'累计游玩 ' + game.totalSeconds + ' 秒'">
+      <span :title="t('累计游玩 {0} 秒', game.totalSeconds)">
         {{ formatPlaytimeShort(game.totalSeconds) }}
       </span>
     </div>
     <div v-else class="card-meta">
-      <span :title="'累计游玩 ' + game.totalSeconds + ' 秒'">
+      <span :title="t('累计游玩 {0} 秒', game.totalSeconds)">
         {{ formatPlaytimeShort(game.totalSeconds) }}
       </span>
     </div>
@@ -95,12 +96,12 @@ const STATE_TEXT = {
         :class="{ danger: game.state === 'RUNNING' && !launching }"
         :disabled="busy || launching"
         @click.stop="$emit('toggle', $event)"
-      >{{ launching ? (action === 'stop' ? '关闭中…' : '启动中…') : game.state === 'RUNNING' ? '停止' : '启动' }}</button>
+      >{{ launching ? (action === 'stop' ? t('关闭中…') : t('启动中…')) : game.state === 'RUNNING' ? t('停止') : t('启动') }}</button>
       <button
         v-if="game.state === 'RUNNING' && !launching"
         class="mini-btn primary"
         @click.stop="$emit('open', $event)"
-      >进入</button>
+      >{{ t("进入") }}</button>
     </div>
     <div v-if="launching" class="card-launch">
       <div class="card-launch-track">

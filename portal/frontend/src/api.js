@@ -3,7 +3,21 @@
  * Copyright (c) 2026 sander
  */
 
+import { currentLocale, t } from './i18n.js'
+
 const BASE = ''
+
+/**
+ * 语言头：后端按它决定异常文案的语言（与 LocaleFilter.HEADER 一致）。
+ * 所有请求都带，读写一致——报错也要跟界面同语言。
+ */
+const LOCALE_HEADER = 'X-GalWorld-Locale'
+
+/** 当前界面语言的请求头；语言未就绪时为空 */
+function localeHeader() {
+  const v = currentLocale()
+  return v ? { [LOCALE_HEADER]: v } : {}
+}
 
 /** 部署接口的令牌头（与后端 DeploySecurity.HEADER 一致） */
 const DEPLOY_HEADER = 'X-GalWorld-Deploy-Token'
@@ -72,7 +86,7 @@ function signalMaintenance() {
 }
 
 export class MaintenanceError extends Error {
-  constructor(message = '门户正在更新维护') {
+  constructor(message = t('门户正在更新维护')) {
     super(message)
     this.name = 'MaintenanceError'
   }
@@ -84,9 +98,12 @@ export function isMaintenanceError(e) {
 
 /** 带维护判定的 fetch：网络中断与网关类 5xx 都视为维护期 */
 async function guardedFetch(input, init) {
+  // 语言头统一在这里补：所有 API 请求都走它，报错语言才能跟界面一致
+  const merged = { ...(init || {}) }
+  merged.headers = { ...localeHeader(), ...(merged.headers || {}) }
   let res
   try {
-    res = await fetch(input, init)
+    res = await fetch(input, merged)
   } catch (e) {
     // 主动取消（SSE 断开、页面卸载）不算维护
     if (e && e.name === 'AbortError') throw e
@@ -118,7 +135,7 @@ async function req(path, options = {}) {
   const method = (options.method || 'GET').toUpperCase()
   const isWrite = method !== 'GET' && method !== 'HEAD'
   const { headers: givenHeaders, ...rest } = options
-  const base = { 'Content-Type': 'application/json', ...(givenHeaders || {}) }
+  const base = { 'Content-Type': 'application/json', ...localeHeader(), ...(givenHeaders || {}) }
   const headers = isWrite ? writeHeaders(base) : base
   const res = await guardedFetch(BASE + path, {
     // 列表/详情/fetch 一律不走 HTTP 缓存：编辑页改完顺序后，
@@ -129,7 +146,7 @@ async function req(path, options = {}) {
   })
   if (!res.ok) {
     if (res.status === 403 && isWrite) {
-      throw new Error('写操作被拒绝：请在「后台管理」页填写或更新写接口令牌')
+      throw new Error(t('写操作被拒绝：请在「后台管理」页填写或更新写接口令牌'))
     }
     const text = await res.text().catch(() => '')
     throw new Error(`${res.status} ${res.statusText}${text ? ' — ' + text : ''}`)
@@ -155,6 +172,7 @@ function uploadFile(id, kind, file, onProgress, onXhr) {
     const xhr = new XMLHttpRequest()
     xhr.open('POST', `${BASE}/api/games/${encodeURIComponent(id)}/${kind}`)
     // 上传是写操作，同样需要写接口令牌（未启用时后端放行，头为空也不影响）
+    for (const [k, v] of Object.entries(localeHeader())) xhr.setRequestHeader(k, v)
     const wt = getWriteToken()
     if (wt) xhr.setRequestHeader(WRITE_HEADER, wt)
     if (onXhr) onXhr(xhr)
@@ -186,12 +204,12 @@ function uploadFile(id, kind, file, onProgress, onXhr) {
       } catch {
         // 非 JSON，保留状态码
       }
-      if (xhr.status === 413) msg = '文件过大：请到「设置」页查看当前图片 / 视频上限'
+      if (xhr.status === 413) msg = t('文件过大：请到「设置」页查看当前图片 / 视频上限')
       reject(new Error(msg))
     }
-    xhr.onerror = () => reject(new Error('网络中断，上传未完成（大文件请检查连接后重试）'))
-    xhr.ontimeout = () => reject(new Error('上传超时'))
-    xhr.onabort = () => reject(new Error('上传已取消'))
+    xhr.onerror = () => reject(new Error(t('网络中断，上传未完成（大文件请检查连接后重试）')))
+    xhr.ontimeout = () => reject(new Error(t('上传超时')))
+    xhr.onabort = () => reject(new Error(t('上传已取消')))
     xhr.send(form)
   })
 }
@@ -213,6 +231,7 @@ function uploadChunk(uploadId, fileId, offset, blob, sha256, onProgress, onXhr) 
     xhr.open('PUT', url)
     xhr.setRequestHeader('Content-Type', 'application/octet-stream')
     if (sha256) xhr.setRequestHeader('X-Chunk-SHA256', sha256)
+    for (const [k, v] of Object.entries(localeHeader())) xhr.setRequestHeader(k, v)
     const wt = getWriteToken()
     if (wt) xhr.setRequestHeader(WRITE_HEADER, wt)
     if (onXhr) onXhr(xhr)
@@ -251,10 +270,10 @@ function uploadChunk(uploadId, fileId, offset, blob, sha256, onProgress, onXhr) 
       err.actualOffset = actualOffset
       reject(err)
     }
-    xhr.onerror = () => reject(new Error('网络中断，分片上传失败'))
-    xhr.ontimeout = () => reject(new Error('分片上传超时'))
+    xhr.onerror = () => reject(new Error(t('网络中断，分片上传失败')))
+    xhr.ontimeout = () => reject(new Error(t('分片上传超时')))
     xhr.onabort = () => {
-      const err = new Error('上传已暂停')
+      const err = new Error(t('上传已暂停'))
       err.aborted = true
       reject(err)
     }
@@ -486,6 +505,24 @@ export const api = {
   /** 派生图清理：仅开关关闭时可用 */
   imageVariants: () => req('/api/settings/image-variants'),
   clearImageVariants: () => req('/api/settings/image-variants', { method: 'DELETE' }),
+
+  // ---------------- 国际化 ----------------
+
+  /** 语言清单（公开接口）：id / 名称 / 是否内置 / 键数 */
+  i18nList: () => req('/api/i18n'),
+  /** 安装或覆盖语言包；body 为 { json } 或 { id, name, messages } */
+  installI18n: (body, token) =>
+    req('/api/admin/i18n', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', [DEPLOY_HEADER]: token },
+      body: JSON.stringify(body),
+    }),
+  /** 删除外部语言包；内置语言不可删 */
+  deleteI18n: (id, token) =>
+    req(`/api/admin/i18n/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+      headers: { [DEPLOY_HEADER]: token },
+    }),
 
   // ---------------- 后台管理 ----------------
   adminSettings: (token) =>

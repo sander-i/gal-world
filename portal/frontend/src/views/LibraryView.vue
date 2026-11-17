@@ -4,6 +4,7 @@
 -->
 
 <script setup>
+import { t } from '../i18n.js'
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { api } from '../api'
@@ -59,7 +60,7 @@ const { busyId, launches, toggle: launchToggle } = useGameLaunch({
   onStarted: (id) => setGameState(id, 'RUNNING'),
   onStopped: (id) => {
     setGameState(id, 'STOPPED')
-    notify.success('游戏已关闭')
+    notify.success(t('游戏已关闭'))
   },
 })
 
@@ -138,8 +139,8 @@ function fmtDay(iso) {
   const today = new Date()
   const sameDay = d.toDateString() === today.toDateString()
   const p = (x) => String(x).padStart(2, '0')
-  return sameDay ? `今天 ${p(d.getHours())}:${p(d.getMinutes())}`
-    : `${d.getMonth() + 1}月${d.getDate()}日`
+  return sameDay ? t("今天 {0}:{1}", p(d.getHours()), p(d.getMinutes()))
+    : t("{0}月{1}日", d.getMonth() + 1, d.getDate())
 }
 
 onMounted(load)
@@ -150,17 +151,17 @@ onMounted(load)
     <header class="topbar">
       <div class="brand">GAL <em>WORLD</em></div>
       <div class="spacer" />
-      <router-link to="/games/import" class="ghost-btn">＋ 接入游戏</router-link>
-      <router-link to="/games" class="ghost-btn">全部游戏</router-link>
-      <router-link v-if="companyEnabled" to="/companies" class="ghost-btn">公司维护</router-link>
-      <router-link v-if="localizationEnabled" to="/localization-groups" class="ghost-btn">汉化组维护</router-link>
-      <router-link to="/tags" class="ghost-btn">标签维护</router-link>
-      <router-link to="/settings" class="ghost-btn">设置</router-link>
-      <router-link to="/admin" class="ghost-btn" title="后台管理">管理</router-link>
+      <router-link to="/games/import" class="ghost-btn">{{ t("＋ 接入游戏") }}</router-link>
+      <router-link to="/games" class="ghost-btn">{{ t("全部游戏") }}</router-link>
+      <router-link v-if="companyEnabled" to="/companies" class="ghost-btn">{{ t("公司维护") }}</router-link>
+      <router-link v-if="localizationEnabled" to="/localization-groups" class="ghost-btn">{{ t("汉化组维护") }}</router-link>
+      <router-link to="/tags" class="ghost-btn">{{ t("标签维护") }}</router-link>
+      <router-link to="/settings" class="ghost-btn">{{ t("设置") }}</router-link>
+      <router-link to="/admin" class="ghost-btn" :title="t('后台管理')">{{ t("管理") }}</router-link>
     </header>
 
-    <div v-if="loading" class="loading">加载中…</div>
-    <div v-else-if="error" class="empty">加载失败：{{ error }}</div>
+    <div v-if="loading" class="loading">{{ t("加载中…") }}</div>
+    <div v-else-if="error" class="empty">{{ t("加载失败：{0}", error) }}</div>
 
     <template v-else>
       <!-- 推荐位：medium 大图 / off 只留横条 -->
@@ -187,9 +188,8 @@ onMounted(load)
             <span class="hero-reason">{{ hero.reason }}</span>
           </div>
           <div class="hero-meta">
-            累计 {{ formatPlaytimeShort(hero.totalSeconds) }}
-            <span v-if="hero.lastPlayed" class="dot-sep">·</span>
-            <span v-if="hero.lastPlayed">上次 {{ fmtDay(hero.lastPlayed) }}</span>
+            {{ t("累计 {0}", formatPlaytimeShort(hero.totalSeconds)) }}<span v-if="hero.lastPlayed" class="dot-sep">·</span>
+            <span v-if="hero.lastPlayed">{{ t("上次 {0}", fmtDay(hero.lastPlayed)) }}</span>
           </div>
           <div class="hero-actions">
             <button
@@ -197,19 +197,19 @@ onMounted(load)
               class="btn primary hero-cta"
               :disabled="heroBusy"
               @click.stop="openHero"
-            >继续游玩</button>
+            >{{ t("继续游玩") }}</button>
             <button
               v-else
               class="btn primary hero-cta"
               :disabled="heroBusy"
               @click.stop="openHero"
-            >{{ heroAction?.action === 'start' ? '启动中 ' + heroAction.percent + '%' : '开始游戏' }}</button>
+            >{{ heroAction?.action === 'start' ? t('启动中 ') + heroAction.percent + '%' : t('开始游戏') }}</button>
             <button
               v-if="hero.state === 'RUNNING'"
               class="btn hero-cta"
               :disabled="heroBusy"
               @click.stop="stopHero"
-            >{{ heroAction?.action === 'stop' ? '关闭中 ' + heroAction.percent + '%' : '关闭游戏' }}</button>
+            >{{ heroAction?.action === 'stop' ? t('关闭中 ') + heroAction.percent + '%' : t('关闭游戏') }}</button>
           </div>
           <div v-if="heroAction" class="action-progress">
             <div class="action-progress-track">
@@ -232,15 +232,15 @@ onMounted(load)
         <div class="hero-strip">
           <span class="hero-strip-label">{{ hero.reason }}</span>
           <b>{{ hero.name }}</b>
-          <span class="hero-strip-meta">累计 {{ formatPlaytimeShort(hero.totalSeconds) }}</span>
+          <span class="hero-strip-meta">{{ t("累计 {0}", formatPlaytimeShort(hero.totalSeconds)) }}</span>
           <template v-if="hero.state === 'RUNNING'">
-            <button class="btn primary sm" :disabled="heroBusy" @click.stop="openHero">继续游玩</button>
+            <button class="btn primary sm" :disabled="heroBusy" @click.stop="openHero">{{ t("继续游玩") }}</button>
             <button class="btn sm" :disabled="heroBusy" @click.stop="stopHero">
-              {{ heroAction?.action === 'stop' ? '关闭中 ' + heroAction.percent + '%' : '关闭游戏' }}
+              {{ heroAction?.action === 'stop' ? t('关闭中 ') + heroAction.percent + '%' : t('关闭游戏') }}
             </button>
           </template>
           <button v-else class="btn primary sm" :disabled="heroBusy" @click.stop="openHero">
-            {{ heroAction?.action === 'start' ? '启动中 ' + heroAction.percent + '%' : '开始游戏' }}
+            {{ heroAction?.action === 'start' ? t('启动中 ') + heroAction.percent + '%' : t('开始游戏') }}
           </button>
         </div>
         <div v-if="heroAction" class="action-progress hero-progress">
@@ -255,14 +255,13 @@ onMounted(load)
       </section>
 
       <div class="section-head">
-        <h2>为你推荐</h2>
-        <span class="muted-sm">按推荐算法排序的前 {{ RECOMMEND_COUNT }} 款</span>
-        <router-link to="/games" class="ghost-btn">全部游戏 →</router-link>
+        <h2>{{ t("为你推荐") }}</h2>
+        <span class="muted-sm">{{ t("按推荐算法排序的前 {0} 款", RECOMMEND_COUNT) }}</span>
+        <router-link to="/games" class="ghost-btn">{{ t("全部游戏 →") }}</router-link>
       </div>
 
       <div v-if="!recommended.length" class="empty">
-        还没有游戏。用 <code>galworld add</code> 注册后刷新。
-      </div>
+        {{ t("还没有游戏。用") }}<code>galworld add</code> {{ t("注册后刷新。") }}</div>
       <div v-else class="grid grid-fixed-5">
         <article
           v-for="g in recommended"

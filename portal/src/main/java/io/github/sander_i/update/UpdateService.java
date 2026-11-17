@@ -8,6 +8,7 @@ package io.github.sander_i.update;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.sander_i.config.PathConfig;
+import io.github.sander_i.i18n.I18n;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -93,16 +94,16 @@ public class UpdateService {
             CheckResult out;
             if (r == null) {
                 out = new CheckResult(currentVersion, "", "", false,
-                        "仓库暂无 Release 发布",
+                        I18n.t("仓库暂无 Release 发布"),
                         client.releasesWebUrl(), "");
             } else {
                 boolean newer = Version.isStableTag(r.tag())
                         && Version.isNewer(r.tag(), currentVersion);
                 String message;
                 if (!Version.isStableTag(r.tag())) {
-                    message = "最新发布为预发布版本 " + r.tag() + "，需在管理页覆盖更新";
+                    message = I18n.t("最新发布为预发布版本 {0}，需在管理页覆盖更新", r.tag());
                 } else {
-                    message = newer ? "发现新版本 " + r.tag() : "当前已是最新版本";
+                    message = newer ? I18n.t("发现新版本 {0}", r.tag()) : I18n.t("当前已是最新版本");
                 }
                 out = new CheckResult(currentVersion, r.tag(), r.name(), newer,
                         message,
@@ -114,7 +115,7 @@ public class UpdateService {
             cachedAt = now;
             return out;
         } catch (IOException e) {
-            throw new IllegalStateException("检查更新失败：" + e.getMessage(), e);
+            throw new IllegalStateException(I18n.t("检查更新失败：{0}", e.getMessage()), e);
         }
     }
 
@@ -123,29 +124,29 @@ public class UpdateService {
     }
 
     public synchronized String apply(String version, String confirm, boolean override) {
-        if (!enabled) throw new UnsupportedOperationException("当前环境未启用远程更新");
+        if (!enabled) throw new UnsupportedOperationException(I18n.t("当前环境未启用远程更新"));
         if (override && !allowOverride) {
-            throw new UnsupportedOperationException("当前环境未启用覆盖更新");
+            throw new UnsupportedOperationException(I18n.t("当前环境未启用覆盖更新"));
         }
         if (version == null || version.isBlank()) {
-            throw new IllegalArgumentException("缺少目标版本");
+            throw new IllegalArgumentException(I18n.t("缺少目标版本"));
         }
         String target = Version.normalize(version);
         // 覆盖更新按用户原样输入比对：v0.1.4-pr7 归一化后是 0.1.4，直接用 target 会要求错文本
         String expected = override ? "OVERRIDE " + version.strip() : "UPDATE " + target;
         if (!expected.equals(confirm == null ? "" : confirm.strip())) {
-            throw new IllegalArgumentException("确认文本必须是 " + expected);
+            throw new IllegalArgumentException(I18n.t("确认文本必须是 {0}", expected));
         }
         if (!override && !Version.isNewer(target, currentVersion)) {
-            throw new IllegalArgumentException("目标版本必须高于当前版本 " + currentVersion);
+            throw new IllegalArgumentException(I18n.t("目标版本必须高于当前版本 {0}", currentVersion));
         }
         if (!launcher.supported()) {
-            throw new UnsupportedOperationException("当前平台不支持远程更新");
+            throw new UnsupportedOperationException(I18n.t("当前平台不支持远程更新"));
         }
         Map<String, Object> st = status();
         if (ACTIVE.contains(String.valueOf(st.get("phase")))) {
             if (!isStale(st)) {
-                throw new IllegalStateException("已有更新任务在执行");
+                throw new IllegalStateException(I18n.t("已有更新任务在执行"));
             }
             // 更新器崩溃/被信号杀死时可能留下 queued 等活跃状态；超过 10 分钟视为残留，
             // 允许重新申请，否则一次异常就会永久 409。
@@ -164,22 +165,22 @@ public class UpdateService {
                     matchedTag = alt;
                 }
             }
-            if (release == null) throw new IllegalArgumentException("Release 不存在: " + version);
+            if (release == null) throw new IllegalArgumentException(I18n.t("Release 不存在: {0}", version));
             if (release.manifestUrl().isBlank()) {
-                throw new IllegalArgumentException("Release 缺少 release-manifest.json");
+                throw new IllegalArgumentException(I18n.t("Release 缺少 release-manifest.json"));
             }
             JsonNode manifest = mapper.readTree(
                     client.assetText(release.manifestUrl(), MANIFEST_MAX));
             String mv = Version.normalize(manifest.path("version").asText(""));
             String mt = manifest.path("tag").asText("");
             if (!mv.equals(target) || !mt.equals(matchedTag)) {
-                throw new IllegalArgumentException("manifest 版本或 tag 不匹配");
+                throw new IllegalArgumentException(I18n.t("manifest 版本或 tag 不匹配"));
             }
             String from = manifest.path("minFromVersion").asText("");
             // 覆盖更新可以降级，minFromVersion 必然不满足；下限由更新器实检 jar 保证
             if (!override && !from.isBlank() && !Version.isNewer(currentVersion, from)
                     && !Version.normalize(currentVersion).equals(Version.normalize(from))) {
-                throw new IllegalArgumentException("当前版本过低，低于 minFromVersion " + from);
+                throw new IllegalArgumentException(I18n.t("当前版本过低，低于 minFromVersion {0}", from));
             }
             String jobId = "upd-" + Instant.now().toEpochMilli() + "-"
                     + UUID.randomUUID().toString().substring(0, 4);
@@ -191,12 +192,12 @@ public class UpdateService {
                 launchUpdater(jobId);
             } catch (RuntimeException | IOException e) {
                 writeStatus(jobId, startedAt, "failed", target, currentVersion,
-                        "启动更新器失败：" + e.getMessage());
+                        I18n.t("启动更新器失败：{0}", e.getMessage()));
                 throw e;
             }
             return jobId;
         } catch (IOException e) {
-            throw new IllegalStateException("申请更新失败：" + e.getMessage(), e);
+            throw new IllegalStateException(I18n.t("申请更新失败：{0}", e.getMessage()), e);
         }
     }
 

@@ -16,14 +16,16 @@
  *   player  70-90  加载播放器页面
  *   frame   90-100 等待首帧画面
  */
+import { t } from './i18n.js'
+
 export const PHASES = ['prepare', 'start', 'stream', 'player', 'frame']
 
 export const PHASE_LABELS = {
-  prepare: '查询会话状态…',
-  start: '正在启动游戏…',
-  stream: '连接串流服务…',
-  player: '加载播放器…',
-  frame: '等待画面…',
+  prepare: t('查询会话状态…'),
+  start: t('正在启动游戏…'),
+  stream: t('连接串流服务…'),
+  player: t('加载播放器…'),
+  frame: t('等待画面…'),
 }
 
 const RANGES = {

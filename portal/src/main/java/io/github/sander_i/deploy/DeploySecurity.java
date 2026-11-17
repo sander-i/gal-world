@@ -6,6 +6,7 @@
 package io.github.sander_i.deploy;
 
 import io.github.sander_i.config.PathConfig;
+import io.github.sander_i.i18n.I18n;
 import jakarta.annotation.PostConstruct;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
@@ -80,7 +81,7 @@ public class DeploySecurity {
     public void check(HttpServletRequest req) {
         String given = req.getHeader(HEADER);
         if (given == null || !constantTimeEquals(given, token)) {
-            throw new SecurityException("缺少或错误的部署令牌");
+            throw new SecurityException(I18n.t("缺少或错误的部署令牌"));
         }
         String remote = req.getRemoteAddr();
         // IPv6 回环（::1 / 0:0:0:0:0:0:0:1）等价于 127.0.0.1，CIDR 只解析 IPv4，这里单独放行
@@ -95,7 +96,7 @@ public class DeploySecurity {
                 return;
             }
         }
-        throw new SecurityException("来源地址不在允许网段: " + remote);
+        throw new SecurityException(I18n.t("来源地址不在允许网段: {0}", remote));
     }
 
     private static boolean constantTimeEquals(String a, String b) {
@@ -186,7 +187,7 @@ public class DeploySecurity {
         private static int ipv4(String s) {
             String[] parts = s.split("\\.");
             if (parts.length != 4) {
-                throw new IllegalArgumentException("不是 IPv4: " + s);
+                throw new IllegalArgumentException(I18n.t("不是 IPv4: {0}", s));
             }
             int v = 0;
             for (String part : parts) {

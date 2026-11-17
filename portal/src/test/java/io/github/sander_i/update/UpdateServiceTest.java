@@ -28,6 +28,17 @@ class UpdateServiceTest {
     UpdaterLauncher launcher;
     UpdateService service;
 
+    /** 断言的是翻译后的模板：显式给一个语言，否则 t() 走「无请求语言不翻译」分支 */
+    @org.junit.jupiter.api.BeforeEach
+    void setLocale() {
+        io.github.sander_i.i18n.LocaleContext.set("zh-CN");
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    void clearLocale() {
+        io.github.sander_i.i18n.LocaleContext.clear();
+    }
+
     @BeforeEach
     void setUp() throws Exception {
         PathConfig paths = new PathConfig(root.toString());
@@ -359,7 +370,7 @@ class UpdateServiceTest {
         when(client.latest()).thenReturn(release("v0.1.4-pr7", "u"));
         var r = service.check();
         assertFalse(r.hasUpdate());
-        assertTrue(r.message().contains("预发布"));
+                assertTrue(r.message().contains("预发布"), "message=" + r.message());
     }
 
     @Test

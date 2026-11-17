@@ -6,13 +6,15 @@
 /**
  * 游玩时长格式化：秒 → "12 小时 34 分" / "45 分" / "不足 1 分"
  */
+import { t } from './i18n.js'
+
 export function formatPlaytime(seconds) {
   const s = Math.max(0, Math.floor(seconds || 0))
-  if (s < 60) return s > 0 ? '不足 1 分钟' : '未游玩'
+  if (s < 60) return s > 0 ? t('不足 1 分钟') : t('未游玩')
   const h = Math.floor(s / 3600)
   const m = Math.floor((s % 3600) / 60)
-  if (h > 0) return `${h} 小时 ${m} 分`
-  return `${m} 分钟`
+  if (h > 0) return t("{0} 小时 {1} 分", h, m)
+  return t("{0} 分钟", m)
 }
 
 /** 简短版，用于卡片角标 */

@@ -5,6 +5,7 @@
 
 package io.github.sander_i.security;
 
+import io.github.sander_i.i18n.I18n;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -64,7 +65,7 @@ public class WriteSecurity {
         }
         String given = req.getHeader(HEADER);
         if (given == null || !constantTimeEquals(given.trim(), token)) {
-            throw new SecurityException("缺少或错误的写接口令牌");
+            throw new SecurityException(I18n.t("缺少或错误的写接口令牌"));
         }
     }
 

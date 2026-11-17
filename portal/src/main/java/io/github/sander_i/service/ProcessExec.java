@@ -5,6 +5,7 @@
 
 package io.github.sander_i.service;
 
+import io.github.sander_i.i18n.I18n;
 import io.github.sander_i.deploy.DeployRun;
 import org.springframework.stereotype.Component;
 
@@ -46,7 +47,7 @@ public class ProcessExec implements GameImportService.Exec {
         reader.start();
         boolean finished = p.waitFor(Math.max(1, timeout.toMillis()), TimeUnit.MILLISECONDS);
         if (!finished) {
-            run.log("超时（" + timeout.toSeconds() + "s），终止进程");
+            run.log(I18n.t("超时（{0}s），终止进程", timeout.toSeconds()));
             p.destroyForcibly();
         }
         reader.join(2000);

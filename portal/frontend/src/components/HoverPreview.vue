@@ -10,6 +10,7 @@
  *
  * 只用于编辑页；缩略图本身不挂悬停小窗，避免同一行出现两个入口。
  */
+import { t } from '../i18n.js'
 import { onBeforeUnmount, ref } from 'vue'
 
 const props = defineProps({
@@ -107,7 +108,7 @@ onBeforeUnmount(hide)
       >
       <div class="hover-preview-cap">
         <span class="hp-name">{{ item?.filename || '' }}</span>
-        <span class="hp-type">{{ item?.video ? '视频' : '图片' }}</span>
+        <span class="hp-type">{{ item?.video ? t('视频') : t('图片') }}</span>
       </div>
     </div>
   </Teleport>

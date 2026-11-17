@@ -6,6 +6,7 @@
 package io.github.sander_i.web;
 
 import io.github.sander_i.config.PathConfig;
+import io.github.sander_i.i18n.I18n;
 import io.github.sander_i.service.ImageVariantService;
 import io.github.sander_i.service.SettingsService;
 import org.springframework.http.ResponseEntity;
@@ -27,7 +28,10 @@ import java.util.Map;
 @RequestMapping("/api/settings/image-variants")
 public class ImageVariantAdminController {
 
-    private static final String HINT = "请先关闭「图片预加载优化」再清理派生图";
+    /** 提示语在请求期翻译，不能做成 static final 常量 */
+    private static String hint() {
+        return I18n.t("请先关闭「图片预加载优化」再清理派生图");
+    }
 
     private final ImageVariantService variants;
     private final SettingsService settings;
@@ -44,7 +48,7 @@ public class ImageVariantAdminController {
     @GetMapping
     public ResponseEntity<?> list() {
         if (settings.imageVariantEnabled()) {
-            return ResponseEntity.badRequest().body(Map.of("message", HINT));
+            return ResponseEntity.badRequest().body(Map.of("message", hint()));
         }
         return ResponseEntity.ok(variants.scan(paths.gamesDir()));
     }
@@ -53,7 +57,7 @@ public class ImageVariantAdminController {
     @DeleteMapping
     public ResponseEntity<?> clear() {
         if (settings.imageVariantEnabled()) {
-            return ResponseEntity.badRequest().body(Map.of("message", HINT));
+            return ResponseEntity.badRequest().body(Map.of("message", hint()));
         }
         return ResponseEntity.ok(variants.clear(paths.gamesDir()));
     }

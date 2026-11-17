@@ -6,6 +6,7 @@
 package io.github.sander_i.web;
 
 import io.github.sander_i.domain.Game;
+import io.github.sander_i.i18n.I18n;
 import io.github.sander_i.repo.GameRepository;
 import io.github.sander_i.service.GameScanService;
 import io.github.sander_i.service.PlaytimeService;
@@ -181,7 +182,8 @@ public class GameController {
         String mode = req == null || req.mode() == null
                 ? "" : req.mode().strip().toLowerCase(java.util.Locale.ROOT);
         if (!(mode.equals("cg") || mode.equals("cover"))) {
-            return ResponseEntity.badRequest().body(Map.of("message", "mode 只能是 cg 或 cover"));
+            return ResponseEntity.badRequest()
+                    .body(Map.of("message", I18n.t("mode 只能是 cg 或 cover")));
         }
         return repo.findById(id)
                 .map(g -> {
@@ -201,7 +203,7 @@ public class GameController {
             return ResponseEntity.status(404).body(Map.of("message", e.getMessage()));
         } catch (java.io.IOException e) {
             return ResponseEntity.status(500)
-                    .body(Map.of("message", "删除失败：" + e.getMessage()));
+                    .body(Map.of("message", I18n.t("删除失败：{0}", e.getMessage())));
         }
     }
 

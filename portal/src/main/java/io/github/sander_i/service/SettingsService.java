@@ -6,6 +6,8 @@
 package io.github.sander_i.service;
 
 import io.github.sander_i.domain.Setting;
+import io.github.sander_i.i18n.I18n;
+import io.github.sander_i.i18n.I18nService;
 import io.github.sander_i.repo.SettingRepository;
 import jakarta.annotation.PostConstruct;
 import org.springframework.context.ApplicationEventPublisher;
@@ -80,6 +82,12 @@ public class SettingsService {
     public static final String KEY_UPDATE_REPO = "updateRepo";
     /** 远程更新源：仓库网页根地址，用于拼发布页链接，默认取 GALWORLD_UPDATE_WEB_BASE */
     public static final String KEY_UPDATE_WEB_BASE = "updateWebBase";
+    /**
+     * 站点默认语言（{@code en} / {@code zh-CN} / {@code zh-TW} / {@code ja} 或外部语言包 id）。
+     *
+     * 浏览器本机的选择存在 localStorage，优先于它；这里是新访客与后端消息的默认值。
+     */
+    public static final String KEY_LANGUAGE = I18nService.KEY_LANGUAGE;
 
     private static final java.util.Set<String> HERO_SIZES = java.util.Set.of("medium", "off");
 
@@ -122,7 +130,8 @@ public class SettingsService {
             // 同样留空：更新源由 GALWORLD_UPDATE_API_BASE / _REPO / _WEB_BASE 提供
             Map.entry(KEY_UPDATE_API_BASE, ""),
             Map.entry(KEY_UPDATE_REPO, ""),
-            Map.entry(KEY_UPDATE_WEB_BASE, ""));
+            Map.entry(KEY_UPDATE_WEB_BASE, ""),
+            Map.entry(KEY_LANGUAGE, I18nService.DEFAULT_LOCALE));
 
     /** 运维类设置：只允许在 /api/admin/settings 修改，普通设置接口拒绝 */
     public static final java.util.Set<String> ADMIN_KEYS = java.util.Set.of(
@@ -146,6 +155,8 @@ public class SettingsService {
 
     private final SettingRepository repo;
     private final ApplicationEventPublisher publisher;
+    /** 语言包服务：校验语言 id 是否已安装，并在切换默认语言后刷新缓存 */
+    private final I18nService i18n;
 
     /**
      * application.yml / 环境变量里配置的元件仓库地址（GALWORLD_ARTIFACT_NEXUS）。
@@ -182,9 +193,11 @@ public class SettingsService {
     @org.springframework.beans.factory.annotation.Value("${galworld.update.web-base:}")
     private String configuredUpdateWebBase = "";
 
-    public SettingsService(SettingRepository repo, ApplicationEventPublisher publisher) {
+    public SettingsService(SettingRepository repo, ApplicationEventPublisher publisher,
+                           I18nService i18n) {
         this.repo = repo;
         this.publisher = publisher;
+        this.i18n = i18n;
     }
 
     /** 测试用：替换配置的元件仓库地址 */
@@ -420,39 +433,39 @@ public class SettingsService {
             String key = e.getKey();
             String value = e.getValue() == null ? "" : e.getValue().trim();
             if (!DEFAULTS.containsKey(key)) {
-                throw new IllegalArgumentException("未知设置项: " + key);
+                throw new IllegalArgumentException(I18n.t("未知设置项: {0}", key));
             }
             if (KEY_SWITCH_MODE.equals(key) && !(value.equals("tab") || value.equals("page"))) {
-                throw new IllegalArgumentException("switchMode 只能是 tab 或 page");
+                throw new IllegalArgumentException(I18n.t("switchMode 只能是 tab 或 page"));
             }
             if (KEY_IDLE_STOP_MINUTES.equals(key)) {
                 int n;
                 try {
                     n = Integer.parseInt(value);
                 } catch (NumberFormatException ex) {
-                    throw new IllegalArgumentException("idleStopMinutes 必须是整数");
+                    throw new IllegalArgumentException(I18n.t("idleStopMinutes 必须是整数"));
                 }
                 if (n < 0 || n > 1440) {
-                    throw new IllegalArgumentException("idleStopMinutes 范围 0-1440");
+                    throw new IllegalArgumentException(I18n.t("idleStopMinutes 范围 0-1440"));
                 }
                 value = String.valueOf(n);
             }
             if (KEY_CG_SOUND.equals(key)) {
                 String v = value.toLowerCase(java.util.Locale.ROOT);
                 if (!(v.equals("true") || v.equals("false"))) {
-                    throw new IllegalArgumentException("cgSound 只能是 true 或 false");
+                    throw new IllegalArgumentException(I18n.t("cgSound 只能是 true 或 false"));
                 }
                 value = v;
             }
             if (KEY_CANVAS_CALIBRATE_MODE.equals(key)) {
                 if (!(value.equals("auto") || value.equals("manual"))) {
                     throw new IllegalArgumentException(
-                            "canvasCalibrateMode 只能是 auto 或 manual");
+                            I18n.t("canvasCalibrateMode 只能是 auto 或 manual"));
                 }
             }
             if (KEY_ROTATION_MODE.equals(key)) {
                 if (!(value.equals("seq") || value.equals("random"))) {
-                    throw new IllegalArgumentException("rotationMode 只能是 seq 或 random");
+                    throw new IllegalArgumentException(I18n.t("rotationMode 只能是 seq 或 random"));
                 }
             }
             if (KEY_ROTATION_INTERVAL.equals(key)) {
@@ -460,57 +473,57 @@ public class SettingsService {
                 try {
                     n = Integer.parseInt(value);
                 } catch (NumberFormatException ex) {
-                    throw new IllegalArgumentException("rotationInterval 必须是整数");
+                    throw new IllegalArgumentException(I18n.t("rotationInterval 必须是整数"));
                 }
                 // 1 秒 – 24 小时
                 if (n < 1 || n > 86400) {
-                    throw new IllegalArgumentException("rotationInterval 范围 1-86400 秒");
+                    throw new IllegalArgumentException(I18n.t("rotationInterval 范围 1-86400 秒"));
                 }
                 value = String.valueOf(n);
             }
             if (KEY_COVER_ROTATION_MODE.equals(key)) {
                 if (!(value.equals("seq") || value.equals("random"))) {
-                    throw new IllegalArgumentException("coverRotationMode 只能是 seq 或 random");
+                    throw new IllegalArgumentException(I18n.t("coverRotationMode 只能是 seq 或 random"));
                 }
             }
             if (KEY_CG_ROTATION_MODE.equals(key)) {
                 if (!(value.equals("autoNext") || value.equals("repeat")
                         || value.equals("stop"))) {
                     throw new IllegalArgumentException(
-                            "cgRotationMode 只能是 autoNext、repeat 或 stop");
+                            I18n.t("cgRotationMode 只能是 autoNext、repeat 或 stop"));
                 }
             }
             if (KEY_CG_ROTATION_ORDER.equals(key)) {
                 if (!(value.equals("seq") || value.equals("random"))) {
-                    throw new IllegalArgumentException("cgRotationOrder 只能是 seq 或 random");
+                    throw new IllegalArgumentException(I18n.t("cgRotationOrder 只能是 seq 或 random"));
                 }
             }
             if (KEY_COVER_ROTATION_INTERVAL.equals(key)
                     || KEY_CG_ROTATION_INTERVAL.equals(key)) {
                 int n = parseInt(value, key);
                 if (n < 1 || n > 86400) {
-                    throw new IllegalArgumentException(key + " 范围 1-86400 秒");
+                    throw new IllegalArgumentException(I18n.t("{0} 范围 1-86400 秒", key));
                 }
                 value = String.valueOf(n);
             }
             if (KEY_ROTATION_ENABLED.equals(key)) {
                 String v = value.toLowerCase(java.util.Locale.ROOT);
                 if (!(v.equals("true") || v.equals("false"))) {
-                    throw new IllegalArgumentException("rotationEnabled 只能是 true 或 false");
+                    throw new IllegalArgumentException(I18n.t("rotationEnabled 只能是 true 或 false"));
                 }
                 value = v;
             }
             if (KEY_COMPANY_ENABLED.equals(key) || KEY_LOCALIZATION_ENABLED.equals(key)) {
                 String v = value.toLowerCase(java.util.Locale.ROOT);
                 if (!(v.equals("true") || v.equals("false"))) {
-                    throw new IllegalArgumentException(key + " 只能是 true 或 false");
+                    throw new IllegalArgumentException(I18n.t("{0} 只能是 true 或 false", key));
                 }
                 value = v;
             }
             if (KEY_COVER_MAX_COUNT.equals(key) || KEY_CG_MAX_COUNT.equals(key)) {
                 int n = parseInt(value, key);
                 if (n < 1 || n > MAX_COUNT_CEILING) {
-                    throw new IllegalArgumentException(key + " 范围 1-" + MAX_COUNT_CEILING);
+                    throw new IllegalArgumentException(I18n.t("{0} 范围 1-{1}", key, MAX_COUNT_CEILING));
                 }
                 value = String.valueOf(n);
             }
@@ -518,7 +531,7 @@ public class SettingsService {
                 int n = parseInt(value, key);
                 if (n < 1 || n > MAX_IMAGE_MB_CEILING) {
                     throw new IllegalArgumentException(
-                            "imageMaxMb 范围 1-" + MAX_IMAGE_MB_CEILING);
+                            I18n.t("imageMaxMb 范围 1-{0}", MAX_IMAGE_MB_CEILING));
                 }
                 value = String.valueOf(n);
             }
@@ -526,32 +539,32 @@ public class SettingsService {
                 int n = parseInt(value, key);
                 if (n < 1 || n > MAX_VIDEO_MB_CEILING) {
                     throw new IllegalArgumentException(
-                            "videoMaxMb 范围 1-" + MAX_VIDEO_MB_CEILING);
+                            I18n.t("videoMaxMb 范围 1-{0}", MAX_VIDEO_MB_CEILING));
                 }
                 value = String.valueOf(n);
             }
             if (KEY_IMAGE_VARIANT.equals(key)) {
                 String v = value.toLowerCase(java.util.Locale.ROOT);
                 if (!(v.equals("true") || v.equals("false"))) {
-                    throw new IllegalArgumentException("imageVariantEnabled 只能是 true 或 false");
+                    throw new IllegalArgumentException(I18n.t("imageVariantEnabled 只能是 true 或 false"));
                 }
                 value = v;
             }
             if (KEY_DEFAULT_MEDIA_MODE.equals(key)) {
                 if (!(value.equals("cover") || value.equals("cg"))) {
-                    throw new IllegalArgumentException("defaultMediaMode 只能是 cover 或 cg");
+                    throw new IllegalArgumentException(I18n.t("defaultMediaMode 只能是 cover 或 cg"));
                 }
             }
             if (KEY_HOME_HERO_SIZE.equals(key)) {
                 if (!HERO_SIZES.contains(value)) {
-                    throw new IllegalArgumentException("homeHeroSize 只能是 medium 或 off");
+                    throw new IllegalArgumentException(I18n.t("homeHeroSize 只能是 medium 或 off"));
                 }
             }
             if (KEY_ARTIFACT_NEXUS.equals(key)) {
                 // 去掉末尾斜杠，方便下载器直接拼 "/manifest.json"
                 value = value.replaceAll("/+$", "");
                 if (!value.isEmpty() && !URL_PATTERN.matcher(value).matches()) {
-                    throw new IllegalArgumentException("artifactNexusBase 必须是 http(s) 地址");
+                    throw new IllegalArgumentException(I18n.t("artifactNexusBase 必须是 http(s) 地址"));
                 }
             }
             if (KEY_ARTIFACT_MIRRORS.equals(key)) {
@@ -562,7 +575,7 @@ public class SettingsService {
                         continue;
                     }
                     if (!URL_PATTERN.matcher(v).matches()) {
-                        throw new IllegalArgumentException("镜像地址必须是 http(s): " + v);
+                        throw new IllegalArgumentException(I18n.t("镜像地址必须是 http(s): {0}", v));
                     }
                     parts.add(v);
                 }
@@ -572,27 +585,37 @@ public class SettingsService {
                 // 去掉末尾斜杠，链接与复制出来的地址保持一致
                 value = value.replaceAll("/+$", "");
                 if (!value.isEmpty() && !URL_PATTERN.matcher(value).matches()) {
-                    throw new IllegalArgumentException("repoUrl 必须是 http(s) 地址");
+                    throw new IllegalArgumentException(I18n.t("repoUrl 必须是 http(s) 地址"));
                 }
             }
             if (KEY_REPO_URL_PUBLIC.equals(key)) {
                 String v = value.toLowerCase(java.util.Locale.ROOT);
                 if (!(v.equals("true") || v.equals("false"))) {
-                    throw new IllegalArgumentException("repoUrlPublic 只能是 true 或 false");
+                    throw new IllegalArgumentException(I18n.t("repoUrlPublic 只能是 true 或 false"));
                 }
                 value = v;
             }
             if (KEY_UPDATE_API_BASE.equals(key) || KEY_UPDATE_WEB_BASE.equals(key)) {
                 value = value.replaceAll("/+$", "");
                 if (!value.isEmpty() && !URL_PATTERN.matcher(value).matches()) {
-                    throw new IllegalArgumentException(key + " 必须是 http(s) 地址");
+                    throw new IllegalArgumentException(I18n.t("{0} 必须是 http(s) 地址", key));
                 }
             }
             if (KEY_UPDATE_REPO.equals(key)) {
                 value = value.replaceAll("^/+|/+$", "");
                 if (!value.isEmpty() && !REPO_PATTERN.matcher(value).matches()) {
-                    throw new IllegalArgumentException("updateRepo 必须是 owner/repo 形式");
+                    throw new IllegalArgumentException(I18n.t("updateRepo 必须是 owner/repo 形式"));
                 }
+            }
+            if (KEY_LANGUAGE.equals(key)) {
+                // 只接受已安装的语言包：写进库里但翻译时找不到，界面会整片显示键名
+                String norm = io.github.sander_i.i18n.LocalePack.normalize(value);
+                if (norm.isEmpty() || !i18n.exists(norm)) {
+                    throw new IllegalArgumentException(
+                            I18n.t("language 必须是已安装的语言包: {0}", i18n.packs().stream()
+                                    .map(io.github.sander_i.i18n.LocalePack::id).toList()));
+                }
+                value = norm;
             }
             // 存成默认值等于没设置：删掉这行，让环境变量/内置默认重新生效。
             // 否则页面把当前显示值原样保存一次，就把默认值固化成「显式设置」，
@@ -618,6 +641,21 @@ public class SettingsService {
                 publisher.publishEvent(new ImageVariantEnabledEvent(true));
             }
         }
+        // 默认语言变了：翻译服务缓存的是旧值，事务提交后刷新。
+        // 提交前刷新会让后台线程读不到新值（与派生图事件同理）。
+        if (patch.containsKey(KEY_LANGUAGE)) {
+            if (TransactionSynchronizationManager.isSynchronizationActive()) {
+                TransactionSynchronizationManager.registerSynchronization(
+                        new TransactionSynchronization() {
+                            @Override
+                            public void afterCommit() {
+                                i18n.refreshDefaultLocale();
+                            }
+                        });
+            } else {
+                i18n.refreshDefaultLocale();
+            }
+        }
         return all();
     }
 
@@ -625,7 +663,7 @@ public class SettingsService {
         try {
             return Integer.parseInt(value);
         } catch (NumberFormatException e) {
-            throw new IllegalArgumentException(key + " 必须是整数");
+            throw new IllegalArgumentException(I18n.t("{0} 必须是整数", key));
         }
     }
 }

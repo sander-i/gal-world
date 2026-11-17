@@ -4,6 +4,7 @@
 -->
 
 <script setup>
+import { t } from '../i18n.js'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { api, getWriteToken } from '../api'
 import { notify } from '../feedback'
@@ -78,7 +79,7 @@ const info = computed(() => {
   if (selection.value.kind === 'ARCHIVE') {
     return `${archiveFile.value.name} · ${total}`
   }
-  return `${folderRootName(folderFiles.value) || '文件夹'} · ${r.count} 个文件 · ${total}`
+  return t("{0} · {1} 个文件 · {2}", folderRootName(folderFiles.value) || t('文件夹'), r.count, total)
 })
 
 const percent = computed(() =>
@@ -89,11 +90,11 @@ const percentText = computed(() => {
 })
 const speedText = computed(() => (speed.value > 0 ? `${formatBytes(speed.value)}/s` : '—'))
 const etaText = computed(() => {
-  if (eta.value == null) return '剩余时间未知'
+  if (eta.value == null) return t('剩余时间未知')
   const s = Number(eta.value)
-  if (s < 60) return `剩余 ${s} 秒`
+  if (s < 60) return t("剩余 {0} 秒", s)
   const m = Math.floor(s / 60)
-  return `剩余 ${m} 分 ${s % 60} 秒`
+  return t("剩余 {0} 分 {1} 秒", m, s % 60)
 })
 const busy = computed(() => state.value === 'uploading' || state.value === 'extracting')
 
@@ -153,7 +154,7 @@ async function onDrop(e) {
       await walkEntry(entry, '', files)
     }
   } catch (err) {
-    notify.error('读取拖入内容失败：' + err.message)
+    notify.error(t("读取拖入内容失败：{0}", err.message))
     return
   }
   if (files.length) {
@@ -238,7 +239,7 @@ async function syncPending(sel) {
   } catch {
     // 旧会话已过期或正在解压：不影响新建
   }
-  notify.error('文件已变化，旧上传会话已丢弃，需要重新上传')
+  notify.error(t('文件已变化，旧上传会话已丢弃，需要重新上传'))
 }
 
 // ---------------- 上传 ----------------
@@ -286,7 +287,7 @@ async function start() {
     }
     state.value = 'failed'
     error.value = e.message
-    notify.error('上传失败：' + e.message)
+    notify.error(t("上传失败：{0}", e.message))
   }
 }
 
@@ -325,7 +326,7 @@ async function uploadAll(created, serverFiles) {
 
   for (const f of created.files) {
     const src = sourceFor(kind, f, f.path)
-    if (!src) throw new Error('本地文件丢失，请重新选择：' + f.path)
+    if (!src) throw new Error(t("本地文件丢失，请重新选择：{0}", f.path))
     let offset = done[f.fileId] || 0
     while (offset < f.size) {
       if (paused) return
@@ -394,7 +395,7 @@ async function watch() {
   } catch (e) {
     if (e.name !== 'AbortError') {
       // 流断了不影响最终状态：下面统一查一次快照
-      logLines.value = [...logLines.value, '日志流中断：' + e.message]
+      logLines.value = [...logLines.value, t("日志流中断：{0}", e.message)]
     }
   }
   await settle()
@@ -413,7 +414,7 @@ async function settle() {
     }
     if (st.state === 'FAILED') {
       state.value = 'failed'
-      error.value = st.error || '解压失败'
+      error.value = st.error || t('解压失败')
       return
     }
     if (st.state === 'CANCELLED') {
@@ -458,7 +459,7 @@ async function resume() {
 }
 
 async function cancel() {
-  if (!window.confirm('取消上传只会删除服务器上的临时文件，已上传完成的游戏目录不受影响。继续？')) {
+  if (!window.confirm(t('取消上传只会删除服务器上的临时文件，已上传完成的游戏目录不受影响。继续？'))) {
     return
   }
   paused = true
@@ -466,7 +467,7 @@ async function cancel() {
   try {
     if (uploadId.value) await api.cancelUpload(uploadId.value)
   } catch (e) {
-    notify.error('取消失败：' + e.message)
+    notify.error(t("取消失败：{0}", e.message))
   }
   reset()
 }
@@ -547,21 +548,19 @@ onBeforeUnmount(() => {
         :class="{ primary: tab === 'archive' }"
         :disabled="busy"
         @click="tab = 'archive'"
-      >上传压缩包</button>
+      >{{ t("上传压缩包") }}</button>
       <button
         class="btn sm"
         :class="{ primary: tab === 'folder' }"
         :disabled="busy || !folderSupported"
         @click="tab = 'folder'"
-      >上传文件夹</button>
+      >{{ t("上传文件夹") }}</button>
     </div>
     <p v-if="!folderSupported" class="upload-info">
-      当前浏览器不支持选择整个文件夹，请使用压缩包上传。
-    </p>
+      {{ t("当前浏览器不支持选择整个文件夹，请使用压缩包上传。") }}</p>
 
     <label class="upload-name">
-      显示名
-      <input v-model="name" maxlength="120" :disabled="busy" placeholder="游戏显示名" />
+      {{ t("显示名") }}<input v-model="name" maxlength="120" :disabled="busy" :placeholder="t('游戏显示名')" />
     </label>
 
     <div
@@ -587,14 +586,12 @@ onBeforeUnmount(() => {
         @change="onFolderChange"
       />
       <button class="btn sm" :disabled="busy || !supported" @click="openPicker">
-        选择{{ tab === 'archive' ? '压缩包（.zip / .7z）' : '文件夹' }}
-      </button>
-      <span class="upload-drop-hint">或直接拖入这里</span>
+        {{ t("选择{0}", tab === 'archive' ? t('压缩包（.zip / .7z）') : t('文件夹')) }}</button>
+      <span class="upload-drop-hint">{{ t("或直接拖入这里") }}</span>
     </div>
 
     <p v-if="!supported" class="import-error">
-      当前平台不支持上传接入：只能在 Linux 服务器上使用。
-    </p>
+      {{ t("当前平台不支持上传接入：只能在 Linux 服务器上使用。") }}</p>
     <p v-else-if="info" class="upload-info">{{ info }}</p>
     <p v-else-if="check.reason && selection" class="import-error">{{ check.reason }}</p>
 
@@ -611,10 +608,10 @@ onBeforeUnmount(() => {
         class="btn primary sm"
         :disabled="!check.ok || !supported"
         @click="start"
-      >{{ uploadId && (state === 'paused' || state === 'failed') ? '继续上传' : '开始上传' }}</button>
-      <button v-if="state === 'uploading'" class="btn sm" @click="pause">暂停</button>
-      <button v-if="state === 'paused'" class="btn sm" :disabled="!check.ok" @click="resume">继续</button>
-      <button v-if="state !== 'idle'" class="btn sm" @click="cancel">取消上传</button>
+      >{{ uploadId && (state === 'paused' || state === 'failed') ? t('继续上传') : t('开始上传') }}</button>
+      <button v-if="state === 'uploading'" class="btn sm" @click="pause">{{ t("暂停") }}</button>
+      <button v-if="state === 'paused'" class="btn sm" :disabled="!check.ok" @click="resume">{{ t("继续") }}</button>
+      <button v-if="state !== 'idle'" class="btn sm" @click="cancel">{{ t("取消上传") }}</button>
     </div>
 
     <ol v-if="steps.length" class="import-steps">
@@ -625,12 +622,12 @@ onBeforeUnmount(() => {
     <pre v-if="logLines.length" class="import-log">{{ logLines.join('\n') }}</pre>
 
     <div v-if="uploadedCard" class="upload-done">
-      已上传到 <code>games/{{ uploadedCard.gameId }}</code>
-      <button class="btn sm" @click="emitReady">继续配置</button>
+      {{ t("已上传到") }}<code>games/{{ uploadedCard.gameId }}</code>
+      <button class="btn sm" @click="emitReady">{{ t("继续配置") }}</button>
     </div>
 
     <p v-if="pending && state !== 'uploading' && !uploadedCard" class="upload-info">
-      发现未完成上传「{{ pending.name }}」：重新选择同一文件后可继续。
+      {{ t("发现未完成上传「{0}」：重新选择同一文件后可继续。", pending.name) }}
     </p>
   </div>
 </template>

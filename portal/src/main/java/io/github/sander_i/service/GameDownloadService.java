@@ -6,6 +6,7 @@
 package io.github.sander_i.service;
 
 import io.github.sander_i.config.PathConfig;
+import io.github.sander_i.i18n.I18n;
 import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -252,7 +253,7 @@ public class GameDownloadService {
     public JobView start(String gameId) {
         Path dir = paths.gameDir(gameId);
         if (!Files.isDirectory(dir, LinkOption.NOFOLLOW_LINKS)) {
-            throw new NotFound("游戏目录不存在: " + gameId);
+            throw new NotFound(I18n.t("游戏目录不存在: {0}", gameId));
         }
         synchronized (this) {
             String runningId = latest.get(gameId);
@@ -301,7 +302,7 @@ public class GameDownloadService {
     public Estimate estimate(String gameId) throws IOException {
         Path dir = paths.gameDir(gameId);
         if (!Files.isDirectory(dir, LinkOption.NOFOLLOW_LINKS)) {
-            throw new NotFound("游戏目录不存在: " + gameId);
+            throw new NotFound(I18n.t("游戏目录不存在: {0}", gameId));
         }
         long totalBytes = 0;
         int totalFiles = 0;
@@ -320,11 +321,11 @@ public class GameDownloadService {
     public Path file(String gameId, String jobId) {
         Job job = require(gameId, jobId);
         if (!STATE_READY.equals(job.state)) {
-            throw new Conflict("打包尚未完成，当前状态: " + job.state);
+            throw new Conflict(I18n.t("打包尚未完成，当前状态: {0}", job.state));
         }
         Path archive = job.archive;
         if (archive == null || !Files.isRegularFile(archive)) {
-            throw new NotFound("打包文件已不存在，请重新打包");
+            throw new NotFound(I18n.t("打包文件已不存在，请重新打包"));
         }
         return archive;
     }
@@ -345,7 +346,7 @@ public class GameDownloadService {
     private Job require(String gameId, String jobId) {
         Job job = jobs.get(jobId);
         if (job == null || !job.gameId.equals(gameId)) {
-            throw new NotFound("没有这个打包任务: " + jobId);
+            throw new NotFound(I18n.t("没有这个打包任务: {0}", jobId));
         }
         return job;
     }
@@ -419,7 +420,7 @@ public class GameDownloadService {
             log.info("游戏已打包 {} -> {} ({} 字节)", job.gameId, target, job.written.get());
         } catch (Cancelled e) {
             job.state = STATE_CANCELLED;
-            job.error = "已取消";
+            job.error = I18n.t("已取消");
             deleteRecursively(part);
         } catch (Exception e) {
             job.state = STATE_FAILED;
@@ -521,7 +522,7 @@ public class GameDownloadService {
         FileStore store = Files.getFileStore(dir);
         long usable = store.getUsableSpace();
         if (usable < needBytes + DISK_RESERVE_BYTES) {
-            throw new IOException("磁盘剩余空间不足：需要约 " + needBytes + " 字节，剩余 " + usable + " 字节");
+            throw new IOException(I18n.t("磁盘剩余空间不足：需要约 {0} 字节，剩余 {1} 字节", needBytes, usable));
         }
     }
 
@@ -606,7 +607,7 @@ public class GameDownloadService {
     /** 打包循环内部的中断信号 */
     private static final class Cancelled extends RuntimeException {
         Cancelled() {
-            super("已取消", null, false, false);
+            super(I18n.t("已取消"), null, false, false);
         }
     }
 }

@@ -6,6 +6,7 @@
 package io.github.sander_i.service;
 
 import io.github.sander_i.config.PathConfig;
+import io.github.sander_i.i18n.I18n;
 import io.github.sander_i.repo.GameRepository;
 import org.springframework.stereotype.Component;
 
@@ -62,42 +63,43 @@ public class GameImportValidator {
                                Integer width, Integer height, String framerate, String gameLang) {
         String gid = id == null ? "" : id.trim();
         if (!ID.matcher(gid).matches()) {
-            throw new IllegalArgumentException("目录名不合法：只能用小写字母、数字、点、下划线、连字符，2–32 位");
+            throw new IllegalArgumentException(
+                    I18n.t("目录名不合法：只能用小写字母、数字、点、下划线、连字符，2–32 位"));
         }
         if (repo.existsById(gid)) {
-            throw new IllegalArgumentException("游戏已存在: " + gid);
+            throw new IllegalArgumentException(I18n.t("游戏已存在: {0}", gid));
         }
         Path gameDir = paths.gameDir(gid);
         if (!Files.isDirectory(gameDir, LinkOption.NOFOLLOW_LINKS)) {
-            throw new IllegalArgumentException("目录不存在: " + gid);
+            throw new IllegalArgumentException(I18n.t("目录不存在: {0}", gid));
         }
         if (Files.exists(gameDir.resolve("game.env"))) {
-            throw new IllegalArgumentException("该目录已注册 game.env: " + gid);
+            throw new IllegalArgumentException(I18n.t("该目录已注册 game.env: {0}", gid));
         }
         String exe = GameExePaths.resolve(gameDir, exeRel);
         String alt = "";
         if (exeAltRel != null && !exeAltRel.isBlank()) {
             alt = GameExePaths.resolve(gameDir, exeAltRel);
             if (alt.equals(exe)) {
-                throw new IllegalArgumentException("备用启动程序不能与当前启动程序相同");
+                throw new IllegalArgumentException(I18n.t("备用启动程序不能与当前启动程序相同"));
             }
         }
         String n = name == null ? "" : name.trim();
         if (n.isEmpty() || n.length() > 120) {
-            throw new IllegalArgumentException("显示名必填，且不超过 120 字");
+            throw new IllegalArgumentException(I18n.t("显示名必填，且不超过 120 字"));
         }
         int w = width == null ? 1280 : width;
         int h = height == null ? 720 : height;
         if (w < 640 || w > 3840 || h < 480 || h > 2160) {
-            throw new IllegalArgumentException("分辨率超出范围");
+            throw new IllegalArgumentException(I18n.t("分辨率超出范围"));
         }
         String fr = framerate == null || framerate.isBlank() ? "30" : framerate.trim();
         if (!FRAMERATE.matcher(fr).matches()) {
-            throw new IllegalArgumentException("帧率格式应为 30 或 30-60");
+            throw new IllegalArgumentException(I18n.t("帧率格式应为 30 或 30-60"));
         }
         String lang = gameLang == null ? "" : gameLang.trim();
         if (!LANGS.contains(lang)) {
-            throw new IllegalArgumentException("GAME_LANG 只支持空或 zh_CN.UTF-8");
+            throw new IllegalArgumentException(I18n.t("GAME_LANG 只支持空或 zh_CN.UTF-8"));
         }
         return new Normalized(gid, n, exe, alt, w, h, fr, lang);
     }

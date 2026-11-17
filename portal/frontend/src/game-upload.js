@@ -9,6 +9,8 @@
  * 全部是纯函数，便于 node --test 直接覆盖；DOM / XHR 留在组件与 api.js。
  */
 
+import { t } from './i18n.js'
+
 export const DEFAULT_CHUNK_SIZE = 8 * 1024 * 1024
 
 export function isArchiveName(name) {
@@ -141,40 +143,40 @@ export function mergeUploadEvent(acc, name, data) {
  */
 export function canStartUpload(form, selection, limits = {}) {
   const name = String(form?.name || '').trim()
-  if (!name) return { ok: false, reason: '请填写显示名' }
-  if (name.length > 120) return { ok: false, reason: '显示名不超过 120 字' }
-  if (!selection || !selection.kind) return { ok: false, reason: '请选择压缩包或文件夹' }
+  if (!name) return { ok: false, reason: t('请填写显示名') }
+  if (name.length > 120) return { ok: false, reason: t('显示名不超过 120 字') }
+  if (!selection || !selection.kind) return { ok: false, reason: t('请选择压缩包或文件夹') }
   const maxUpload = Number(limits?.maxUploadBytes) || Infinity
   const maxFile = Number(limits?.maxFileBytes) || Infinity
   const maxFiles = Number(limits?.maxFiles) || Infinity
 
   if (selection.kind === 'ARCHIVE') {
     const file = selection.file
-    if (!file) return { ok: false, reason: '请选择压缩包' }
-    if (!isArchiveName(file.name)) return { ok: false, reason: '只支持 .zip / .7z' }
+    if (!file) return { ok: false, reason: t('请选择压缩包') }
+    if (!isArchiveName(file.name)) return { ok: false, reason: t('只支持 .zip / .7z') }
     const size = Number(file.size) || 0
-    if (size <= 0) return { ok: false, reason: '文件为空' }
-    if (size > maxUpload) return { ok: false, reason: '压缩包超过上传上限' }
-    if (size > maxFile) return { ok: false, reason: '压缩包超过单文件上限' }
+    if (size <= 0) return { ok: false, reason: t('文件为空') }
+    if (size > maxUpload) return { ok: false, reason: t('压缩包超过上传上限') }
+    if (size > maxFile) return { ok: false, reason: t('压缩包超过单文件上限') }
     return { ok: true, reason: '', totalBytes: size, count: 1 }
   }
 
   if (selection.kind === 'FOLDER') {
     const files = selection.files || []
-    if (!files.length) return { ok: false, reason: '请选择文件夹' }
-    if (files.length > maxFiles) return { ok: false, reason: `文件数超过上限 ${maxFiles}` }
+    if (!files.length) return { ok: false, reason: t('请选择文件夹') }
+    if (files.length > maxFiles) return { ok: false, reason: t("文件数超过上限 {0}", maxFiles) }
     let total = 0
     for (const f of files) {
       const size = Number(f.size) || 0
-      if (size > maxFile) return { ok: false, reason: `单个文件超过上限：${f.name}` }
+      if (size > maxFile) return { ok: false, reason: t("单个文件超过上限：{0}", f.name) }
       total += size
     }
-    if (total <= 0) return { ok: false, reason: '文件夹为空' }
-    if (total > maxUpload) return { ok: false, reason: '文件总量超过上传上限' }
+    if (total <= 0) return { ok: false, reason: t('文件夹为空') }
+    if (total > maxUpload) return { ok: false, reason: t('文件总量超过上传上限') }
     return { ok: true, reason: '', totalBytes: total, count: files.length }
   }
 
-  return { ok: false, reason: '未知的上传来源' }
+  return { ok: false, reason: t('未知的上传来源') }
 }
 
 /**
