@@ -289,3 +289,11 @@ export function useI18n() {
     setLocale,
   }
 }
+
+/**
+ * 已安装语言清单（响应式）。
+ *
+ * 维护页要在「多语言名称」里列出可选语言，用 `useI18n()` 会拿到一堆
+ * 用不到的字段；直接导出这个 ref 更直白。
+ */
+export { languages }

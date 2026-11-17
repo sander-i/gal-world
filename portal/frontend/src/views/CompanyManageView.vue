@@ -10,11 +10,12 @@
  * 公司身份 = 名称 + 网址：允许同名不同网址，列表里按组合区分。
  * 删除公司只解除与游戏的关联，不删除游戏。
  */
-import { t } from '../i18n.js'
-import { computed, onMounted, ref } from 'vue'
+import { languages, onLocaleChange, t } from '../i18n.js'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { api } from '../api'
 import { confirmAction, notify } from '../feedback'
 import { idsOf, moveItem } from '../order'
+import I18nFields from '../components/I18nFields.vue'
 
 const companies = ref([])
 const loading = ref(true)
@@ -28,6 +29,16 @@ const editName = ref('')
 const editAlias = ref('')
 const editWebsite = ref('')
 const editDescription = ref('')
+/** 正在编辑的多语言覆盖：{ en: { name, alias, description } } */
+const newI18n = ref({})
+const editI18n = ref({})
+
+/** 多语言字段定义：computed 而非常量，否则切换语言后字段名不更新 */
+const orgFields = computed(() => [
+  { key: 'name', label: t('名称') },
+  { key: 'alias', label: t('别名') },
+  { key: 'description', label: t('简介') },
+])
 
 const total = computed(() => companies.value.length)
 const dragIndex = ref(-1)
@@ -75,11 +86,12 @@ async function create() {
   busy.value = true
   try {
     await api.createCompany(name, newAlias.value.trim(), newWebsite.value.trim(),
-      newDescription.value.trim())
+      newDescription.value.trim(), newI18n.value)
     newName.value = ''
     newAlias.value = ''
     newWebsite.value = ''
     newDescription.value = ''
+    newI18n.value = {}
     await load()
     notify.success(t('公司已添加'))
   } catch (e) {
@@ -91,10 +103,12 @@ async function create() {
 
 function startEdit(c) {
   editingId.value = c.id
-  editName.value = c.name
-  editAlias.value = c.alias || ''
+  // 主字段编辑的是默认值，不是当前语言解析出来的展示值
+  editName.value = c.baseName ?? c.name
+  editAlias.value = c.baseAlias ?? (c.alias || '')
   editWebsite.value = c.website || ''
-  editDescription.value = c.description || ''
+  editDescription.value = c.baseDescription ?? (c.description || '')
+  editI18n.value = c.i18n ? JSON.parse(JSON.stringify(c.i18n)) : {}
 }
 
 function cancelEdit() {
@@ -110,7 +124,7 @@ async function saveEdit(id) {
   busy.value = true
   try {
     await api.updateCompany(id, name, editAlias.value.trim(), editWebsite.value.trim(),
-      editDescription.value.trim())
+      editDescription.value.trim(), editI18n.value)
     editingId.value = null
     await load()
     notify.success(t('公司已更新'))
@@ -140,6 +154,10 @@ async function remove(c) {
 }
 
 onMounted(load)
+
+// 名称等字段按请求语言返回，切语言后要重取
+const stopLocaleWatch = onLocaleChange(() => load())
+onBeforeUnmount(stopLocaleWatch)
 </script>
 
 <template>
@@ -162,6 +180,10 @@ onMounted(load)
         <input v-model="newDescription" class="input" :placeholder="t('简介，可留空')" maxlength="1000" @keyup.enter="create">
         <button class="btn primary sm" :disabled="busy" @click="create">{{ t("添加") }}</button>
       </div>
+      <details class="i18n-locale" style="margin-top:12px">
+        <summary>{{ t("多语言名称（可选）") }}</summary>
+        <I18nFields v-model="newI18n" :fields="orgFields" :languages="languages" />
+      </details>
     </section>
 
     <section class="panel">
@@ -228,6 +250,15 @@ onMounted(load)
           </tr>
         </tbody>
       </table>
+
+      <!-- 多语言编辑：表格行里放不下多组输入，编辑时在下方单开一块 -->
+      <div v-if="editingId != null" class="i18n-edit-panel">
+        <div class="panel-head" style="margin-bottom:8px">
+          <h3 style="font-size:13px;margin:0">{{ t("多语言名称") }}</h3>
+          <span class="muted-sm">{{ t("留空表示沿用默认值") }}</span>
+        </div>
+        <I18nFields v-model="editI18n" :fields="orgFields" :languages="languages" />
+      </div>
     </section>
   </div>
 </template>

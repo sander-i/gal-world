@@ -9,11 +9,12 @@
  *
  * 标签身份 = 名称（唯一），别名为可选展示/搜索字段；拖动行调整全局展示顺序。
  */
-import { t } from '../i18n.js'
-import { computed, onMounted, ref } from 'vue'
+import { languages, onLocaleChange, t } from '../i18n.js'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { api } from '../api'
 import { confirmAction, notify } from '../feedback'
 import { idsOf, moveItem } from '../order'
+import I18nFields from '../components/I18nFields.vue'
 
 const tags = ref([])
 const loading = ref(true)
@@ -24,6 +25,15 @@ const newAlias = ref('')
 const editingId = ref(null)
 const editName = ref('')
 const editAlias = ref('')
+/** 正在编辑的多语言覆盖：{ en: { name, alias } } */
+const newI18n = ref({})
+const editI18n = ref({})
+
+/** 标签只有名称与别名两个可翻译字段 */
+const tagFields = computed(() => [
+  { key: 'name', label: t('名称') },
+  { key: 'alias', label: t('别名') },
+])
 
 const total = computed(() => tags.value.length)
 
@@ -46,9 +56,10 @@ async function create() {
   }
   busy.value = true
   try {
-    await api.createTag(name, newAlias.value.trim())
+    await api.createTag(name, newAlias.value.trim(), newI18n.value)
     newName.value = ''
     newAlias.value = ''
+    newI18n.value = {}
     await load()
     notify.success(t('标签已添加'))
   } catch (e) {
@@ -58,10 +69,12 @@ async function create() {
   }
 }
 
-function startEdit(t) {
-  editingId.value = t.id
-  editName.value = t.name
-  editAlias.value = t.alias || ''
+function startEdit(tag) {
+  editingId.value = tag.id
+  // 主字段编辑的是默认值，不是当前语言解析出来的展示值
+  editName.value = tag.baseName ?? tag.name
+  editAlias.value = tag.baseAlias ?? (tag.alias || '')
+  editI18n.value = tag.i18n ? JSON.parse(JSON.stringify(tag.i18n)) : {}
 }
 
 function cancelEdit() {
@@ -76,7 +89,7 @@ async function saveEdit(id) {
   }
   busy.value = true
   try {
-    await api.updateTag(id, name, editAlias.value.trim())
+    await api.updateTag(id, name, editAlias.value.trim(), editI18n.value)
     editingId.value = null
     await load()
     notify.success(t('标签已更新'))
@@ -87,15 +100,15 @@ async function saveEdit(id) {
   }
 }
 
-async function remove(t) {
+async function remove(tag) {
   const ok = await confirmAction(
-    t("删除标签「{0}」？\n\n会同时解除它与所有游戏的关联。", t.name),
+    t("删除标签「{0}」？\n\n会同时解除它与所有游戏的关联。", tag.name),
     { title: t('删除标签'), confirmText: t('删除') },
   )
   if (!ok) return
   busy.value = true
   try {
-    await api.deleteTag(t.id)
+    await api.deleteTag(tag.id)
     await load()
     notify.success(t('标签已删除'))
   } catch (e) {
@@ -129,6 +142,10 @@ async function onDrop(i) {
 }
 
 onMounted(load)
+
+// 名称按请求语言返回，切语言后要重取
+const stopLocaleWatch = onLocaleChange(() => load())
+onBeforeUnmount(stopLocaleWatch)
 </script>
 
 <template>
@@ -149,6 +166,10 @@ onMounted(load)
         <input v-model="newAlias" class="input" :placeholder="t('别名，可留空')" maxlength="64" @keyup.enter="create">
         <button class="btn primary sm" :disabled="busy" @click="create">{{ t("添加") }}</button>
       </div>
+      <details class="i18n-locale" style="margin-top:12px">
+        <summary>{{ t("多语言名称（可选）") }}</summary>
+        <I18nFields v-model="newI18n" :fields="tagFields" :languages="languages" />
+      </details>
     </section>
 
     <section class="panel">
@@ -171,33 +192,42 @@ onMounted(load)
         </thead>
         <tbody>
           <tr
-            v-for="(t, i) in tags"
-            :key="t.id"
+            v-for="(tag, i) in tags"
+            :key="tag.id"
             draggable="true"
             @dragstart="onDragStart(i)"
             @dragover.prevent
             @drop="onDrop(i)"
           >
             <td class="drag-handle" :title="t('拖动排序')">⣿</td>
-            <template v-if="editingId === t.id">
+            <template v-if="editingId === tag.id">
               <td><input v-model="editName" class="input" maxlength="64"></td>
               <td><input v-model="editAlias" class="input" maxlength="64" :placeholder="t('可留空')"></td>
               <td style="text-align:right;white-space:nowrap">
-                <button class="link-btn" :disabled="busy" @click="saveEdit(t.id)">{{ t("保存") }}</button>
+                <button class="link-btn" :disabled="busy" @click="saveEdit(tag.id)">{{ t("保存") }}</button>
                 <button class="link-btn" :disabled="busy" @click="cancelEdit">{{ t("取消") }}</button>
               </td>
             </template>
             <template v-else>
-              <td>{{ t.name }}</td>
-              <td><span v-if="t.alias">{{ t.alias }}</span><span v-else class="muted-sm">—</span></td>
+              <td>{{ tag.name }}</td>
+              <td><span v-if="tag.alias">{{ tag.alias }}</span><span v-else class="muted-sm">—</span></td>
               <td style="text-align:right;white-space:nowrap">
-                <button class="link-btn" :disabled="busy" @click="startEdit(t)">{{ t("编辑") }}</button>
-                <button class="link-btn danger" :disabled="busy" @click="remove(t)">{{ t("删除") }}</button>
+                <button class="link-btn" :disabled="busy" @click="startEdit(tag)">{{ t("编辑") }}</button>
+                <button class="link-btn danger" :disabled="busy" @click="remove(tag)">{{ t("删除") }}</button>
               </td>
             </template>
           </tr>
         </tbody>
       </table>
+
+      <!-- 多语言编辑：表格行里放不下多组输入，编辑时在下方单开一块 -->
+      <div v-if="editingId != null" class="i18n-edit-panel">
+        <div class="panel-head" style="margin-bottom:8px">
+          <h3 style="font-size:13px;margin:0">{{ t("多语言名称") }}</h3>
+          <span class="muted-sm">{{ t("留空表示沿用默认值") }}</span>
+        </div>
+        <I18nFields v-model="editI18n" :fields="tagFields" :languages="languages" />
+      </div>
     </section>
   </div>
 </template>

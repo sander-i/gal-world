@@ -1514,6 +1514,11 @@
     "符号键，需 keyMap": "符號鍵，需 keyMap",
     "strings.xml，符号键，需 keyMap": "strings.xml，符號鍵，需 keyMap",
     "Flutter，符号键，需 keyMap": "Flutter，符號鍵，需 keyMap",
-    "Apple，符号键，需 keyMap": "Apple，符號鍵，需 keyMap"
+    "Apple，符号键，需 keyMap": "Apple，符號鍵，需 keyMap",
+    "多语言名称（可选）": "多語言名稱（可選）",
+    "多语言名称": "多語言名稱",
+    "留空表示沿用默认值": "留空表示沿用預設值",
+    "已填写": "已填寫",
+    "没有可配置的语言": "沒有可設定的語言"
   }
 }

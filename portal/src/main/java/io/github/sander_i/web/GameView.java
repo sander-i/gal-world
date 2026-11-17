@@ -7,6 +7,8 @@ package io.github.sander_i.web;
 
 import io.github.sander_i.domain.Game;
 import io.github.sander_i.domain.Tag;
+import io.github.sander_i.i18n.I18n;
+import io.github.sander_i.i18n.LocalizedText;
 import io.github.sander_i.service.GameMediaService;
 import io.github.sander_i.service.SessionService;
 
@@ -76,7 +78,8 @@ public record GameView(
                 status == null ? "UNKNOWN" : status.state().name(),
                 status != null && status.crashed(),
                 totalSeconds,
-                tags == null ? List.of() : tags.stream().map(Tag::getName).toList(),
+                tags == null ? List.of() : tags.stream()
+                        .map(t -> LocalizedText.of(t, I18n.locale())).toList(),
                 companies == null ? List.of() : companies,
                 localizations == null ? List.of() : localizations,
                 covers == null ? List.of() : covers,

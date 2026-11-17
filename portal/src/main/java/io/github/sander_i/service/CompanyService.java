@@ -193,6 +193,12 @@ public class CompanyService {
         return companies.save(c);
     }
 
+    /** 保存多语言覆盖等附加字段；业务字段仍走 create / update 校验 */
+    @Transactional
+    public Company save(Company c) {
+        return companies.save(c);
+    }
+
     /** 去首尾空白，null 归一为空串，避免 null 绕过唯一索引 */
     private String text(String value) {
         return value == null ? "" : value.strip();

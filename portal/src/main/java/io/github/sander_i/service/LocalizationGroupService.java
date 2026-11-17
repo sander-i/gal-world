@@ -197,6 +197,12 @@ public class LocalizationGroupService {
         return groups.save(g);
     }
 
+    /** 保存多语言覆盖等附加字段；业务字段仍走 create / update 校验 */
+    @Transactional
+    public LocalizationGroup save(LocalizationGroup g) {
+        return groups.save(g);
+    }
+
     /** 网址为空时保留空串；没写协议时补 https:// */
     private String normalizeWebsite(String website) {
         String w = text(website);

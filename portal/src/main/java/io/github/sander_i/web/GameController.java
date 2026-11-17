@@ -7,6 +7,8 @@ package io.github.sander_i.web;
 
 import io.github.sander_i.domain.Game;
 import io.github.sander_i.i18n.I18n;
+import io.github.sander_i.i18n.I18nText;
+import io.github.sander_i.i18n.LocalizedText;
 import io.github.sander_i.repo.GameRepository;
 import io.github.sander_i.service.GameScanService;
 import io.github.sander_i.service.PlaytimeService;
@@ -115,8 +117,13 @@ public class GameController {
         }
     }
 
-    private boolean matches(Game g, List<io.github.sander_i.domain.Tag> tags, String tag, String q) {        if (tag != null && !tag.isBlank()) {
-            boolean has = tags != null && tags.stream().anyMatch(t -> t.getName().equals(tag.strip()));
+    private boolean matches(Game g, List<io.github.sander_i.domain.Tag> tags, String tag, String q) {
+        if (tag != null && !tag.isBlank()) {
+            String needle = tag.strip();
+            // 标签名可能按语言翻译过，所以默认名和所有语言的覆盖名都要参与匹配，
+            // 否则切到英文后用英文标签名筛选会筛不到
+            boolean has = tags != null && tags.stream().anyMatch(t ->
+                    needle.equals(t.getName()) || matchesI18nName(t, needle));
             if (!has) {
                 return false;
             }
@@ -207,6 +214,13 @@ public class GameController {
         }
     }
 
+    /** 标签的多语言名里是否有匹配 needle 的 */
+    private boolean matchesI18nName(io.github.sander_i.domain.Tag t, String needle) {
+        return I18nText.parse(t.getI18nText()).values().stream()
+                .map(fields -> fields.get("name"))
+                .anyMatch(name -> name != null && needle.equals(name.strip()));
+    }
+
     private GameView toView(Game g, List<io.github.sander_i.domain.Tag> tags) {
         var st = sessions.status(g.getId(), g.getPort());
         return toView(g, st, tags);
@@ -214,17 +228,20 @@ public class GameController {
 
     private GameView toView(Game g, SessionService.SessionStatus st,
                             List<io.github.sander_i.domain.Tag> tags) {
+        String locale = I18n.locale();
         var comps = companyService.ofGame(g.getId()).stream()
-                .map(c -> new GameView.CompanyView(c.getId(), c.getName(),
-                        c.getAlias() == null ? "" : c.getAlias(),
-                        c.getWebsite() == null ? "" : c.getWebsite(),
-                        c.getDescription() == null ? "" : c.getDescription()))
+                .map(c -> {
+                    var text = LocalizedText.of(c, locale);
+                    return new GameView.CompanyView(c.getId(), text.name(), text.alias(),
+                            text.website(), text.description());
+                })
                 .toList();
         var groups = localizationService.ofGame(g.getId()).stream()
-                .map(c -> new GameView.GroupView(c.getId(), c.getName(),
-                        c.getAlias() == null ? "" : c.getAlias(),
-                        c.getWebsite() == null ? "" : c.getWebsite(),
-                        c.getDescription() == null ? "" : c.getDescription()))
+                .map(c -> {
+                    var text = LocalizedText.of(c, locale);
+                    return new GameView.GroupView(c.getId(), text.name(), text.alias(),
+                            text.website(), text.description());
+                })
                 .toList();
         var covers = gameMedia.itemsOf(g.getId(), "cover");
         var cgs = gameMedia.itemsOf(g.getId(), "cg");

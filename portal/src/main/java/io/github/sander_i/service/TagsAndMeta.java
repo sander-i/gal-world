@@ -195,6 +195,12 @@ public class TagsAndMeta {
         return tags.save(t);
     }
 
+    /** 保存多语言覆盖等附加字段；业务字段仍走 create / update 校验 */
+    @Transactional
+    public Tag save(Tag t) {
+        return tags.save(t);
+    }
+
     @Transactional
     public void deleteTag(long id) {
         links.deleteByTagId(id);

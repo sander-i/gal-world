@@ -344,15 +344,15 @@ export const api = {
   rescan: () => req('/api/games/scan', { method: 'POST' }),
 
   listTags: () => req('/api/tags'),
-  createTag: (name, alias) =>
+  createTag: (name, alias, i18n) =>
     req('/api/tags', {
       method: 'POST',
-      body: JSON.stringify({ name, alias: alias || '' }),
+      body: JSON.stringify({ name, alias: alias || '', i18n: i18n || null }),
     }),
-  updateTag: (id, name, alias) =>
+  updateTag: (id, name, alias, i18n) =>
     req(`/api/tags/${encodeURIComponent(id)}`, {
       method: 'PUT',
-      body: JSON.stringify({ name, alias: alias || '' }),
+      body: JSON.stringify({ name, alias: alias || '', i18n: i18n || null }),
     }),
   deleteTag: (id) =>
     req(`/api/tags/${encodeURIComponent(id)}`, { method: 'DELETE' }),
@@ -372,7 +372,7 @@ export const api = {
       method: 'DELETE',
     }),
   listCompanies: () => req('/api/companies'),
-  createCompany: (name, alias, website, description) =>
+  createCompany: (name, alias, website, description, i18n) =>
     req('/api/companies', {
       method: 'POST',
       body: JSON.stringify({
@@ -380,9 +380,10 @@ export const api = {
         alias: alias || '',
         website: website || '',
         description: description || '',
+        i18n: i18n || null,
       }),
     }),
-  updateCompany: (id, name, alias, website, description) =>
+  updateCompany: (id, name, alias, website, description, i18n) =>
     req(`/api/companies/${encodeURIComponent(id)}`, {
       method: 'PUT',
       body: JSON.stringify({
@@ -390,12 +391,13 @@ export const api = {
         alias: alias || '',
         website: website || '',
         description: description || '',
+        i18n: i18n || null,
       }),
     }),
   deleteCompany: (id) =>
     req(`/api/companies/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   listLocalizationGroups: () => req('/api/localization-groups'),
-  createLocalizationGroup: (name, alias, website, description) =>
+  createLocalizationGroup: (name, alias, website, description, i18n) =>
     req('/api/localization-groups', {
       method: 'POST',
       body: JSON.stringify({
@@ -403,9 +405,10 @@ export const api = {
         alias: alias || '',
         website: website || '',
         description: description || '',
+        i18n: i18n || null,
       }),
     }),
-  updateLocalizationGroup: (id, name, alias, website, description) =>
+  updateLocalizationGroup: (id, name, alias, website, description, i18n) =>
     req(`/api/localization-groups/${encodeURIComponent(id)}`, {
       method: 'PUT',
       body: JSON.stringify({
@@ -413,6 +416,7 @@ export const api = {
         alias: alias || '',
         website: website || '',
         description: description || '',
+        i18n: i18n || null,
       }),
     }),
   deleteLocalizationGroup: (id) =>

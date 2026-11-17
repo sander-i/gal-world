@@ -1184,7 +1184,7 @@
     "等待游戏保存存档后退出，请不要关闭页面": "Waiting for the game to save and exit; do not close the page",
     "等待画面…": "Waiting for the picture…",
     "筛选条件": "Filters",
-    "简介": "Description",
+    "简介": "Summary",
     "管理": "Admin",
     "管理员权限": "Administrator rights",
     "管理员权限（安装服务、配置防火墙）": "Administrator rights (install services, configure the firewall)",
@@ -1514,6 +1514,11 @@
     "符号键，需 keyMap": "Symbolic keys, needs a keyMap",
     "strings.xml，符号键，需 keyMap": "strings.xml, symbolic keys, needs a keyMap",
     "Flutter，符号键，需 keyMap": "Flutter, symbolic keys, needs a keyMap",
-    "Apple，符号键，需 keyMap": "Apple, symbolic keys, needs a keyMap"
+    "Apple，符号键，需 keyMap": "Apple, symbolic keys, needs a keyMap",
+    "多语言名称（可选）": "Translations (optional)",
+    "多语言名称": "Translations",
+    "留空表示沿用默认值": "Leave blank to use the default",
+    "已填写": "Filled",
+    "没有可配置的语言": "No languages available"
   }
 }

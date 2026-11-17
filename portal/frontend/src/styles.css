@@ -3607,3 +3607,77 @@ tr[draggable="true"]:active { cursor: grabbing; }
 .lang-keymap summary:hover {
   color: var(--text);
 }
+
+/* ===== 多语言字段编辑（公司 / 标签 / 汉化组维护页） ===== */
+.i18n-fields {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.i18n-locale {
+  border: 1px solid var(--line);
+  border-radius: var(--r-ctl);
+  background: var(--surface-2);
+}
+
+.i18n-locale > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--muted);
+  list-style: none;
+}
+
+.i18n-locale > summary::-webkit-details-marker { display: none; }
+
+.i18n-locale > summary:hover { color: var(--text); }
+
+.i18n-locale-name { color: var(--text); }
+
+.i18n-locale-id {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11.5px;
+  color: var(--muted-soft);
+}
+
+.i18n-locale-dot {
+  margin-left: auto;
+  color: var(--ok);
+  font-size: 10px;
+}
+
+.i18n-locale-body {
+  display: grid;
+  gap: 8px;
+  padding: 0 12px 12px;
+}
+
+.i18n-field {
+  display: grid;
+  grid-template-columns: minmax(0, 120px) minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+}
+
+.i18n-field-label {
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+/* 窄屏下标签与输入框上下排列，避免输入框被挤成一条 */
+@media (max-width: 700px) {
+  .i18n-field { grid-template-columns: 1fr; gap: 4px; }
+}
+
+/* 编辑行下方的多语言面板：与表格隔开，视觉上从属当前编辑项 */
+.i18n-edit-panel {
+  margin-top: 16px;
+  padding: 14px 16px;
+  border: 1px solid var(--accent-line);
+  border-radius: var(--radius);
+  background: var(--accent-faint);
+}
