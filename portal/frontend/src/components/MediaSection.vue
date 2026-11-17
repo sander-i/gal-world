@@ -27,7 +27,7 @@ const props = defineProps({
   imageMaxMb: { type: Number, required: true },
   videoMaxMb: { type: Number, required: true },
   /** 数量单位：张 / 个 */
-  unit: { type: String, default: t('张') },
+  unit: { type: String, default: '' },
   /** 每行左侧的序号标签类型：数字序号，或按媒体类型显示「图片 / 视频」 */
   indexMode: { type: String, default: 'number' },
   /** 上传中时的百分比（0-1），null 表示不显示进度条 */
@@ -50,6 +50,9 @@ const dragOverIndex = ref(-1)
 const accept = computed(() => props.allowVideo
   ? 'image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm'
   : 'image/png,image/jpeg,image/webp,image/gif')
+
+/** 数量单位的默认值在这里求值，不放进 props 默认值——导入期算一次，切换语言后不更新 */
+const unitText = computed(() => props.unit || t('张'))
 
 function isVideoItem(item) {
   return item.file
@@ -82,8 +85,8 @@ function onBusy(busy) {
 
 /** 拖放区：只接管从系统拖入的文件，卡片内部排序不受影响 */
 function hasFileDrag(ev) {
-  const t = ev.dataTransfer && ev.dataTransfer.types
-  return !!t && Array.prototype.indexOf.call(t, 'Files') >= 0
+  const types = ev.dataTransfer && ev.dataTransfer.types
+  return !!types && Array.prototype.indexOf.call(types, 'Files') >= 0
 }
 
 function onZoneEnter(ev) {
@@ -199,7 +202,7 @@ function onDragEnd() {
       <input type="file" :accept="accept" multiple hidden @change="pick">
     </label>
     <span class="muted-sm" style="margin-left:10px">
-      {{ t("最多 {0} {1}，图片 {2} MB", max, unit, imageMaxMb) }}<template v-if="allowVideo"> {{ t("/ 视频 {0} MB", videoMaxMb) }}</template>
+      {{ t("最多 {0} {1}，图片 {2} MB", max, unitText, imageMaxMb) }}<template v-if="allowVideo"> {{ t("/ 视频 {0} MB", videoMaxMb) }}</template>
     </span>
   </div>
 

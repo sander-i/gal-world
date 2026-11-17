@@ -75,7 +75,8 @@ const currentBackup = computed(() => {
   return (saves.value.backups || []).find((b) => b.name === name) || null
 })
 
-const SAVE_KIND_TEXT = { MANUAL: t('手动'), ORIGINAL: t('原始'), PRE_RESTORE: t('自动快照') }
+/** 存档类型文案：computed 而非常量，否则语言切换后不更新 */
+const saveKindText = computed(() => ({ MANUAL: t('手动'), ORIGINAL: t('原始'), PRE_RESTORE: t('自动快照') }))
 
 /** 打包下载任务：两段式，先打包再下载 */
 const downloadJob = ref(null)
@@ -169,13 +170,14 @@ async function selectMedia(mode) {
   }
 }
 
-const STATE_TEXT = {
+/** 状态文案：computed 而非常量，否则语言切换后不更新 */
+const stateText = computed(() => ({
   RUNNING: t('运行中'),
   STOPPED: t('已停止'),
   FAILED: t('异常'),
   UNKNOWN: t('未知'),
   UNSUPPORTED: t('不支持'),
-}
+}))
 
 const running = computed(() => game.value?.state === 'RUNNING')
 
@@ -534,7 +536,7 @@ onMounted(load)
             <h1>{{ game.name }}</h1>
           </div>
           <div class="sub">
-            {{ t("{0}×{1} · 状态 {2}", game.width, game.height, STATE_TEXT[game.state] || game.state) }}<span
+            {{ t("{0}×{1} · 状态 {2}", game.width, game.height, stateText[game.state] || game.state) }}<span
               v-if="running && latency != null"
               class="latency-inline"
               :class="latencyTone(latency)"
@@ -836,7 +838,7 @@ onMounted(load)
                 <td class="mono">{{ fmtTime(b.createdAt) }}</td>
                 <td>
                   <span class="save-kind" :class="b.kind">
-                    {{ SAVE_KIND_TEXT[b.kind] || b.kind }}
+                    {{ saveKindText[b.kind] || b.kind }}
                   </span>
                 </td>
                 <td>

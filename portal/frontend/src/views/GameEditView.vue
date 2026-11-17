@@ -509,8 +509,8 @@ function reorderMedia(kind, { from, to }) {
 /** 标签表单只存名称；选择器用对象模型，别名来自标签字典 */
 const tagModel = computed({
   get: () => form.value.tags.map((n) => {
-    const t = allTags.value.find((x) => x.name === n)
-    return { id: t?.id ?? null, name: n, alias: t?.alias || '', website: '' }
+    const hit = allTags.value.find((x) => x.name === n)
+    return { id: hit?.id ?? null, name: n, alias: hit?.alias || '', website: '' }
   }),
   set: (v) => { form.value.tags = (v || []).map((o) => o.name) },
 })
@@ -598,10 +598,12 @@ async function createLocalization({ name, alias }) {
 /** 编辑页新增标签：名称 + 可选别名；返回新条目供下拉自动选中 */
 async function createTag({ name, alias }) {
   try {
-    const t = await api.createTag(name, alias)
-    if (!allTags.value.some((x) => x.id === t.id)) allTags.value = [...allTags.value, t]
-    if (!form.value.tags.includes(t.name)) form.value.tags.push(t.name)
-    return t
+    const created = await api.createTag(name, alias)
+    if (!allTags.value.some((x) => x.id === created.id)) {
+      allTags.value = [...allTags.value, created]
+    }
+    if (!form.value.tags.includes(created.name)) form.value.tags.push(created.name)
+    return created
   } catch (e) {
     notify.error(t("新增标签失败：{0}", e.message))
     return null

@@ -168,11 +168,13 @@ EventSource / 直链下载可用 `?lang=` 代替。
 | 脚本 | 用途 |
 |---|---|
 | `tools/i18n-chunk.py` | 从源码抽取全部键，写入 `tmp-i18n/keys.txt` |
-| `tools/i18n-check.py <pack.json>` | 校验缺失键、多余键、占位符不一致 |
+| `tools/i18n-check.py <pack.json> [...]` | 校验缺失键、多余键、占位符不一致（第一套包作参考键集，可用 `--keys` 指定） |
 | `tools/i18n-wrap.py` / `i18n-wrap-fe.py` | 把中文字面量包进 `I18n.t()` / `t()`（改代码时用） |
 | `tools/i18n-e2e.py` | 起服务后验证语言接口与异常语言 |
 | `tools/i18n-e2e-import.py` | 起服务后验证各格式导入、keyMap、导出往返 |
 | `tools/i18n-e2e-market.py` | 起服务后验证从地址安装（市场直链） |
+| `tools/i18n-audit.py [src 目录]` | 找前端漏走 `t()` 的中文（字符串与模板文本节点） |
+| `tools/i18n-keydiff.js [src 目录] [包.json]` | 比对前端 `t()` 用到的键与语言包键集，报缺失/多余 |
 
 `i18n-extract*.py` / `i18n-keys.py` / `i18n-fixkey.py` 是抽取与改键的辅助脚本，
 功能已被 `i18n-chunk.py` 覆盖，保留作参考。

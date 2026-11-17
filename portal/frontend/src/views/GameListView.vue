@@ -43,11 +43,12 @@ const density = ref(initial.density || localStorage.getItem(DENSITY_KEY) || 'coz
 const busyId = ref('')
 const rotationEnabled = ref(true)
 
-const DENSITIES = [
+/** 密度选项：computed 而非常量，否则语言切换后不更新 */
+const densities = computed(() => [
   { id: 'cozy', label: t('标准') },
   { id: 'compact', label: t('紧凑') },
   { id: 'list', label: t('列表') },
-]
+])
 
 /** 超出这个数量就折叠成「前 N 个 + 更多」，避免筛选区被撑成多行 */
 const CHIP_LIMIT = 8
@@ -373,7 +374,7 @@ function hostOf(url) {
         <div class="spacer" />
         <div class="seg density-seg">
           <button
-            v-for="d in DENSITIES"
+            v-for="d in densities"
             :key="d.id"
             :class="{ on: density === d.id }"
             @click="setDensity(d.id)"

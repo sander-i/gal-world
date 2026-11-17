@@ -12,10 +12,11 @@ const props = defineProps({ draft: { type: Object, required: true } })
 const emit = defineEmits(['save', 'cancel'])
 
 const form = reactive({ name: props.draft.name, base: props.draft.base, seed: { ...props.draft.seed } })
-const FIELDS = [
+/** 颜色字段：computed 而非常量，否则语言切换后不更新 */
+const fields = computed(() => [
   ['bg', t('背景')], ['surface', t('表面')], ['line', t('边框')], ['text', t('正文')],
   ['muted', t('次要文字')], ['accent', t('强调色')], ['ok', t('成功')], ['warn', t('警告')], ['err', t('错误')],
-]
+])
 const preview = computed(() => deriveVars({ ...form.seed }))
 
 function save() {
@@ -38,7 +39,7 @@ function save() {
       </div>
     </div>
     <div class="theme-fields">
-      <label v-for="[k, label] in FIELDS" :key="k" class="theme-field">
+      <label v-for="[k, label] in fields" :key="k" class="theme-field">
         <span>{{ label }}</span>
         <input v-model="form.seed[k]" type="color">
         <code>{{ form.seed[k] }}</code>
@@ -57,7 +58,7 @@ function save() {
     </div>
     <div class="backup-bar">
       <button class="btn primary sm" @click="save">{{ t("保存并使用") }}</button>
-      <button class="btn" @click="$emit('cancel')">取消</button>
+      <button class="btn" @click="$emit('cancel')">{{ t("取消") }}</button>
     </div>
   </div>
 </template>

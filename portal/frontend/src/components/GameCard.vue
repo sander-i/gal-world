@@ -10,6 +10,7 @@
  * 首页传 recommend 接口的条目、列表页传 GameView，两者字段并集覆盖本组件所需；
  * 首页条目没有 width/height/iconPath 时对应位置留空，不报错。
  */
+import { computed } from 'vue'
 import { t } from '../i18n.js'
 import MediaRotator from './MediaRotator.vue'
 import { formatPlaytimeShort } from '../format'
@@ -30,13 +31,14 @@ defineProps({
 })
 defineEmits(['toggle', 'open'])
 
-const STATE_TEXT = {
+/** 状态文案：computed 而非常量，否则语言切换后不更新 */
+const stateText = computed(() => ({
   RUNNING: t('运行中'),
   STOPPED: t('已停止'),
   FAILED: t('异常'),
   UNKNOWN: t('未知'),
   UNSUPPORTED: t('不支持'),
-}
+}))
 </script>
 
 <template>
@@ -53,7 +55,7 @@ const STATE_TEXT = {
       :priority="priority"
     />
     <span v-else class="initial">{{ game.name.slice(0, 1) }}</span>
-    <span class="badge" :class="game.state">{{ STATE_TEXT[game.state] || game.state }}</span>
+    <span class="badge" :class="game.state">{{ stateText[game.state] || game.state }}</span>
     <span
       v-if="game.state === 'RUNNING' && latency != null"
       class="latency-badge"

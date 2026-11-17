@@ -6,7 +6,7 @@
 import { t } from './i18n.js'
 import { onBeforeUnmount, reactive, ref } from 'vue'
 import { api } from './api'
-import { LAUNCH_LABELS, launchPercent, startVerdict, stopPercent } from './launch-progress'
+import { launchLabel, launchPercent, startVerdict, stopPercent } from './launch-progress'
 
 const POLL_MS = 400
 const START_MS = 15_000
@@ -67,7 +67,7 @@ export function useGameLaunch({ idOf = (g) => g.id ?? g.gameId, onError, onStart
     const prev = launches[id]?.percent ?? 0
     launches[id] = {
       percent: Math.max(prev, percent),
-      label: LAUNCH_LABELS[step] || '',
+      label: launchLabel(step),
       step,
       action,
     }

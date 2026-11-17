@@ -20,12 +20,19 @@ import { t } from './i18n.js'
 
 export const PHASES = ['prepare', 'start', 'stream', 'player', 'frame']
 
-export const PHASE_LABELS = {
-  prepare: t('查询会话状态…'),
-  start: t('正在启动游戏…'),
-  stream: t('连接串流服务…'),
-  player: t('加载播放器…'),
-  frame: t('等待画面…'),
+/**
+ * 启动阶段文案。做成函数而不是常量：模块级常量在导入期求值，
+ * 语言切换后不会更新。
+ */
+export function phaseLabel(phase) {
+  switch (phase) {
+    case 'prepare': return t('查询会话状态…')
+    case 'start': return t('正在启动游戏…')
+    case 'stream': return t('连接串流服务…')
+    case 'player': return t('加载播放器…')
+    case 'frame': return t('等待画面…')
+    default: return ''
+  }
 }
 
 const RANGES = {

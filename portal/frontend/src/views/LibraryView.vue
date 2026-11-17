@@ -4,8 +4,8 @@
 -->
 
 <script setup>
-import { t } from '../i18n.js'
-import { computed, onMounted, ref } from 'vue'
+import { onLocaleChange, t } from '../i18n.js'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { api } from '../api'
 import { notify } from '../feedback'
@@ -144,6 +144,10 @@ function fmtDay(iso) {
 }
 
 onMounted(load)
+
+// Hero 的推荐理由与推荐条的理由由后端按请求语言翻译，切语言后要重取
+const stopLocaleWatch = onLocaleChange(() => load())
+onBeforeUnmount(stopLocaleWatch)
 </script>
 
 <template>

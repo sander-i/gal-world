@@ -4,7 +4,7 @@
 -->
 
 <script setup>
-import { t } from '../i18n.js'
+import { onLocaleChange, t } from '../i18n.js'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { api, getWriteToken } from '../api'
@@ -40,13 +40,14 @@ const run = ref({ lines: [], steps: [], state: 'RUNNING' })
 const busy = ref(false)
 
 const STEP_IDS = ['validate', 'allocate', 'register', 'wineboot', 'fonts']
-const STEP_TITLES = {
+/** 步骤标题：computed 而非常量，否则语言切换后不更新 */
+const stepTitles = computed(() => ({
   validate: t('校验参数与目录'),
   allocate: t('分配显示号 / 端口 / 槽位'),
   register: t('写入 game.env 并入库'),
   wineboot: t('初始化 Wine 前缀'),
   fonts: t('安装中文字体'),
-}
+}))
 const stepsView = computed(() => STEP_IDS.map((id) => stepOf(run.value.steps, id)))
 const phase = computed(() => runPhase(run.value.state))
 const submitReady = computed(() => canSubmit(form.value) && !!selected.value)
@@ -243,7 +244,15 @@ onMounted(() => {
   }
 })
 
-onBeforeUnmount(() => abort?.abort())
+// 候选目录的警告由后端按请求语言翻译，切语言后要重取
+const stopLocaleWatch = onLocaleChange(() => {
+  if (!runId.value) loadCandidates()
+})
+
+onBeforeUnmount(() => {
+  abort?.abort()
+  stopLocaleWatch()
+})
 </script>
 
 <template>
@@ -348,7 +357,7 @@ onBeforeUnmount(() => abort?.abort())
       <h2>{{ t("3. 执行接入") }}</h2>
       <ol class="import-steps">
         <li v-for="s in stepsView" :key="s.id" :class="'state-' + s.state.toLowerCase()">
-          {{ STEP_TITLES[s.id] || s.title }} — {{ s.state }}
+          {{ stepTitles[s.id] || s.title }} — {{ s.state }}
         </li>
       </ol>
       <pre class="import-log">{{ run.lines.join('\n') }}</pre>

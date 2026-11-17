@@ -78,12 +78,12 @@ function onSave(theme) {
 
     <div class="backup-bar" style="margin-top:12px">
       <button class="btn" @click="duplicate(currentId === 'obsidian'
-        ? allThemes[0] : allThemes.find((x) => x.id === currentId))">基于当前主题新建</button>
+        ? allThemes[0] : allThemes.find((x) => x.id === currentId))">{{ t("基于当前主题新建") }}</button>
       <button
         v-if="!allThemes.find((x) => x.id === currentId)?.builtin"
         class="btn danger"
         @click="removeCustom(currentId)"
-      >删除当前自定义主题</button>
+      >{{ t("删除当前自定义主题") }}</button>
     </div>
 
     <ThemeEditor v-if="editing" :draft="editing" @cancel="editing = null" @save="onSave" />

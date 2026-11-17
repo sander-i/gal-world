@@ -119,9 +119,10 @@ export function resolveTheme(id, customThemes = []) {
 export function parseStoredTheme(raw) {
   if (!raw) return null
   try {
-    const t = JSON.parse(raw)
-    if (!t || typeof t.id !== 'string' || !t.vars || typeof t.vars !== 'object') return null
-    return t
+    const parsed = JSON.parse(raw)
+    if (!parsed || typeof parsed.id !== 'string' || !parsed.vars
+        || typeof parsed.vars !== 'object') return null
+    return parsed
   } catch {
     return null
   }

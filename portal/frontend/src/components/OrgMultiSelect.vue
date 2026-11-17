@@ -22,7 +22,7 @@ import { moveItem } from '../order'
 const props = defineProps({
   modelValue: { type: Array, default: () => [] },
   options: { type: Array, default: () => [] },
-  placeholder: { type: String, default: t('搜索名称或别名') },
+  placeholder: { type: String, default: '' },
   /** 允许在编辑页直接新建 */
   creatable: { type: Boolean, default: false },
   /** 新建实现：({ name, alias }) => Promise<条目|null>；实现方必须自行把条目并入 modelValue */
@@ -48,6 +48,8 @@ const open = ref(false)
 const composing = ref(false)
 const creating = ref(false)
 const searchEl = ref(null)
+/** 默认占位文案在这里求值，不放进 props 默认值——props 默认值在导入期算一次，切换语言后不更新 */
+const placeholderText = computed(() => props.placeholder || t('搜索名称或别名'))
 const filtered = computed(() => filterOrgs(props.options, query.value))
 const enterAction = computed(() =>
   resolveEnterAction(filtered.value, query.value, props.creatable))
@@ -128,7 +130,7 @@ function onFocusOut(ev) {
         ref="searchEl"
         v-model="query"
         class="org-select-input"
-        :placeholder="modelValue.length ? '' : placeholder"
+        :placeholder="modelValue.length ? '' : placeholderText"
         @focus="open = true"
         @input="open = true"
         @compositionstart="composing = true"

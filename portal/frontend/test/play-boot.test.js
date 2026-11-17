@@ -5,12 +5,12 @@
 
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { PHASES, PHASE_LABELS, bootPercent, nextPercent, viewForSession,
+import { PHASES, phaseLabel, bootPercent, nextPercent, viewForSession,
   interruptionFor, bootDecision, isCleanExit } from '../src/play-boot.js'
 
 test('阶段顺序与中文标签齐全', () => {
   assert.deepEqual(PHASES, ['prepare', 'start', 'stream', 'player', 'frame'])
-  for (const p of PHASES) assert.equal(typeof PHASE_LABELS[p], 'string')
+  for (const p of PHASES) assert.equal(typeof phaseLabel(p), 'string')
 })
 
 test('bootPercent 在阶段区间内且随时间单调不减', () => {

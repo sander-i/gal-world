@@ -5,12 +5,13 @@
 
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { LAUNCH_STEPS, LAUNCH_LABELS, launchPercent, startVerdict, stopPercent }
+import { LAUNCH_STEPS, launchLabel, launchPercent, startVerdict, stopPercent }
   from '../src/launch-progress.js'
 
 test('阶段顺序与中文标签齐全', () => {
   assert.deepEqual(LAUNCH_STEPS, ['start', 'stream', 'done'])
-  for (const s of LAUNCH_STEPS) assert.equal(typeof LAUNCH_LABELS[s], 'string')
+  // 标签改成函数：模块级常量在导入期求值，语言切换后不会更新
+  for (const s of LAUNCH_STEPS) assert.equal(typeof launchLabel(s), 'string')
 })
 
 test('launchPercent 在区间内单调不减', () => {

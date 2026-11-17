@@ -40,7 +40,8 @@ function saveWriteToken() {
   nextTick(updateActiveNav)
 }
 
-const baseNavItems = [
+/** 目录项：computed 而非常量，否则语言切换后不更新 */
+const baseNavItems = computed(() => [
   { id: 'language', label: t('界面语言') },
   { id: 'appearance', label: t('外观主题') },
   { id: 'features', label: t('功能开关') },
@@ -52,10 +53,10 @@ const baseNavItems = [
   { id: 'media-default', label: t('游戏页展示') },
   { id: 'access', label: t('写接口令牌') },
   { id: 'about', label: t('关于') },
-]
+])
 /** 令牌一旦填写，修改入口只保留在后台管理页 */
 const navItems = computed(() =>
-  baseNavItems.filter((n) => n.id !== 'access' || !writeTokenSaved.value))
+  baseNavItems.value.filter((n) => n.id !== 'access' || !writeTokenSaved.value))
 const activeNav = ref('switch-mode')
 
 /** 仓库地址由后台管理配置；开关关闭时 /api/health 不下发该字段 */

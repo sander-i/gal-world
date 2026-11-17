@@ -4,7 +4,7 @@
 -->
 
 <script setup>
-import { reloadI18n, t } from '../i18n.js'
+import { onLocaleChange, reloadI18n, t } from '../i18n.js'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { api, getWriteToken, setWriteToken } from '../api'
 import { confirmAction, notify } from '../feedback'
@@ -26,11 +26,16 @@ const savedWriteToken = ref(getWriteToken())
 const writeTokenSaved = computed(() => !!savedWriteToken.value.trim())
 /** 输入框不预填旧令牌：预填会让占位文案永远不可见，直接输入还会拼成旧+新 */
 const writeToken = ref('')
+/**
+ * 这两条是 grep 命令，匹配后端启动日志里的原文。
+ * 日志文案在 WriteSecurity / DeploySecurity 里硬编码中文、不走语言包，
+ * 所以这里不能包 t()——翻译后 grep 就匹配不到了。
+ */
 const WRITE_TOKEN_CMD =
-  t("journalctl --user -u galworld-portal --no-pager | grep '写接口令牌：' | tail -1")
+  "journalctl --user -u galworld-portal --no-pager | grep '写接口令牌：' | tail -1"
 /** 部署令牌：未配置 GALWORLD_DEPLOY_TOKEN 时每次启动随机生成，只出现在启动日志里 */
 const DEPLOY_TOKEN_CMD =
-  t("journalctl --user -u galworld-portal --no-pager | grep '随机令牌' | tail -1")
+  "journalctl --user -u galworld-portal --no-pager | grep '随机令牌' | tail -1"
 function saveWriteToken() {
   if (!writeToken.value.trim()) return
   setWriteToken(writeToken.value)
@@ -63,19 +68,21 @@ const account = ref(null)
 const selectedEnv = computed(() =>
   environment.value.find((s) => s.key === selectedEnvKey.value) || environment.value[0])
 
-const STATUS_TEXT = {
+/** 环境状态文案：computed 而非常量，否则语言切换后不更新 */
+const statusText = computed(() => ({
   active: t('已启用'),
   installed: t('已安装'),
   planned: t('规划中'),
   rejected: t('未采用'),
-}
+}))
 
-const HEALTH_TEXT = {
+/** 健康状态文案：computed 而非常量 */
+const healthText = computed(() => ({
   ok: t('正常'),
   warn: t('注意'),
   error: t('异常'),
   unknown: t('未知'),
-}
+}))
 
 /** 环境方案里当前展开的详情分组（一次只展开一个，便于排查） */
 const openGroup = ref('')
@@ -380,19 +387,20 @@ function commandsOf(step) {
   return lines.length ? lines.join('\n') : t('该步骤没有可直接展示的命令')
 }
 
-const DEPLOY_LABEL = {
+/** 部署步骤状态文案：computed 而非常量 */
+const deployLabel = computed(() => ({
   READY: t('已就绪'), NOT_READY: t('待执行'), BLOCKED: t('等待前置'), QUEUED: t('排队中'),
   RUNNING: t('执行中'), SUCCESS: t('成功'), FAILED: t('失败'), NEED_ELEVATION: t('需提权'),
   CANCELLED: t('已取消'),
-}
+}))
 const DEPLOY_BADGE = {
   READY: 'ok', SUCCESS: 'ok', RUNNING: 'run', QUEUED: 'run',
   BLOCKED: 'warn', NEED_ELEVATION: 'warn', FAILED: 'bad', CANCELLED: 'bad',
 }
 
 async function loadDeployStatus() {
-  const t = token.value.trim()
-  if (!t) {
+  const tk = token.value.trim()
+  if (!tk) {
     deploySteps.value = []
     deployElevation.value = null
     return
@@ -400,7 +408,7 @@ async function loadDeployStatus() {
   deployLoading.value = true
   deployError.value = ''
   try {
-    const d = await api.deployStatus(t)
+    const d = await api.deployStatus(tk)
     deployOs.value = d.os || ''
     allowSudo.value = d.allowSudoPassword === true
     deployElevation.value = d.elevation || null
@@ -415,8 +423,9 @@ async function loadDeployStatus() {
 
 async function runDeployStep(step, sudoPassword, opts = {}) {
   if (deployRunId.value) return false
-  const t = token.value.trim()
-  if (!t) {
+  // 变量名不能叫 t：会遮蔽 i18n 的翻译函数，下面 t('...') 就变成调用字符串
+  const tk = token.value.trim()
+  if (!tk) {
     notify.error(t('先填写部署令牌'))
     return false
   }
@@ -430,16 +439,16 @@ async function runDeployStep(step, sudoPassword, opts = {}) {
         )
         if (!ok) return false
       }
-      const c = await api.deployConfirm(step.id, t)
+      const c = await api.deployConfirm(step.id, tk)
       confirmToken = c.confirmToken
     }
     deployLines.value = []
     deployRunStep.value = step.title || step.id
     deployRunState.value = 'QUEUED'
-    const r = await api.deployRun(step.id, t, confirmToken, sudoPassword || null)
+    const r = await api.deployRun(step.id, tk, confirmToken, sudoPassword || null)
     if (!opts.keepSudo) deploySudo.value = ''
     deployRunId.value = r.runId
-    await followRun(r.runId, t)
+    await followRun(r.runId, tk)
     // 状态刷新失败时不能当作成功：宁可停下报错，也不能谎报卸载完成
     const latest = deploySteps.value.find((s) => s.id === step.id)
     return latest?.lastState === 'SUCCESS'
@@ -451,11 +460,11 @@ async function runDeployStep(step, sudoPassword, opts = {}) {
   }
 }
 
-async function followRun(runId, t) {
+async function followRun(runId, tk) {
   deployAbort?.abort()
   deployAbort = new AbortController()
   try {
-    await api.deployEvents(runId, t, (line) => {
+    await api.deployEvents(runId, tk, (line) => {
       if (line === 'done') return
       deployLines.value = [...deployLines.value, line]
     }, deployAbort.signal)
@@ -617,12 +626,12 @@ async function clearVariants() {
 // ---------------- 设置读写 ----------------
 
 async function unlock() {
-  const t = token.value.trim()
-  if (!t) return
+  const tk = token.value.trim()
+  if (!tk) return
   busy.value = true
   try {
-    settings.value = await api.adminSettings(t)
-    sessionStorage.setItem(TOKEN_KEY, t)
+    settings.value = await api.adminSettings(tk)
+    sessionStorage.setItem(TOKEN_KEY, tk)
     syncRepoUrl()
     syncUpdateSource()
     syncArtifactSources()
@@ -696,7 +705,10 @@ const keyMapText = ref('')
 const sourceKeys = ref([])
 /** 语言包市场直链：填地址后从后端拉取，走与上传相同的导入链路 */
 const marketUrl = ref('')
-/** 输入框占位示例；写在脚本里避免模板属性里嵌引号 */
+/**
+ * 输入框占位示例；写在脚本里避免模板属性里嵌引号。
+ * 值必须是中文原文（源文即键），所以这里不能包 t()——翻译后示例就错了。
+ */
 const keyMapHint = '{"nav.library": "游戏库"}'
 /** 地址输入框示例；URL 本身不翻译 */
 const marketUrlHint = 'https://raw.githubusercontent.com/org/i18n/main/ko.po'
@@ -846,9 +858,20 @@ onMounted(() => {
   loadLanguages()
 })
 
+// 部署步骤的标题 / 摘要 / 成功提示由后端按请求语言翻译，切语言后要重取，
+// 否则页面上还是旧语言
+const stopLocaleWatch = onLocaleChange(() => {
+  if (token.value) {
+    loadDeployStatus()
+    loadEnvironment()
+  }
+  loadLanguages()
+})
+
 onBeforeUnmount(() => {
   deployAbort?.abort()
   stopUpdatePolling()
+  stopLocaleWatch()
 })
 </script>
 
@@ -1215,7 +1238,7 @@ onBeforeUnmount(() => {
                   <span class="deploy-caret">{{ cmdOpen(s.id) ? '▾' : '▸' }}</span>
                   <b>{{ s.title }}</b>
                   <span class="deploy-badge" :class="DEPLOY_BADGE[s.state]">
-                    {{ DEPLOY_LABEL[s.state] || s.state }}
+                    {{ deployLabel[s.state] || s.state }}
                   </span>
                   <span class="deploy-badge kind">{{ s.kind }}</span>
                   <span v-if="s.destructive" class="deploy-badge bad">{{ t("破坏性") }}</span>
@@ -1282,7 +1305,7 @@ onBeforeUnmount(() => {
                   <span class="deploy-caret">{{ cmdOpen(s.id) ? '▾' : '▸' }}</span>
                   <b>{{ s.title }}</b>
                   <span class="deploy-badge" :class="DEPLOY_BADGE[s.state]">
-                    {{ DEPLOY_LABEL[s.state] || s.state }}
+                    {{ deployLabel[s.state] || s.state }}
                   </span>
                   <span class="deploy-badge bad">{{ t("破坏性") }}</span>
                 </div>
@@ -1335,7 +1358,7 @@ onBeforeUnmount(() => {
             <span class="env-scheme-top">
               <span class="env-name">{{ s.name }}</span>
               <span class="env-status" :class="s.status">
-                {{ STATUS_TEXT[s.status] || s.status }}
+                {{ statusText[s.status] || s.status }}
               </span>
             </span>
             <span class="env-tagline">{{ s.tagline }}</span>
@@ -1346,7 +1369,7 @@ onBeforeUnmount(() => {
           <div class="env-detail-head">
             <h3>{{ selectedEnv.name }}</h3>
             <span class="env-status" :class="selectedEnv.status">
-              {{ STATUS_TEXT[selectedEnv.status] || selectedEnv.status }}
+              {{ statusText[selectedEnv.status] || selectedEnv.status }}
             </span>
           </div>
           <p class="env-tagline" style="margin:0 0 14px">{{ selectedEnv.tagline }}</p>
@@ -1382,7 +1405,7 @@ onBeforeUnmount(() => {
               <span class="env-group-name">{{ g.name }}</span>
               <span v-if="g.summary" class="env-group-summary">{{ g.summary }}</span>
               <span v-if="g.health" class="env-status" :class="g.health">
-                {{ HEALTH_TEXT[g.health] || g.health }}
+                {{ healthText[g.health] || g.health }}
               </span>
               <span class="env-group-arrow">{{ openGroup === g.name ? '−' : '+' }}</span>
             </button>
@@ -1395,8 +1418,8 @@ onBeforeUnmount(() => {
                     :class="it.health && selectedEnv.status === 'active' ? it.health : it.status"
                   >
                     {{ it.health && selectedEnv.status === 'active'
-                      ? (HEALTH_TEXT[it.health] || it.health)
-                      : (STATUS_TEXT[it.status] || it.status) }}
+                      ? (healthText[it.health] || it.health)
+                      : (statusText[it.status] || it.status) }}
                   </span>
                 </div>
                 <div class="env-detail mono">{{ it.detail }}</div>
@@ -1543,6 +1566,9 @@ onBeforeUnmount(() => {
           <p class="muted-sm">
             {{ t("格式 {0} · 导入 {1} 条 · 跳过 {2} 条", importReport.format,
                  importReport.imported, importReport.skipped) }}
+          </p>
+          <p v-if="importReport.sourceUrl" class="muted-sm">
+            {{ t("来源：{0}", importReport.sourceUrl) }}
           </p>
           <p v-if="importReport.placeholderMismatches?.length" class="muted-sm lang-warn">
             {{ t("占位符不一致 {0} 条，页面上会显示原始占位符：", importReport.placeholderMismatches.length) }}

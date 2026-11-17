@@ -4,12 +4,12 @@
 -->
 
 <script setup>
-import { t } from '../i18n.js'
+import { onLocaleChange, t } from '../i18n.js'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { api, inMaintenanceWindow, isMaintenanceError } from '../api'
 import { formatPlaytime } from '../format'
-import { PHASES, PHASE_LABELS, bootPercent, nextPercent, bootDecision,
+import { PHASES, phaseLabel, bootPercent, nextPercent, bootDecision,
   interruptionFor, isCleanExit } from '../play-boot'
 import { cropPlan } from '../play-crop'
 import { playBackTarget } from '../play-origin'
@@ -126,7 +126,8 @@ const stateTone = computed(() => ({
   error: 'error',
 }[view.value] || ''))
 
-const CARD = {
+/** 空状态卡片：computed 而非常量，否则语言切换后不更新 */
+const cards = computed(() => ({
   'not-started': {
     tone: 'muted',
     icon: '⏸',
@@ -155,20 +156,20 @@ const CARD = {
     desc: '',
     primary: t('重试'),
   },
-}
+}))
 
 /** 诊断显示退出码 0 且无信号：是正常退出，不是红色崩溃 */
-const CLEAN_EXIT_CARD = {
+const cleanExitCard = computed(() => ({
   tone: 'muted',
   icon: '⏹',
   title: t('游戏已退出'),
   desc: t('游戏已正常退出，未检测到崩溃。存档可在详情页管理。'),
   primary: t('重新启动'),
-}
+}))
 
 const card = computed(() => {
-  if (view.value === 'crashed' && isCleanExit(diagnostics.value)) return CLEAN_EXIT_CARD
-  return CARD[view.value] || null
+  if (view.value === 'crashed' && isCleanExit(diagnostics.value)) return cleanExitCard.value
+  return cards.value[view.value] || null
 })
 const cardDesc = computed(() => {
   const base = card.value?.desc || ''
@@ -297,7 +298,7 @@ function tickBoot() {
   percent.value = Math.max(percent.value,
     bootPercent(phase.value, performance.now() - phaseStartedAt, phaseExpectedMs))
   if (performance.now() > bootDeadline) {
-    failBoot('连接超时：串流服务在 2 分钟内没有就绪。')
+    failBoot(t('连接超时：串流服务在 2 分钟内没有就绪。'))
   }
 }
 
@@ -323,7 +324,7 @@ async function startBoot(startedByUser = false) {
   } catch (e) {
     // 平台更新/重启期间后端不可用：交给维护遮罩，不要当作启动失败
     if (isMaintenanceError(e)) return
-    if (token === bootToken) failBoot('读取会话状态失败：' + e.message)
+    if (token === bootToken) failBoot(t('读取会话状态失败：{0}', e.message))
     return
   }
   if (token !== bootToken || view.value !== 'booting') return
@@ -917,6 +918,11 @@ function onVisibility() {
   updatePresence()
 }
 
+// 会话诊断的摘要由后端按请求语言翻译，切语言后重取
+const stopLocaleWatch = onLocaleChange(() => {
+  if (diagnostics.value) loadDiagnostics()
+})
+
 onMounted(() => {
   window.addEventListener('error', onPageError)
   window.addEventListener('unhandledrejection', onPageError)
@@ -934,6 +940,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  stopLocaleWatch()
   sendTelemetry('unload')
   pageGone = true
   window.removeEventListener('error', onPageError)
@@ -1009,7 +1016,7 @@ onBeforeUnmount(() => {
             <div class="play-boot-ring" :style="{ '--p': percent + '%' }">
               <span class="play-boot-percent">{{ percent }}<em>%</em></span>
             </div>
-            <div class="play-boot-stage">{{ PHASE_LABELS[phase] }}</div>
+            <div class="play-boot-stage">{{ phaseLabel(phase) }}</div>
             <div class="play-boot-track">
               <span class="play-boot-fill" :style="{ width: percent + '%' }" />
             </div>
@@ -1018,7 +1025,7 @@ onBeforeUnmount(() => {
                 v-for="p in PHASES"
                 :key="p"
                 :class="{ done: stepDone(p), on: p === phase }"
-              >{{ PHASE_LABELS[p] }}</li>
+              >{{ phaseLabel(p) }}</li>
             </ol>
             <button class="link-btn" @click="cancelBoot">{{ t("取消并返回详情") }}</button>
           </div>
