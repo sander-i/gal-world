@@ -6,6 +6,7 @@
 package io.github.sander_i.update;
 
 import io.github.sander_i.config.PathConfig;
+import io.github.sander_i.i18n.I18n;
 import io.github.sander_i.platform.OsKind;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -62,25 +63,25 @@ public class UpdaterLauncher {
     /** 启动更新器并返回 PID。 */
     public long launch(String jobId) throws IOException {
         if (!supported()) {
-            throw new UnsupportedOperationException("当前平台不支持远程更新: " + os);
+            throw new UnsupportedOperationException(I18n.t("当前平台不支持远程更新: {0}", os));
         }
         Process p = builder(jobId).start();
         try {
             if (os == OsKind.LINUX) {
                 if (!p.waitFor(10, TimeUnit.SECONDS)) {
                     p.destroyForcibly();
-                    throw new IllegalStateException("启动更新器超时");
+                    throw new IllegalStateException(I18n.t("启动更新器超时"));
                 }
                 if (p.exitValue() != 0) {
-                    throw new IllegalStateException("systemd-run 启动失败，exit=" + p.exitValue());
+                    throw new IllegalStateException(I18n.t("systemd-run 启动失败，exit={0}", p.exitValue()));
                 }
             } else if (p.waitFor(WINDOWS_PROBE_SECONDS, TimeUnit.SECONDS) && p.exitValue() != 0) {
-                throw new IllegalStateException("更新器启动失败，exit=" + p.exitValue()
-                        + "，详见 " + launchLog());
+                throw new IllegalStateException(I18n.t("更新器启动失败，exit={0}，详见 {1}",
+                        p.exitValue(), launchLog()));
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            throw new IOException("启动更新器被中断", e);
+            throw new IOException(I18n.t("启动更新器被中断"), e);
         }
         return p.pid();
     }
@@ -105,7 +106,7 @@ public class UpdaterLauncher {
         if (os == OsKind.LINUX) {
             Path script = paths.root().resolve("bin/updater.sh");
             if (!Files.isRegularFile(script)) {
-                throw new IllegalStateException("更新器不存在: " + script);
+                throw new IllegalStateException(I18n.t("更新器不存在: {0}", script));
             }
             return new ProcessBuilder("systemd-run", "--user", "--collect",
                     "--unit=galworld-updater-" + jobId.replace("upd-", ""),
@@ -113,7 +114,7 @@ public class UpdaterLauncher {
                     .redirectErrorStream(true)
                     .redirectOutput(ProcessBuilder.Redirect.DISCARD);
         }
-        throw new UnsupportedOperationException("当前平台不支持远程更新: " + os);
+        throw new UnsupportedOperationException(I18n.t("当前平台不支持远程更新: {0}", os));
     }
 
     /** 把 jar 内的更新器释放到 data/update/，顺带实现更新器自升级。 */
@@ -124,7 +125,7 @@ public class UpdaterLauncher {
         try (InputStream in = getClass().getClassLoader()
                 .getResourceAsStream(WINDOWS_SCRIPT_RESOURCE)) {
             if (in == null) {
-                throw new IOException("jar 内缺少资源: " + WINDOWS_SCRIPT_RESOURCE);
+                throw new IOException(I18n.t("jar 内缺少资源: {0}", WINDOWS_SCRIPT_RESOURCE));
             }
             Files.copy(in, target, StandardCopyOption.REPLACE_EXISTING);
         }

@@ -5,6 +5,7 @@
 
 package io.github.sander_i.web;
 
+import io.github.sander_i.i18n.I18n;
 import io.github.sander_i.platform.OsKind;
 import io.github.sander_i.security.WriteSecurity;
 import io.github.sander_i.service.GameImportService;
@@ -70,7 +71,7 @@ public class GameImportController {
         security.check(req);
         if (os != OsKind.LINUX) {
             // 平台守卫放在 controller：service 的单测可以在 Windows 开发机上跑
-            throw new UnsupportedOperationException("当前平台不支持游戏接入（仅 Linux）");
+            throw new UnsupportedOperationException(I18n.t("当前平台不支持游戏接入（仅 Linux）"));
         }
         GameImportService.StartResult result = importService.start(body.id(), body.name(),
                 body.exe(), body.exeAlt(), body.width(), body.height(), body.framerate(),
@@ -141,8 +142,9 @@ public class GameImportController {
 
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<?> badRequest(IllegalArgumentException e) {
-        // run 不存在也走这里：用 message 区分，避免再定义异常类
-        if (e.getMessage() != null && e.getMessage().startsWith("没有这个 run")) {
+        // run 不存在也走这里：用异常类型区分，避免匹配 message 文本——
+        // 消息已按请求语言翻译，中文前缀匹配在非中文界面下会失效。
+        if (e instanceof io.github.sander_i.service.GameImportService.RunNotFoundException) {
             return ResponseEntity.status(404).body(Map.of("message", e.getMessage()));
         }
         return ResponseEntity.status(400).body(Map.of("message", e.getMessage()));

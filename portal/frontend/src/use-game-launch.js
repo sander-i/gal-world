@@ -3,9 +3,10 @@
  * Copyright (c) 2026 sander
  */
 
+import { t } from './i18n.js'
 import { onBeforeUnmount, reactive, ref } from 'vue'
 import { api } from './api'
-import { LAUNCH_LABELS, launchPercent, startVerdict, stopPercent } from './launch-progress'
+import { launchLabel, launchPercent, startVerdict, stopPercent } from './launch-progress'
 
 const POLL_MS = 400
 const START_MS = 15_000
@@ -66,7 +67,7 @@ export function useGameLaunch({ idOf = (g) => g.id ?? g.gameId, onError, onStart
     const prev = launches[id]?.percent ?? 0
     launches[id] = {
       percent: Math.max(prev, percent),
-      label: LAUNCH_LABELS[step] || '',
+      label: launchLabel(step),
       step,
       action,
     }
@@ -102,7 +103,7 @@ export function useGameLaunch({ idOf = (g) => g.id ?? g.gameId, onError, onStart
       const poll = setInterval(async () => {
         if (done || inflight || !polls.has(id)) return
         if (performance.now() - startedAt > START_TIMEOUT_MS) {
-          fail('启动超时：90 秒内未就绪，请到详情页查看状态。')
+          fail(t('启动超时：90 秒内未就绪，请到详情页查看状态。'))
           return
         }
         inflight = true
@@ -116,7 +117,7 @@ export function useGameLaunch({ idOf = (g) => g.id ?? g.gameId, onError, onStart
         inflight = false
         if (done || !polls.has(id)) return
         if (st.state === 'FAILED' || st.crashed) {
-          fail('游戏启动失败，请到详情页查看日志。')
+          fail(t('游戏启动失败，请到详情页查看日志。'))
           return
         }
         // 会话在启动过程中自己退出了（游戏崩溃、缺文件秒退、被外部停掉）：
@@ -124,7 +125,7 @@ export function useGameLaunch({ idOf = (g) => g.id ?? g.gameId, onError, onStart
         // 直到 90 秒超时，用户看到的就是「卡住不动」。
         // 启动头几秒的 STOPPED 可能是 systemd 的瞬时值，过了宽限期才判定。
         if (startVerdict(st, performance.now() - startedAt, STOPPED_GRACE_MS) === 'fail') {
-          fail('游戏进程已退出，请到详情页查看日志。')
+          fail(t('游戏进程已退出，请到详情页查看日志。'))
           return
         }
         if (step === 'start' && st.state === 'RUNNING') {
@@ -162,7 +163,7 @@ export function useGameLaunch({ idOf = (g) => g.id ?? g.gameId, onError, onStart
       const poll = setInterval(async () => {
         if (done || inflight || !polls.has(id)) return
         if (performance.now() - startedAt > STOP_TIMEOUT_MS) {
-          fail('关闭超时：请刷新页面确认会话状态。')
+          fail(t('关闭超时：请刷新页面确认会话状态。'))
           return
         }
         inflight = true
@@ -209,7 +210,7 @@ export function useGameLaunch({ idOf = (g) => g.id ?? g.gameId, onError, onStart
       } catch (e) {
         clearLaunch(id)
         release()
-        onError?.('操作失败：' + e.message)
+        onError?.(t("操作失败：{0}", e.message))
         return null
       }
       release()
@@ -224,7 +225,7 @@ export function useGameLaunch({ idOf = (g) => g.id ?? g.gameId, onError, onStart
     } catch (e) {
       clearLaunch(id)
       release()
-      onError?.('操作失败：' + e.message)
+      onError?.(t("操作失败：{0}", e.message))
       return null
     }
     release()

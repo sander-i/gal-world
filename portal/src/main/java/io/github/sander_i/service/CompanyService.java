@@ -7,6 +7,7 @@ package io.github.sander_i.service;
 
 import io.github.sander_i.domain.Company;
 import io.github.sander_i.domain.GameCompany;
+import io.github.sander_i.i18n.I18n;
 import io.github.sander_i.repo.CompanyRepository;
 import io.github.sander_i.repo.GameCompanyRepository;
 import org.springframework.stereotype.Service;
@@ -156,7 +157,7 @@ public class CompanyService {
     public Company create(String name, String alias, String website, String description) {
         String n = text(name);
         if (n.isEmpty()) {
-            throw new IllegalArgumentException("公司名不能为空");
+            throw new IllegalArgumentException(I18n.t("公司名不能为空"));
         }
         String a = text(alias);
         String w = normalizeWebsite(website);
@@ -174,21 +175,27 @@ public class CompanyService {
     @Transactional
     public Company update(long id, String name, String alias, String website, String description) {
         Company c = companies.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("公司不存在: " + id));
+                .orElseThrow(() -> new IllegalArgumentException(I18n.t("公司不存在: {0}", id)));
         String n = text(name);
         if (n.isEmpty()) {
-            throw new IllegalArgumentException("公司名不能为空");
+            throw new IllegalArgumentException(I18n.t("公司名不能为空"));
         }
         String a = text(alias);
         String w = normalizeWebsite(website);
         if (companies.findByNameAndAliasAndWebsite(n, a, w)
                 .filter(other -> !other.getId().equals(id)).isPresent()) {
-            throw new IllegalArgumentException("公司名 + 别名 + 网址已存在");
+            throw new IllegalArgumentException(I18n.t("公司名 + 别名 + 网址已存在"));
         }
         c.setName(n);
         c.setAlias(a);
         c.setWebsite(w);
         c.setDescription(text(description));
+        return companies.save(c);
+    }
+
+    /** 保存多语言覆盖等附加字段；业务字段仍走 create / update 校验 */
+    @Transactional
+    public Company save(Company c) {
         return companies.save(c);
     }
 

@@ -6,6 +6,7 @@
 package io.github.sander_i.service;
 
 import io.github.sander_i.domain.Game;
+import io.github.sander_i.i18n.I18n;
 import org.springframework.stereotype.Component;
 
 import java.util.HashSet;
@@ -58,7 +59,7 @@ public class GameSlotAllocator {
             display++;
         }
         if (display > MAX_DISPLAY) {
-            throw new IllegalStateException("没有空闲的显示号/槽位");
+            throw new IllegalStateException(I18n.t("没有空闲的显示号/槽位"));
         }
 
         // 先在同一张卡内找空位，卡内满了再换下一张，保证早期的游戏都留在 card 0
@@ -69,10 +70,9 @@ public class GameSlotAllocator {
                 }
             }
         }
-        throw new IllegalStateException(
-                "loopback 通道已用满（" + LOOPBACK_CARDS + " 张卡 × " + SLOTS_PER_CARD
-                        + " 个 = " + (LOOPBACK_CARDS * SLOTS_PER_CARD)
-                        + " 个），无法再接新游戏");
+        throw new IllegalStateException(I18n.t(
+                "loopback 通道已用满（{0} 张卡 × {1} 个 = {2} 个），无法再接新游戏",
+                LOOPBACK_CARDS, SLOTS_PER_CARD, LOOPBACK_CARDS * SLOTS_PER_CARD));
     }
 
     private static long channelKey(int card, int slot) {

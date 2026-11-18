@@ -5,6 +5,7 @@
 
 package io.github.sander_i.config;
 
+import io.github.sander_i.i18n.LocaleFilter;
 import io.github.sander_i.security.WriteSecurityInterceptor;
 import io.github.sander_i.web.StreamWsBridge;
 import jakarta.servlet.ServletContext;
@@ -12,6 +13,8 @@ import jakarta.websocket.server.ServerContainer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 import org.springframework.web.context.ServletContextAware;
@@ -38,10 +41,24 @@ public class WebConfig implements WebMvcConfigurer, ServletContextAware {
     private static final String WS_CONTAINER_ATTR = "jakarta.websocket.server.ServerContainer";
 
     private final WriteSecurityInterceptor writeSecurity;
+    private final LocaleFilter localeFilter;
     private ServletContext servletContext;
 
-    public WebConfig(WriteSecurityInterceptor writeSecurity) {
+    public WebConfig(WriteSecurityInterceptor writeSecurity, LocaleFilter localeFilter) {
         this.writeSecurity = writeSecurity;
+        this.localeFilter = localeFilter;
+    }
+
+    /**
+     * 语言过滤器要在最外层：任何异常处理与鉴权拒绝都要用请求的语言回消息。
+     * 顺序取最低值，保证它在写接口令牌校验之前执行。
+     */
+    @Bean
+    public FilterRegistrationBean<LocaleFilter> localeFilterRegistration() {
+        FilterRegistrationBean<LocaleFilter> reg = new FilterRegistrationBean<>(localeFilter);
+        reg.setOrder(Integer.MIN_VALUE);
+        reg.addUrlPatterns("/*");
+        return reg;
     }
 
     @Override

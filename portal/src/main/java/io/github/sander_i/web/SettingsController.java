@@ -5,6 +5,7 @@
 
 package io.github.sander_i.web;
 
+import io.github.sander_i.i18n.I18n;
 import io.github.sander_i.service.SettingsService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -36,7 +37,7 @@ public class SettingsController {
             for (String k : patch.keySet()) {
                 if (AdminSettingsController.isAdminKey(k)) {
                     return ResponseEntity.badRequest().body(
-                            Map.of("message", "该设置在后台管理中修改: " + k));
+                            Map.of("message", I18n.t("该设置在后台管理中修改: {0}", k)));
                 }
             }
         }

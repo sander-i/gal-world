@@ -8,6 +8,7 @@ package io.github.sander_i.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.sander_i.config.PathConfig;
 import io.github.sander_i.deploy.DeployRun;
+import io.github.sander_i.i18n.I18n;
 import io.github.sander_i.repo.GameRepository;
 import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
@@ -243,22 +244,22 @@ public class GameUploadService {
 
     public CreateResult create(CreateRequest req) {
         if (req == null) {
-            throw new IllegalArgumentException("请求体为空");
+            throw new IllegalArgumentException(I18n.t("请求体为空"));
         }
         String kind = req.kind() == null ? "" : req.kind().trim().toUpperCase(Locale.ROOT);
         if (!KIND_ARCHIVE.equals(kind) && !KIND_FOLDER.equals(kind)) {
-            throw new IllegalArgumentException("kind 只能是 ARCHIVE 或 FOLDER");
+            throw new IllegalArgumentException(I18n.t("kind 只能是 ARCHIVE 或 FOLDER"));
         }
         String name = req.name() == null ? "" : req.name().trim();
         if (name.isEmpty() || name.length() > 120) {
-            throw new IllegalArgumentException("显示名必填，且不超过 120 字");
+            throw new IllegalArgumentException(I18n.t("显示名必填，且不超过 120 字"));
         }
         long total = req.totalBytes() == null ? 0L : req.totalBytes();
         if (total <= 0) {
-            throw new IllegalArgumentException("总大小必须大于 0");
+            throw new IllegalArgumentException(I18n.t("总大小必须大于 0"));
         }
         if (total > limits.maxUploadBytes()) {
-            throw new TooLarge("上传体积超过上限 " + limits.maxUploadBytes() + " 字节");
+            throw new TooLarge(I18n.t("上传体积超过上限 {0} 字节", limits.maxUploadBytes()));
         }
 
         List<FileEntry> files = new ArrayList<>();
@@ -266,42 +267,43 @@ public class GameUploadService {
         if (KIND_ARCHIVE.equals(kind)) {
             fileName = req.fileName() == null ? "" : req.fileName().trim();
             if (!GameArchiveExtractor.isArchiveName(fileName)) {
-                throw new UnsupportedArchive("只支持 .zip / .7z 压缩包");
+                throw new UnsupportedArchive(I18n.t("只支持 .zip / .7z 压缩包"));
             }
             if (total > limits.maxFileBytes()) {
-                throw new TooLarge("单文件超过 " + limits.maxFileBytes() + " 字节");
+                throw new TooLarge(I18n.t("单文件超过 {0} 字节", limits.maxFileBytes()));
             }
             files.add(new FileEntry("f000001", fileName, total));
         } else {
             List<FileSpec> specs = req.files();
             if (specs == null || specs.isEmpty()) {
-                throw new IllegalArgumentException("文件夹上传缺少文件清单");
+                throw new IllegalArgumentException(I18n.t("文件夹上传缺少文件清单"));
             }
             if (specs.size() > limits.maxFiles()) {
-                throw new TooLarge("文件数超过上限 " + limits.maxFiles());
+                throw new TooLarge(I18n.t("文件数超过上限 {0}", limits.maxFiles()));
             }
             Set<String> seen = new HashSet<>();
             long sum = 0;
             int i = 1;
             for (FileSpec spec : specs) {
                 if (spec == null) {
-                    throw new IllegalArgumentException("文件清单包含空项");
+                    throw new IllegalArgumentException(I18n.t("文件清单包含空项"));
                 }
                 String rel = GameArchiveExtractor.validateRelative(spec.path(), limits.maxDepth());
                 if (spec.size() < 0) {
-                    throw new IllegalArgumentException("文件大小非法: " + rel);
+                    throw new IllegalArgumentException(I18n.t("文件大小非法: {0}", rel));
                 }
                 if (spec.size() > limits.maxFileBytes()) {
-                    throw new TooLarge("单文件超过 " + limits.maxFileBytes() + " 字节: " + rel);
+                    throw new TooLarge(
+                            I18n.t("单文件超过 {0} 字节: {1}", limits.maxFileBytes(), rel));
                 }
                 if (!seen.add(rel)) {
-                    throw new IllegalArgumentException("清单包含重复路径: " + rel);
+                    throw new IllegalArgumentException(I18n.t("清单包含重复路径: {0}", rel));
                 }
                 sum += spec.size();
                 files.add(new FileEntry(String.format("f%06d", i++), rel, spec.size()));
             }
             if (sum != total) {
-                throw new IllegalArgumentException("文件总大小与 totalBytes 不一致");
+                throw new IllegalArgumentException(I18n.t("文件总大小与 totalBytes 不一致"));
             }
         }
 
@@ -311,7 +313,7 @@ public class GameUploadService {
                         || Files.exists(paths.gameDir(p), LinkOption.NOFOLLOW_LINKS));
         if (reserved.putIfAbsent(gameId, uploadId) != null) {
             // 归一化已经避开占用，这里只是并发兜底
-            throw new ChunkConflict("目录名已被占用: " + gameId);
+            throw new ChunkConflict(I18n.t("目录名已被占用: {0}", gameId));
         }
 
         Session s = new Session();
@@ -331,7 +333,7 @@ public class GameUploadService {
             save(s);
         } catch (IOException e) {
             reserved.remove(gameId, uploadId);
-            throw new IllegalStateException("创建临时目录失败: " + e.getMessage(), e);
+            throw new IllegalStateException(I18n.t("创建临时目录失败: {0}", e.getMessage()), e);
         }
         sessions.put(uploadId, s);
 
@@ -349,35 +351,36 @@ public class GameUploadService {
         Session s = require(uploadId);
         synchronized (s) {
             if (!STATE_UPLOADING.equals(s.state)) {
-                throw new ChunkConflict("会话不在上传状态: " + s.state);
+                throw new ChunkConflict(I18n.t("会话不在上传状态: {0}", s.state));
             }
             if (fileId == null || fileId.isBlank()) {
-                throw new IllegalArgumentException("缺少 fileId");
+                throw new IllegalArgumentException(I18n.t("缺少 fileId"));
             }
             FileEntry f = findFile(s, fileId);
             if (body == null || body.length == 0) {
-                throw new IllegalArgumentException("分片为空");
+                throw new IllegalArgumentException(I18n.t("分片为空"));
             }
             if (body.length > limits.maxChunkBytes()) {
-                throw new TooLarge("分片超过 " + limits.maxChunkBytes() + " 字节");
+                throw new TooLarge(I18n.t("分片超过 {0} 字节", limits.maxChunkBytes()));
             }
             Path part = partPath(s.uploadId, f.fileId);
             long actual = sizeOf(part);
             if (offset != actual) {
-                throw new ChunkConflict("偏移不连续", actual);
+                throw new ChunkConflict(I18n.t("偏移不连续"), actual);
             }
             if (offset + body.length > f.size) {
-                throw new IllegalArgumentException("分片超出文件声明大小");
+                throw new IllegalArgumentException(I18n.t("分片超出文件声明大小"));
             }
             String digest = sha256(body);
             if (sha256Hex == null || !digest.equalsIgnoreCase(sha256Hex.trim())) {
-                throw new IllegalArgumentException("分片 SHA-256 校验失败");
+                throw new IllegalArgumentException(I18n.t("分片 SHA-256 校验失败"));
             }
             if (offset == 0 && KIND_ARCHIVE.equals(s.kind)) {
                 String magic = GameArchiveExtractor.detectKind(body, Math.min(body.length, 6));
                 boolean ext7z = f.path.toLowerCase(Locale.ROOT).endsWith(".7z");
                 if (magic == null || ext7z != GameArchiveExtractor.KIND_7Z.equals(magic)) {
-                    throw new UnsupportedArchive("文件内容与扩展名不匹配，只支持 zip / 7z");
+                    throw new UnsupportedArchive(
+                            I18n.t("文件内容与扩展名不匹配，只支持 zip / 7z"));
                 }
             }
             try {
@@ -391,7 +394,7 @@ public class GameUploadService {
                 }
                 Files.deleteIfExists(chunkTmp);
             } catch (IOException e) {
-                throw new IllegalStateException("写入分片失败: " + e.getMessage(), e);
+                throw new IllegalStateException(I18n.t("写入分片失败: {0}", e.getMessage()), e);
             }
             long written = actual + body.length;
             boolean done = written >= f.size;
@@ -440,7 +443,7 @@ public class GameUploadService {
         require(uploadId);
         DeployRun run = runs.get(uploadId);
         if (run == null) {
-            throw new NotFound("该上传会话没有进行中的任务");
+            throw new NotFound(I18n.t("该上传会话没有进行中的任务"));
         }
         return run;
     }
@@ -457,13 +460,13 @@ public class GameUploadService {
                 return new CompleteResult(uploadId, s.runId, s.state, null);
             }
             if (STATE_CANCELLED.equals(s.state)) {
-                throw new ChunkConflict("会话已取消");
+                throw new ChunkConflict(I18n.t("会话已取消"));
             }
             for (FileEntry f : s.files) {
                 Path assembled = assembledArchive(s);
                 boolean ready = assembled != null && sizeOf(assembled) == f.size;
                 if (!ready && sizeOf(partPath(uploadId, f.fileId)) != f.size) {
-                    throw new ChunkConflict("上传未完成: " + f.path);
+                    throw new ChunkConflict(I18n.t("上传未完成: {0}", f.path));
                 }
             }
             s.state = STATE_COMPLETING;
@@ -477,7 +480,9 @@ public class GameUploadService {
             DeployRun run = new DeployRun(s.runId, "game-upload");
             runs.put(uploadId, run);
             cancels.put(uploadId, new AtomicBoolean());
-            queue.submit(() -> execute(s, run));
+            // 后台线程没有请求上下文：固定提交时的语言，日志才跟界面一致
+            String locale = I18n.locale();
+            queue.submit(() -> I18n.runAs(locale, () -> execute(s, run)));
             return new CompleteResult(uploadId, s.runId, STATE_COMPLETING, null);
         }
     }
@@ -487,7 +492,7 @@ public class GameUploadService {
         AtomicBoolean cancelled = cancels.getOrDefault(s.uploadId, new AtomicBoolean());
         try {
             run.state(DeployRun.State.RUNNING);
-            step(run, "assemble", "合并上传文件", "RUNNING");
+            step(run, "assemble", I18n.t("合并上传文件"), "RUNNING");
             Path archive = null;
             if (KIND_ARCHIVE.equals(s.kind)) {
                 FileEntry only = s.files.get(0);
@@ -496,24 +501,24 @@ public class GameUploadService {
                 archive = tmp.resolve("archive" + ext);
                 if (Files.isRegularFile(part)) {
                     Files.move(part, archive, StandardCopyOption.REPLACE_EXISTING);
-                    run.log("已合并上传文件: " + archive.getFileName());
+                    run.log(I18n.t("已合并上传文件: {0}", archive.getFileName()));
                 } else if (Files.isRegularFile(archive)) {
                     // 上次 complete 已合并、后续步骤失败：允许直接重试
-                    run.log("沿用已合并的上传文件: " + archive.getFileName());
+                    run.log(I18n.t("沿用已合并的上传文件: {0}", archive.getFileName()));
                 } else {
-                    throw new ChunkConflict("上传分片缺失，请重新上传");
+                    throw new ChunkConflict(I18n.t("上传分片缺失，请重新上传"));
                 }
                 String magic = GameArchiveExtractor.detectKind(archive);
                 boolean ext7z = ".7z".equals(ext);
                 if (magic == null || ext7z != GameArchiveExtractor.KIND_7Z.equals(magic)) {
-                    throw new UnsupportedArchive("文件内容与扩展名不匹配");
+                    throw new UnsupportedArchive(I18n.t("文件内容与扩展名不匹配"));
                 }
             } else {
-                run.log("文件夹上传，跳过合并");
+                run.log(I18n.t("文件夹上传，跳过合并"));
             }
-            step(run, "assemble", "合并上传文件", "SUCCESS");
+            step(run, "assemble", I18n.t("合并上传文件"), "SUCCESS");
 
-            step(run, "extract", "解压并整理目录", "RUNNING");
+            step(run, "extract", I18n.t("解压并整理目录"), "RUNNING");
             setState(s, STATE_EXTRACTING, run);
             Path staged;
             if (KIND_ARCHIVE.equals(s.kind)) {
@@ -529,18 +534,18 @@ public class GameUploadService {
                 staged = GameArchiveExtractor.stripWrapper(tree, limits.maxDepth());
             }
             if (cancelled.get()) {
-                throw new Cancelled("已取消");
+                throw new Cancelled(I18n.t("已取消"));
             }
-            step(run, "extract", "解压并整理目录", "SUCCESS");
+            step(run, "extract", I18n.t("解压并整理目录"), "SUCCESS");
 
-            step(run, "scan", "扫描可执行文件", "RUNNING");
+            step(run, "scan", I18n.t("扫描可执行文件"), "RUNNING");
             Path target = paths.gameDir(s.gameId);
             synchronized (lockFor(s.gameId)) {
                 if (Files.exists(target, LinkOption.NOFOLLOW_LINKS)) {
-                    throw new ChunkConflict("目标目录已存在: " + s.gameId);
+                    throw new ChunkConflict(I18n.t("目标目录已存在: {0}", s.gameId));
                 }
                 if (repo.existsById(s.gameId)) {
-                    throw new ChunkConflict("游戏已注册: " + s.gameId);
+                    throw new ChunkConflict(I18n.t("游戏已注册: {0}", s.gameId));
                 }
                 GameArchiveExtractor.moveInto(staged, target);
             }
@@ -557,14 +562,14 @@ public class GameUploadService {
                 save(s);
             }
             cleanupUploadedFiles(s);
-            step(run, "scan", "扫描可执行文件", "SUCCESS");
-            run.log("上传完成: games/" + s.gameId + "，共 " + exes.size() + " 个 exe");
+            step(run, "scan", I18n.t("扫描可执行文件"), "SUCCESS");
+            run.log(I18n.t("上传完成: games/{0}，共 {1} 个 exe", s.gameId, exes.size()));
             run.state(DeployRun.State.SUCCESS);
         } catch (Cancelled e) {
-            run.log("已取消");
+            run.log(I18n.t("已取消"));
             synchronized (s) {
                 s.state = STATE_CANCELLED;
-                s.error = "已取消";
+                s.error = I18n.t("已取消");
                 touch(s);
             }
             cleanupTempQuietly(s.uploadId);
@@ -601,23 +606,23 @@ public class GameUploadService {
         Session s = require(uploadId);
         synchronized (s) {
             if (STATE_CANCELLED.equals(s.state)) {
-                return new CancelResult(STATE_CANCELLED, "已取消");
+                return new CancelResult(STATE_CANCELLED, I18n.t("已取消"));
             }
             if (STATE_READY.equals(s.state)) {
                 // 已整理进 games/ 的目录保留，只清临时残留
                 cleanupTempQuietly(uploadId);
                 sessions.remove(uploadId);
-                return new CancelResult(STATE_READY, "会话已关闭，已上传目录保留");
+                return new CancelResult(STATE_READY, I18n.t("会话已关闭，已上传目录保留"));
             }
             AtomicBoolean flag = cancels.get(uploadId);
             if (flag != null && (STATE_COMPLETING.equals(s.state) || STATE_EXTRACTING.equals(s.state))) {
                 flag.set(true);
-                return new CancelResult(s.state, "正在终止任务");
+                return new CancelResult(s.state, I18n.t("正在终止任务"));
             }
             cleanupTempQuietly(uploadId);
             reserved.remove(s.gameId, uploadId);
             sessions.remove(uploadId);
-            return new CancelResult(STATE_CANCELLED, "已取消并清理临时文件");
+            return new CancelResult(STATE_CANCELLED, I18n.t("已取消并清理临时文件"));
         }
     }
 
@@ -628,7 +633,7 @@ public class GameUploadService {
         for (FileEntry f : s.files) {
             Path out = tree.resolve(f.path).normalize();
             if (!out.startsWith(tree)) {
-                throw new IllegalArgumentException("路径越界: " + f.path);
+                throw new IllegalArgumentException(I18n.t("路径越界: {0}", f.path));
             }
             Files.createDirectories(out.getParent());
             try {
@@ -641,7 +646,7 @@ public class GameUploadService {
                             StandardCopyOption.REPLACE_EXISTING);
                 }
             } catch (IOException e) {
-                throw new IOException("整理上传文件失败：" + f.path + "（" + e + "）", e);
+                throw new IOException(I18n.t("整理上传文件失败：{0}（{1}）", f.path, e), e);
             }
         }
     }
@@ -649,35 +654,38 @@ public class GameUploadService {
     /** 清单与实际目录必须一致；不跟随符号链接 */
     private void validateTree(Session s, Path tree) throws IOException {
         if (!Files.isDirectory(tree, LinkOption.NOFOLLOW_LINKS)) {
-            throw new IllegalArgumentException("上传目录不存在");
+            throw new IllegalArgumentException(I18n.t("上传目录不存在"));
         }
         long[] total = {0};
         int[] count = {0};
         try (Stream<Path> walk = Files.walk(tree)) {
             for (Path p : walk.toList()) {
                 if (Files.isSymbolicLink(p)) {
-                    throw new IllegalArgumentException("上传目录含符号链接，已拒绝");
+                    throw new IllegalArgumentException(I18n.t("上传目录含符号链接，已拒绝"));
                 }
                 if (Files.isDirectory(p, LinkOption.NOFOLLOW_LINKS)) {
                     int depth = tree.relativize(p).getNameCount();
                     if (depth > limits.maxDepth()) {
-                        throw new IllegalArgumentException("目录层级超过 " + limits.maxDepth());
+                        throw new IllegalArgumentException(
+                                I18n.t("目录层级超过 {0}", limits.maxDepth()));
                     }
                     continue;
                 }
                 count[0]++;
                 total[0] += Files.size(p);
                 if (count[0] > limits.maxFiles()) {
-                    throw new TooLarge("文件数超过上限 " + limits.maxFiles());
+                    throw new TooLarge(I18n.t("文件数超过上限 {0}", limits.maxFiles()));
                 }
                 if (total[0] > limits.maxExtractedBytes()) {
-                    throw new TooLarge("总体积超过上限 " + limits.maxExtractedBytes() + " 字节");
+                    throw new TooLarge(
+                            I18n.t("总体积超过上限 {0} 字节", limits.maxExtractedBytes()));
                 }
             }
         }
         if (count[0] != s.files.size() || total[0] != s.totalBytes) {
-            throw new IllegalArgumentException("上传目录与清单不一致：清单 " + s.files.size()
-                    + " 个文件 / " + s.totalBytes + " 字节，实际 " + count[0] + " 个 / " + total[0] + " 字节");
+            throw new IllegalArgumentException(I18n.t(
+                    "上传目录与清单不一致：清单 {0} 个文件 / {1} 字节，实际 {2} 个 / {3} 字节",
+                    s.files.size(), s.totalBytes, count[0], total[0]));
         }
     }
 
@@ -768,7 +776,7 @@ public class GameUploadService {
             }
             if (STATE_COMPLETING.equals(s.state) || STATE_EXTRACTING.equals(s.state)) {
                 s.state = STATE_FAILED;
-                s.error = "服务重启，任务已中断，请重新完成上传";
+                s.error = I18n.t("服务重启，任务已中断，请重新完成上传");
                 touch(s);
                 save(s);
             }
@@ -784,7 +792,7 @@ public class GameUploadService {
 
     private Session require(String uploadId) {
         if (uploadId == null || !UPLOAD_ID.matcher(uploadId).matches()) {
-            throw new NotFound("没有这个上传会话");
+            throw new NotFound(I18n.t("没有这个上传会话"));
         }
         Session cached = sessions.get(uploadId);
         if (cached != null) {
@@ -792,7 +800,7 @@ public class GameUploadService {
         }
         Path manifest = tmpDir(uploadId).resolve(MANIFEST);
         if (!Files.isRegularFile(manifest, LinkOption.NOFOLLOW_LINKS)) {
-            throw new NotFound("没有这个上传会话: " + uploadId);
+            throw new NotFound(I18n.t("没有这个上传会话: {0}", uploadId));
         }
         try {
             Session s = mapper.readValue(manifest.toFile(), Session.class);
@@ -802,7 +810,7 @@ public class GameUploadService {
             }
             return s;
         } catch (IOException e) {
-            throw new NotFound("没有这个上传会话: " + uploadId);
+            throw new NotFound(I18n.t("没有这个上传会话: {0}", uploadId));
         }
     }
 
@@ -812,7 +820,7 @@ public class GameUploadService {
                 return f;
             }
         }
-        throw new NotFound("没有这个文件分片: " + fileId);
+        throw new NotFound(I18n.t("没有这个文件分片: {0}", fileId));
     }
 
     private Path tmpDir(String uploadId) {
@@ -878,7 +886,7 @@ public class GameUploadService {
     private void ensureDiskSpace(Path dir) throws IOException {
         FileStore store = Files.getFileStore(dir);
         if (store.getUsableSpace() < limits.diskReserveBytes()) {
-            throw new TooLarge("服务器磁盘剩余空间不足");
+            throw new TooLarge(I18n.t("服务器磁盘剩余空间不足"));
         }
     }
 
@@ -903,7 +911,7 @@ public class GameUploadService {
             }
             return b.toString();
         } catch (Exception e) {
-            throw new IllegalStateException("无法计算 SHA-256", e);
+            throw new IllegalStateException(I18n.t("无法计算 SHA-256"), e);
         }
     }
 

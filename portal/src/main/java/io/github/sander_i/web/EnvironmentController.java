@@ -5,6 +5,7 @@
 
 package io.github.sander_i.web;
 
+import io.github.sander_i.i18n.I18n;
 import io.github.sander_i.platform.AccountInfo;
 import io.github.sander_i.platform.EnvProbe;
 import io.github.sander_i.platform.EnvScheme;
@@ -52,7 +53,7 @@ public class EnvironmentController {
         out.put("preview", preview);
         if (preview) {
             // 预览另一平台：不读取本机账号与组件状态，只保留方案说明与命令。
-            AccountInfo neutral = new AccountInfo("不可探测", false, List.of(), List.of());
+            AccountInfo neutral = new AccountInfo(I18n.t("不可探测"), false, List.of(), List.of());
             List<EnvScheme> schemes = probe.schemes(neutral).stream()
                     .map(EnvironmentController::withoutLiveState).toList();
             out.put("os", previewOs(want));
@@ -100,7 +101,7 @@ public class EnvironmentController {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("kind", kind.name());
         m.put("name", kind == OsKind.WINDOWS ? "Windows" : "Linux");
-        m.put("version", "非当前系统");
+        m.put("version", I18n.t("非当前系统"));
         m.put("arch", "—");
         m.put("host", "—");
         return m;

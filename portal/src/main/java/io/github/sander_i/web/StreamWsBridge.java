@@ -5,6 +5,7 @@
 
 package io.github.sander_i.web;
 
+import io.github.sander_i.i18n.I18n;
 import io.github.sander_i.repo.GameRepository;
 import jakarta.websocket.ClientEndpointConfig;
 import jakarta.websocket.ContainerProvider;
@@ -100,7 +101,7 @@ public class StreamWsBridge {
             ctx.init(null, tmf, new java.security.SecureRandom());
             return ctx;
         } catch (Exception e) {
-            throw new IllegalStateException("初始化串流 WS 的 TLS 上下文失败", e);
+            throw new IllegalStateException(I18n.t("初始化串流 WS 的 TLS 上下文失败"), e);
         }
     }
 

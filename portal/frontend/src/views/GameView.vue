@@ -4,6 +4,7 @@
 -->
 
 <script setup>
+import { t } from '../i18n.js'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { api } from '../api'
@@ -74,7 +75,8 @@ const currentBackup = computed(() => {
   return (saves.value.backups || []).find((b) => b.name === name) || null
 })
 
-const SAVE_KIND_TEXT = { MANUAL: '手动', ORIGINAL: '原始', PRE_RESTORE: '自动快照' }
+/** 存档类型文案：computed 而非常量，否则语言切换后不更新 */
+const saveKindText = computed(() => ({ MANUAL: t('手动'), ORIGINAL: t('原始'), PRE_RESTORE: t('自动快照') }))
 
 /** 打包下载任务：两段式，先打包再下载 */
 const downloadJob = ref(null)
@@ -164,17 +166,18 @@ async function selectMedia(mode) {
   try {
     await api.setMediaMode(props.id, mode)
   } catch (e) {
-    notify.error('保存展示偏好失败：' + e.message)
+    notify.error(t("保存展示偏好失败：{0}", e.message))
   }
 }
 
-const STATE_TEXT = {
-  RUNNING: '运行中',
-  STOPPED: '已停止',
-  FAILED: '异常',
-  UNKNOWN: '未知',
-  UNSUPPORTED: '不支持',
-}
+/** 状态文案：computed 而非常量，否则语言切换后不更新 */
+const stateText = computed(() => ({
+  RUNNING: t('运行中'),
+  STOPPED: t('已停止'),
+  FAILED: t('异常'),
+  UNKNOWN: t('未知'),
+  UNSUPPORTED: t('不支持'),
+}))
 
 const running = computed(() => game.value?.state === 'RUNNING')
 
@@ -207,7 +210,7 @@ const { busy, launches, toggle: sessionToggle, restart: sessionRestart } = useGa
   },
   onStopped: () => {
     if (game.value) game.value = { ...game.value, state: 'STOPPED', crashed: false }
-    notify.success('游戏已关闭')
+    notify.success(t('游戏已关闭'))
   },
 })
 
@@ -284,9 +287,9 @@ async function doBackup() {
     saves.value = mergeSaves(await api.backupSaves(props.id, saveLabel.value, saveDescription.value))
     saveLabel.value = ''
     saveDescription.value = ''
-    notify.success('存档已备份')
+    notify.success(t('存档已备份'))
   } catch (e) {
-    notify.error('备份失败：' + e.message)
+    notify.error(t("备份失败：{0}", e.message))
   } finally {
     savesBusy.value = false
   }
@@ -309,9 +312,9 @@ async function saveEdit(name) {
   try {
     saves.value = mergeSaves(await api.updateSave(props.id, name, editLabel.value, editDescription.value))
     cancelEdit()
-    notify.success('备份信息已更新')
+    notify.success(t('备份信息已更新'))
   } catch (e) {
-    notify.error('更新失败：' + e.message)
+    notify.error(t("更新失败：{0}", e.message))
   } finally {
     savesBusy.value = false
   }
@@ -324,34 +327,33 @@ async function saveEdit(name) {
  * 否则切走再切回来，这期间在游戏里存的进度就永久丢了。
  */
 async function doSwitch(b) {
-  const desc = b.label ? `「${b.label}」` : '该备份'
+  const desc = b.label ? `「${b.label}」` : t('该备份')
   if (!await confirmAction(
-    `切换当前存档到${desc}？游戏目录里的存档会被这份备份覆盖，`
-      + `当前进度会先存成「切换前进度」，切错了可以再切回来。`,
-    { title: '切换存档', confirmText: '切换' },
+    t("切换当前存档到{0}？游戏目录里的存档会被这份备份覆盖，当前进度会先存成「切换前进度」，切错了可以再切回来。", desc),
+    { title: t('切换存档'), confirmText: t('切换') },
   )) return
   savesBusy.value = true
   try {
     saves.value = mergeSaves(await api.switchSave(props.id, b.name))
-    notify.success(`已切换到${desc}`)
+    notify.success(t("已切换到{0}", desc))
   } catch (e) {
-    notify.error('切换失败：' + e.message)
+    notify.error(t("切换失败：{0}", e.message))
   } finally {
     savesBusy.value = false
   }
 }
 
 async function doDelete(b) {
-  if (!await confirmAction(`删除备份 ${b.name}？此操作不可撤销。`, {
-    title: '删除备份', confirmText: '删除',
+  if (!await confirmAction(t("删除备份 {0}？此操作不可撤销。", b.name), {
+    title: t('删除备份'), confirmText: t('删除'),
   })) return
   savesBusy.value = true
   try {
     saves.value = mergeSaves(await api.deleteSave(props.id, b.name))
     if (editingName.value === b.name) cancelEdit()
-    notify.success('备份已删除')
+    notify.success(t('备份已删除'))
   } catch (e) {
-    notify.error('删除失败：' + e.message)
+    notify.error(t("删除失败：{0}", e.message))
   } finally {
     savesBusy.value = false
   }
@@ -365,15 +367,15 @@ async function doDelete(b) {
  */
 async function doRestoreOriginal() {
   if (!await confirmAction(
-    `恢复到「${saves.value.original}」？游戏目录里的存档会被导入时的初始状态覆盖。`,
-    { title: '恢复初始存档', confirmText: '恢复' },
+    t("恢复到「{0}」？游戏目录里的存档会被导入时的初始状态覆盖。", saves.value.original),
+    { title: t('恢复初始存档'), confirmText: t('恢复') },
   )) return
   savesBusy.value = true
   try {
     saves.value = mergeSaves(await api.restoreOriginalSave(props.id))
-    notify.success('已恢复初始存档')
+    notify.success(t('已恢复初始存档'))
   } catch (e) {
-    notify.error('恢复失败：' + e.message)
+    notify.error(t("恢复失败：{0}", e.message))
   } finally {
     savesBusy.value = false
   }
@@ -436,7 +438,7 @@ async function prepareDownload() {
     pollDownload()
   } catch (e) {
     downloadBusy.value = false
-    notify.error('打包失败：' + e.message)
+    notify.error(t("打包失败：{0}", e.message))
   }
 }
 
@@ -458,18 +460,18 @@ function pollDownload() {
       downloadJob.value = job
       if (job.state === 'READY') {
         downloadBusy.value = false
-        notify.success('打包完成，可以下载压缩包')
+        notify.success(t('打包完成，可以下载压缩包'))
       } else if (job.state === 'FAILED' || job.state === 'CANCELLED') {
         downloadBusy.value = false
         notify.error(job.state === 'FAILED'
-          ? '打包失败：' + (job.error || '未知错误')
-          : '打包已取消')
+          ? t('打包失败：') + (job.error || t('未知错误'))
+          : t('打包已取消'))
       } else {
         pollDownload()
       }
     } catch (e) {
       downloadBusy.value = false
-      notify.error('查询打包进度失败：' + e.message)
+      notify.error(t("查询打包进度失败：{0}", e.message))
     }
   }, 1000)
 }
@@ -491,11 +493,11 @@ function fmtSize(n) {
 /** 预计耗时的口语化展示；调用方自己加「约」等前缀 */
 function fmtDuration(totalSeconds) {
   const s = Math.max(0, Math.round(totalSeconds))
-  if (s < 60) return s + ' 秒'
+  if (s < 60) return s + t(' 秒')
   const m = Math.floor(s / 60)
-  if (m < 60) return s % 60 ? `${m} 分 ${s % 60} 秒` : `${m} 分钟`
+  if (m < 60) return s % 60 ? t("{0} 分 {1} 秒", m, s % 60) : t("{0} 分钟", m)
   const h = Math.floor(m / 60)
-  return m % 60 ? `${h} 小时 ${m % 60} 分` : `${h} 小时`
+  return m % 60 ? t("{0} 小时 {1} 分", h, m % 60) : t("{0} 小时", h)
 }
 
 function fmtTime(iso) {
@@ -513,12 +515,12 @@ onMounted(load)
     <header class="topbar">
       <router-link :to="back" class="ghost-btn">{{ back.label }}</router-link>
       <div class="spacer" />
-      <router-link :to="`/game/${id}/edit`" class="ghost-btn gear-btn" title="编辑此游戏">⚙ 编辑</router-link>
+      <router-link :to="`/game/${id}/edit`" class="ghost-btn gear-btn" :title="t('编辑此游戏')">{{ t("⚙ 编辑") }}</router-link>
     </header>
 
-    <div v-if="loading" class="loading">加载中…</div>
+    <div v-if="loading" class="loading">{{ t("加载中…") }}</div>
     <div v-else-if="error" class="empty">{{ error }}</div>
-    <div v-else-if="!game" class="empty">没有这个游戏</div>
+    <div v-else-if="!game" class="empty">{{ t("没有这个游戏") }}</div>
 
     <template v-else>
       <div class="detail-hero">
@@ -534,19 +536,17 @@ onMounted(load)
             <h1>{{ game.name }}</h1>
           </div>
           <div class="sub">
-            {{ game.width }}×{{ game.height }} ·
-            状态 {{ STATE_TEXT[game.state] || game.state }}
-            <span
+            {{ t("{0}×{1} · 状态 {2}", game.width, game.height, stateText[game.state] || game.state) }}<span
               v-if="running && latency != null"
               class="latency-inline"
               :class="latencyTone(latency)"
-            >· 时延 {{ latency }} ms</span>
+            >{{ t("· 时延 {0} ms", latency) }}</span>
           </div>
 
           <!-- 公司 / 汉化组 / 标签：三项都空则整卡不渲染 -->
           <div v-if="hasMeta" class="game-meta-card">
             <div v-if="companyEnabled && game.companies?.length" class="meta-line">
-              <span class="meta-label">公司</span>
+              <span class="meta-label">{{ t("公司") }}</span>
               <span class="meta-values">
                 <template v-for="c in (game.companies || [])" :key="c.id">
                   <a
@@ -562,7 +562,7 @@ onMounted(load)
               </span>
             </div>
             <div v-if="localizationEnabled && game.localizations?.length" class="meta-line">
-              <span class="meta-label">汉化组</span>
+              <span class="meta-label">{{ t("汉化组") }}</span>
               <span class="meta-values">
                 <template v-for="g in (game.localizations || [])" :key="g.id">
                   <a
@@ -578,24 +578,24 @@ onMounted(load)
               </span>
             </div>
             <div v-if="game.tags?.length" class="meta-line">
-              <span class="meta-label">标签</span>
+              <span class="meta-label">{{ t("标签") }}</span>
               <span class="meta-values">
-                <span v-for="t in (game.tags || [])" :key="t" class="mini-tag">{{ t }}</span>
+                <span v-for="tag in (game.tags || [])" :key="tag" class="mini-tag">{{ tag }}</span>
               </span>
             </div>
           </div>
 
           <div class="stats" v-if="playtime">
             <div class="stat">
-              <span class="stat-label">累计游玩</span>
+              <span class="stat-label">{{ t("累计游玩") }}</span>
               <span class="stat-value">{{ formatPlaytime(playtime.totalSeconds) }}</span>
             </div>
             <div class="stat">
-              <span class="stat-label">今日</span>
+              <span class="stat-label">{{ t("今日") }}</span>
               <span class="stat-value">{{ formatPlaytime(playtime.todaySeconds) }}</span>
             </div>
             <div class="stat">
-              <span class="stat-label">游玩次数</span>
+              <span class="stat-label">{{ t("游玩次数") }}</span>
               <span class="stat-value">{{ playtime.sessions }}</span>
             </div>
           </div>
@@ -606,20 +606,20 @@ onMounted(load)
               class="btn primary sm"
               :disabled="busy || !!action"
               @click="openPlay"
-            >进入游戏</button>
+            >{{ t("进入游戏") }}</button>
             <button
               v-else-if="running"
               class="btn primary sm"
               disabled
-            >游戏启动中…</button>
+            >{{ t("游戏启动中…") }}</button>
             <button v-else-if="game.state === 'FAILED' || game.crashed" class="btn primary sm" :disabled="busy || !!action" @click="restart">
-              {{ action?.action === 'start' ? '启动中 ' + action.percent + '%' : '重新启动' }}
+              {{ action?.action === 'start' ? t('启动中 ') + action.percent + '%' : t('重新启动') }}
             </button>
             <button v-else class="btn primary sm" :disabled="busy || !!action" @click="start">
-              {{ action?.action === 'start' ? '启动中 ' + action.percent + '%' : '启动游戏' }}
+              {{ action?.action === 'start' ? t('启动中 ') + action.percent + '%' : t('启动游戏') }}
             </button>
             <button v-if="running" class="btn danger" :disabled="busy || !!action" @click="stop">
-              {{ action?.action === 'stop' ? '关闭中 ' + action.percent + '%' : '关闭游戏' }}
+              {{ action?.action === 'stop' ? t('关闭中 ') + action.percent + '%' : t('关闭游戏') }}
             </button>
           </div>
           <div v-if="action" class="action-progress">
@@ -633,16 +633,12 @@ onMounted(load)
           </div>
 
           <div v-if="!running && (game.state === 'FAILED' || game.crashed)" class="warn-box">
-            会话已退出（游戏自己关闭或崩溃）。游戏内进度若未存档会丢失，
-            点击「重新启动」重新拉起会话；存档可在下方「存档备份」里恢复。
-          </div>
+            {{ t("会话已退出（游戏自己关闭或崩溃）。游戏内进度若未存档会丢失， 点击「重新启动」重新拉起会话；存档可在下方「存档备份」里恢复。") }}</div>
           <div v-else-if="!running" class="muted-sm" style="margin-top:14px">
-            游戏未启动，点击「启动游戏」开始会话。
-          </div>
+            {{ t("游戏未启动，点击「启动游戏」开始会话。") }}</div>
 
           <p style="color:var(--muted);font-size:12.5px;margin-top:22px">
-            离开页面不会中断游戏，随时回来都能继续。
-          </p>
+            {{ t("离开页面不会中断游戏，随时回来都能继续。") }}</p>
         </div>
 
         <!-- 中：封面 / CG 大屏展示，右上角切换 -->
@@ -651,7 +647,7 @@ onMounted(load)
             <button
               :class="{ on: shownMode === 'cover' }"
               @click="selectMedia('cover')"
-            >封面</button>
+            >{{ t("封面") }}</button>
             <button
               :class="{ on: shownMode === 'cg' }"
               @click="selectMedia('cg')"
@@ -692,7 +688,7 @@ onMounted(load)
               @all-failed="onCgFailed"
             />
             <div v-if="cgPending" class="cg-loading">
-              <div class="cg-loading-title">CG 正在加载中…</div>
+              <div class="cg-loading-title">{{ t("CG 正在加载中…") }}</div>
               <div class="cg-loading-track">
                 <span
                   class="cg-loading-fill"
@@ -701,12 +697,12 @@ onMounted(load)
                 />
               </div>
               <div class="muted-sm">
-                {{ cgPercent === null ? '正在读取数据…' : cgPercent + '%' }}
+                {{ cgPercent === null ? t('正在读取数据…') : cgPercent + '%' }}
               </div>
             </div>
             <div v-if="!hasCover && !hasCg" class="hero-placeholder">
               <span>{{ game.name.slice(0, 1) }}</span>
-              <p class="muted-sm">还没有宣传图或 CG</p>
+              <p class="muted-sm">{{ t("还没有宣传图或 CG") }}</p>
             </div>
           </div>
         </div>
@@ -714,47 +710,45 @@ onMounted(load)
 
       <section class="panel">
         <div class="panel-head">
-          <h2>简介</h2>
+          <h2>{{ t("简介") }}</h2>
         </div>
         <div v-if="game.description" class="desc">{{ game.description }}</div>
-        <div v-else class="desc" style="color:var(--muted)">暂无简介。</div>
+        <div v-else class="desc" style="color:var(--muted)">{{ t("暂无简介。") }}</div>
       </section>
 
       <!-- 游戏文件下载：先打包，再下载 -->
       <section class="panel">
         <div class="panel-head">
-          <h2>游戏文件下载</h2>
-          <span class="muted-sm">打包成 zip 后下载</span>
+          <h2>{{ t("游戏文件下载") }}</h2>
+          <span class="muted-sm">{{ t("打包成 zip 后下载") }}</span>
         </div>
         <p class="muted-sm">
-          把游戏目录原样打包。门户生成的 <code>game.env</code> 与 <code>wineprefix/</code>
-          不包含在内，换机器后需要重新接入。
-        </p>
+          {{ t("把游戏目录原样打包。门户生成的") }}<code>game.env</code> {{ t("与") }}<code>wineprefix/</code>
+          {{ t("不包含在内，换机器后需要重新接入。") }}</p>
         <p
           v-if="packageEstimate && packageEstimate.totalBytes > 0"
           class="muted-sm"
           style="margin-top:6px"
         >
-          本地文件 {{ fmtSize(packageEstimate.totalBytes) }} ·
-          {{ packageEstimate.totalFiles }} 个文件<span
+          {{ t("本地文件 {0} · {1} 个文件", fmtSize(packageEstimate.totalBytes), packageEstimate.totalFiles) }}<span
             v-if="packageEstimate.estimatedSeconds > 0"
-          > · 预计打包约 {{ fmtDuration(packageEstimate.estimatedSeconds) }}</span>
+          > {{ t("· 预计打包约 {0}", fmtDuration(packageEstimate.estimatedSeconds)) }}</span>
         </p>
         <div class="backup-bar" style="margin-top:12px;align-items:center">
           <button class="btn" :disabled="downloadBusy || running" @click="prepareDownload">
             {{ downloadBusy
-              ? '打包中 ' + downloadPercent + '%'
-              : (downloadJob?.state === 'READY' ? '重新打包' : '第一步：打包为 zip') }}
+              ? t('打包中 ') + downloadPercent + '%'
+              : (downloadJob?.state === 'READY' ? t('重新打包') : t('第一步：打包为 zip')) }}
           </button>
           <button
             v-if="downloadJob?.state === 'READY'"
             class="btn primary sm"
             @click="startDownload"
-          >第二步：下载压缩包</button>
-          <span v-if="running" class="muted-sm">请先关闭游戏再打包</span>
+          >{{ t("第二步：下载压缩包") }}</button>
+          <span v-if="running" class="muted-sm">{{ t("请先关闭游戏再打包") }}</span>
           <span v-else-if="downloadJob?.state === 'READY'" class="muted-sm">
             {{ fmtSize(downloadJob.doneBytes)
-            }}<template v-if="downloadJob.totalFiles > 0"> · {{ downloadJob.totalFiles }} 个文件</template>
+            }}<template v-if="downloadJob.totalFiles > 0"> {{ t("· {0} 个文件", downloadJob.totalFiles) }}</template>
           </span>
         </div>
         <div
@@ -766,80 +760,73 @@ onMounted(load)
           </div>
           <div class="action-progress-label">
             <span>
-              {{ downloadJob?.state === 'QUEUED' ? '排队中' : '正在打包游戏文件' }}
+              {{ downloadJob?.state === 'QUEUED' ? t('排队中') : t('正在打包游戏文件') }}
               <template v-if="downloadTiming && downloadTiming.elapsed > 0">
-                · 已用 {{ fmtDuration(downloadTiming.elapsed) }}
-                <template v-if="downloadTiming.remaining > 0">
-                  · 预计剩余 {{ fmtDuration(downloadTiming.remaining) }}
-                </template>
+                {{ t("· 已用 {0}", fmtDuration(downloadTiming.elapsed)) }}<template v-if="downloadTiming.remaining > 0">
+                  {{ t("· 预计剩余 {0}", fmtDuration(downloadTiming.remaining)) }}</template>
               </template>
             </span>
             <span>{{ downloadPercent }}%</span>
           </div>
         </div>
         <p v-if="downloadJob?.state === 'FAILED'" class="muted-sm" style="color:var(--warn)">
-          {{ downloadJob.error || '打包失败' }}
+          {{ downloadJob.error || t('打包失败') }}
         </p>
         <p class="muted-sm" style="margin-top:10px">
-          打包完成后可下载 {{ downloadJob?.fileName || '游戏压缩包' }}；产物保留 24 小时，过期自动清理。
-        </p>
+          {{ t("打包完成后可下载 {0}；产物保留 24 小时，过期自动清理。", downloadJob?.fileName || t('游戏压缩包')) }}</p>
       </section>
 
       <!-- 存档管理与切换 -->
       <section class="panel">
         <div class="panel-head">
-          <h2>存档管理与切换</h2>
+          <h2>{{ t("存档管理与切换") }}</h2>
           <span class="muted-sm">
-            存档目录：{{ saves.saveDirs.length ? saves.saveDirs.join('、') : '未找到' }}
-          </span>
-          <button class="link-btn" @click="openDirPicker">手动选择</button>
+            {{ t("存档目录：{0}", saves.saveDirs.length ? saves.saveDirs.join('、') : t('未找到')) }}</span>
+          <button class="link-btn" @click="openDirPicker">{{ t("手动选择") }}</button>
           <button class="link-btn" @click="savesOpen = !savesOpen">
-            {{ savesOpen ? '收起 ▴' : '展开 ▾' }}
+            {{ savesOpen ? t('收起 ▴') : t('展开 ▾') }}
           </button>
         </div>
 
         <p v-if="!savesOpen" class="muted-sm">
-          {{ saves.backups?.length ? saves.backups.length + ' 份备份（可切换）' : '暂无存档备份' }}
-          <template v-if="currentBackup"> · 当前：{{ currentBackup.label || currentBackup.name }}</template>
+          {{ saves.backups?.length ? saves.backups.length + t(' 份备份（可切换）') : t('暂无存档备份') }}
+          <template v-if="currentBackup"> {{ t("· 当前：{0}", currentBackup.label || currentBackup.name) }}</template>
         </p>
 
         <template v-else>
           <p v-if="currentBackup" class="save-current-line">
-            当前游玩中：<strong>{{ currentBackup.label || currentBackup.name }}</strong>
+            {{ t("当前游玩中：") }}<strong>{{ currentBackup.label || currentBackup.name }}</strong>
             <span class="muted-sm">（{{ fmtTime(currentBackup.createdAt) }}）</span>
           </p>
           <p v-else class="muted-sm">
-            还没有切换到任何备份 —— 游戏里正在用的存档就是当前进度。
-          </p>
+            {{ t("还没有切换到任何备份 —— 游戏里正在用的存档就是当前进度。") }}</p>
           <div class="backup-bar">
             <input
               v-model="saveLabel"
               class="input"
-              placeholder="标签（可选，如 第一章结束）"
+              :placeholder="t('标签（可选，如 第一章结束）')"
               maxlength="40"
               @keyup.enter="doBackup"
             />
             <input
               v-model="saveDescription"
               class="input"
-              placeholder="描述（可选，如 全 CG 收集 / 走完 A 线）"
+              :placeholder="t('描述（可选，如 全 CG 收集 / 走完 A 线）')"
               maxlength="500"
               @keyup.enter="doBackup"
             />
             <button class="btn" :disabled="savesBusy || !saves.saveDirs.length" @click="doBackup">
-              立即备份
-            </button>
+              {{ t("立即备份") }}</button>
           </div>
 
           <p v-if="!saves.saveDirs.length" class="muted-sm" style="margin-top:10px">
-            游戏目录下没有 savedata_cn / savedata_jp / savedata / save 目录，无法备份。
-          </p>
+            {{ t("游戏目录下没有 savedata_cn / savedata_jp / savedata / save 目录，无法备份。") }}</p>
 
           <table v-else-if="saves.backups.length" class="saves">
             <thead>
               <tr>
-                <th>时间</th><th>类型</th><th>标签与描述</th><th>大小</th>
-                <th style="text-align:right">操作</th>
+                <th>{{ t("时间") }}</th><th>{{ t("类型") }}</th><th>{{ t("标签与描述") }}</th><th>{{ t("大小") }}</th>
+                <th style="text-align:right">{{ t("操作") }}</th>
               </tr>
             </thead>
             <tbody>
@@ -851,7 +838,7 @@ onMounted(load)
                 <td class="mono">{{ fmtTime(b.createdAt) }}</td>
                 <td>
                   <span class="save-kind" :class="b.kind">
-                    {{ SAVE_KIND_TEXT[b.kind] || b.kind }}
+                    {{ saveKindText[b.kind] || b.kind }}
                   </span>
                 </td>
                 <td>
@@ -859,21 +846,21 @@ onMounted(load)
                     <input
                       v-model="editLabel"
                       class="input"
-                      placeholder="标签"
+                      :placeholder="t('标签')"
                       maxlength="40"
                       style="margin-bottom:6px"
                     />
                     <input
                       v-model="editDescription"
                       class="input"
-                      placeholder="描述"
+                      :placeholder="t('描述')"
                       maxlength="500"
                     />
                   </template>
                   <template v-else>
-                    <span v-if="b.name === saves.current" class="save-current-badge">当前游玩中</span>
+                    <span v-if="b.name === saves.current" class="save-current-badge">{{ t("当前游玩中") }}</span>
                     <span v-if="b.label" class="tag">{{ b.label }}</span>
-                    <span v-else class="muted-sm">无标签</span>
+                    <span v-else class="muted-sm">{{ t("无标签") }}</span>
                     <div v-if="b.description" class="muted-sm" style="margin-top:4px">
                       {{ b.description }}
                     </div>
@@ -882,51 +869,47 @@ onMounted(load)
                 <td class="mono">{{ fmtSize(b.sizeBytes) }}</td>
                 <td style="text-align:right; white-space:nowrap">
                   <template v-if="editingName === b.name">
-                    <button class="link-btn" :disabled="savesBusy" @click="saveEdit(b.name)">保存</button>
-                    <button class="link-btn" :disabled="savesBusy" @click="cancelEdit">取消</button>
+                    <button class="link-btn" :disabled="savesBusy" @click="saveEdit(b.name)">{{ t("保存") }}</button>
+                    <button class="link-btn" :disabled="savesBusy" @click="cancelEdit">{{ t("取消") }}</button>
                   </template>
                   <template v-else>
-                    <button class="link-btn" :disabled="savesBusy" @click="downloadSave(b)">下载</button>
-                    <button class="link-btn" :disabled="savesBusy" @click="doSwitch(b)">切换到此存档</button>
-                    <button class="link-btn" :disabled="savesBusy" @click="startEdit(b)">编辑</button>
+                    <button class="link-btn" :disabled="savesBusy" @click="downloadSave(b)">{{ t("下载") }}</button>
+                    <button class="link-btn" :disabled="savesBusy" @click="doSwitch(b)">{{ t("切换到此存档") }}</button>
+                    <button class="link-btn" :disabled="savesBusy" @click="startEdit(b)">{{ t("编辑") }}</button>
                     <!-- 原始存档 / 当前游玩中 / 无原始时的最后一份 都不可删，后端也会拒绝 -->
                     <button
                       v-if="canDeleteBackup(b)"
                       class="link-btn danger"
                       :disabled="savesBusy"
                       @click="doDelete(b)"
-                    >删除</button>
+                    >{{ t("删除") }}</button>
                   </template>
                 </td>
               </tr>
             </tbody>
           </table>
 
-          <p v-else class="muted-sm" style="margin-top:10px">还没有备份。</p>
+          <p v-else class="muted-sm" style="margin-top:10px">{{ t("还没有备份。") }}</p>
 
           <!-- 没有任何手动备份时的兜底：回到导入游戏时留的原始存档 -->
           <div class="save-original-box">
             <div v-if="saves.original">
               <span class="muted-sm">
-                原始存档：<strong>{{ saves.original }}</strong>
-                　　这是游戏导入时自动留底的初始状态，不可删除，存档出问题时用它回退。
-              </span>
+                {{ t("原始存档：") }}<strong>{{ saves.original }}</strong>
+                　　{{ t("这是游戏导入时自动留底的初始状态，不可删除，存档出问题时用它回退。") }}</span>
               <button
                 class="btn sm"
                 style="margin-left:10px"
                 :disabled="savesBusy || running"
                 @click="doRestoreOriginal"
-              >恢复初始存档</button>
+              >{{ t("恢复初始存档") }}</button>
             </div>
             <span v-else class="muted-sm">
-              这个游戏没有原始存档备份（导入时未发现存档目录，或导入了不含存档的包）。
-            </span>
+              {{ t("这个游戏没有原始存档备份（导入时未发现存档目录，或导入了不含存档的包）。") }}</span>
           </div>
 
           <p class="muted-sm" style="margin-top:14px">
-            切换前会自动对当前存档做一份 <code>pre-restore</code> 快照，切错了可以再切回来；
-            游戏运行中会拒绝切换（先关闭游戏）。「原始」是导入游戏时自动留存的原始存档。
-          </p>
+            {{ t("切换前会自动对当前存档做一份") }}<code>pre-restore</code> {{ t("快照，切错了可以再切回来； 游戏运行中会拒绝切换（先关闭游戏）。「原始」是导入游戏时自动留存的原始存档。") }}</p>
         </template>
       </section>
 

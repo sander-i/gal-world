@@ -18,11 +18,25 @@ import org.springframework.web.bind.annotation.GetMapping;
  * 但浏览器若缓存了 index.html 本身，就会一直指向上一次的旧 JS。
  * 用户在游戏页里按 Ctrl+F5 会被游戏吞掉（Selkies 绑了这些快捷键），
  * 没法手动硬刷新——只能靠这里保证入口页永远最新。
+ *
+ * 路径清单必须与 frontend/src/router.js 的路由一致：漏一条，直接访问或
+ * 刷新那一页就会落到 Spring 的 404 白页。刻意不写 {@code /**}——
+ * 那会把 /assets/*、/favicon.svg 这些静态资源也一起接管，导致样式与脚本 404。
  */
 @Controller
 public class SpaFallbackController {
 
-    @GetMapping({"/", "/game/**", "/play/**", "/games", "/settings", "/admin", "/companies"})
+    @GetMapping({
+            "/",
+            "/games", "/games/**",
+            "/game/**",
+            "/play/**",
+            "/settings",
+            "/admin",
+            "/companies",
+            "/localization-groups",
+            "/tags",
+    })
     public String index(HttpServletResponse res) {
         res.setHeader("Cache-Control", "no-store, must-revalidate");
         res.setHeader("Pragma", "no-cache");

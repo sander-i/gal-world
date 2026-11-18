@@ -6,6 +6,7 @@
 package io.github.sander_i.service;
 
 import io.github.sander_i.domain.Game;
+import io.github.sander_i.i18n.I18n;
 import io.github.sander_i.platform.CommandRunner;
 import io.github.sander_i.repo.GameRepository;
 import org.slf4j.Logger;
@@ -70,11 +71,11 @@ public class CanvasCalibrationService {
     public synchronized Result calibrate(String gameId, boolean manual) {
         Game game = games.findById(gameId).orElse(null);
         if (game == null) {
-            return new Result("not-found", 0, 0, null, null, 0, "没有这个游戏");
+            return new Result("not-found", 0, 0, null, null, 0, I18n.t("没有这个游戏"));
         }
         if (!manual && !settings.canvasAutoCalibrate()) {
             return new Result("disabled", game.getWidth(), game.getHeight(),
-                    null, null, 0, "已关闭自动校准");
+                    null, null, 0, I18n.t("已关闭自动校准"));
         }
 
         State st = states.computeIfAbsent(gameId, k -> new State());
@@ -100,18 +101,18 @@ public class CanvasCalibrationService {
         if (!manual && st.pinned) {
             return new Result("ok", game.getWidth(), game.getHeight(),
                     null, null, st.round,
-                    "当前画布是手动指定的，已跳过自动校准");
+                    I18n.t("当前画布是手动指定的，已跳过自动校准"));
         }
 
         if (sessions.status(gameId, game.getPort()).state() != SessionService.State.RUNNING) {
             return new Result("not-running", game.getWidth(), game.getHeight(),
-                    null, null, st.round, "游戏未运行，启动后才能测量窗口");
+                    null, null, st.round, I18n.t("游戏未运行，启动后才能测量窗口"));
         }
 
         WindowGeometry win = measure(game.getDisplayNum());
         if (win == null) {
             return new Result("no-window", game.getWidth(), game.getHeight(),
-                    null, null, st.round, "没有读到游戏窗口，请等画面出现后再试");
+                    null, null, st.round, I18n.t("没有读到游戏窗口，请等画面出现后再试"));
         }
 
         long area = (long) win.width() * win.height();
@@ -127,7 +128,7 @@ public class CanvasCalibrationService {
             st.done = true;
             return new Result("ok", game.getWidth(), game.getHeight(),
                     win.width(), win.height(), st.round,
-                    String.format("画布 %d×%d 已匹配游戏窗口 %d×%d",
+                    I18n.t("画布 {0}×{1} 已匹配游戏窗口 {2}×{3}",
                             game.getWidth(), game.getHeight(), win.width(), win.height()));
         }
 
@@ -138,7 +139,7 @@ public class CanvasCalibrationService {
         } catch (RuntimeException e) {
             log.warn("画布校准写入失败 {}: {}", gameId, e.toString());
             return new Result("failed", oldW, oldH, win.width(), win.height(), st.round,
-                    "保存画布失败：" + e.getMessage());
+                    I18n.t("保存画布失败：{0}", e.getMessage()));
         }
         st.round++;
         // 只有回退最佳画布时才终止；轮次上限由 planner 判，不能在这里提前 done，
@@ -148,9 +149,9 @@ public class CanvasCalibrationService {
         }
         boolean restarted = restart(game);
 
-        String message = String.format("画布 %d×%d → %d×%d（窗口 %d×%d），%s",
+        String message = I18n.t("画布 {0}×{1} → {2}×{3}（窗口 {4}×{5}），{6}",
                 oldW, oldH, plan.width(), plan.height(), win.width(), win.height(),
-                restarted ? "会话已重启" : "会话重启失败，请手动重启");
+                restarted ? I18n.t("会话已重启") : I18n.t("会话重启失败，请手动重启"));
         return new Result(restarted ? "restarted" : "failed",
                 plan.width(), plan.height(), win.width(), win.height(), st.round, message);
     }
@@ -179,7 +180,7 @@ public class CanvasCalibrationService {
         } catch (IOException e) {
             game.setWidth(oldW);
             game.setHeight(oldH);
-            throw new IllegalStateException("写入 game.env 失败: " + e.getMessage(), e);
+            throw new IllegalStateException(I18n.t("写入 game.env 失败: {0}", e.getMessage()), e);
         }
     }
 

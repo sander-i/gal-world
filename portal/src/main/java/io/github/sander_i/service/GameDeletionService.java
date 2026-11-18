@@ -5,6 +5,7 @@
 
 package io.github.sander_i.service;
 
+import io.github.sander_i.i18n.I18n;
 import io.github.sander_i.config.PathConfig;
 import io.github.sander_i.domain.Game;
 import io.github.sander_i.repo.GameCompanyRepository;
@@ -70,7 +71,7 @@ public class GameDeletionService {
     @Transactional
     public void delete(String gameId) throws IOException {
         Game game = games.findById(gameId).orElseThrow(
-                () -> new IllegalArgumentException("没有这个游戏: " + gameId));
+                () -> new IllegalArgumentException(I18n.t("没有这个游戏: {0}", gameId)));
 
         // 运行中的会话先停掉，否则删除注册信息后还剩一个野进程
         var status = sessionService.status(gameId, game.getPort());

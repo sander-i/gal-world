@@ -11,14 +11,25 @@
  *   stream 55-95  等待串流
  *   done   100    就绪
  */
+import { t } from './i18n.js'
+
 export const LAUNCH_STEPS = ['start', 'stream', 'done']
 
-export const LAUNCH_LABELS = {
-  start: '正在启动游戏…',
-  stream: '连接串流服务…',
-  done: '已启动',
-  stop: '正在关闭游戏…',
-  closed: '已关闭',
+/**
+ * 启动阶段文案。
+ *
+ * 做成函数而不是常量：模块级常量在导入期求值，语言切换后不会更新，
+ * 用户看到的是首次加载时的语言（2026-11-17 用户报告的问题）。
+ */
+export function launchLabel(step) {
+  switch (step) {
+    case 'start': return t('正在启动游戏…')
+    case 'stream': return t('连接串流服务…')
+    case 'done': return t('已启动')
+    case 'stop': return t('正在关闭游戏…')
+    case 'closed': return t('已关闭')
+    default: return ''
+  }
 }
 
 const RANGES = {

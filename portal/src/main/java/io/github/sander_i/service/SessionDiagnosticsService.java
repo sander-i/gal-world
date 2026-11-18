@@ -6,6 +6,7 @@
 package io.github.sander_i.service;
 
 import io.github.sander_i.config.PathConfig;
+import io.github.sander_i.i18n.I18n;
 import io.github.sander_i.platform.CommandRunner;
 import io.github.sander_i.platform.OsKind;
 import org.springframework.stereotype.Service;
@@ -93,23 +94,23 @@ public class SessionDiagnosticsService {
         StringBuilder sb = new StringBuilder();
         boolean failed = isFailed(status);
         switch (status.state()) {
-            case FAILED -> sb.append("游戏会话异常终止");
-            case STOPPED -> sb.append(failed ? "游戏进程自行退出" : "游戏会话已停止");
-            default -> sb.append("游戏会话状态：").append(status.state());
+            case FAILED -> sb.append(I18n.t("游戏会话异常终止"));
+            case STOPPED -> sb.append(failed ? I18n.t("游戏进程自行退出") : I18n.t("游戏会话已停止"));
+            default -> sb.append(I18n.t("游戏会话状态：")).append(status.state());
         }
         // 只有确实异常时才解释 systemd 的账本与日志里的错误行；
         // 正常停止时最后一条 error 通常是历史噪声，拼上来会误导。
         if (failed) {
             if (facts != null && facts.result() != null && !facts.result().isBlank()
                     && !"success".equalsIgnoreCase(facts.result())) {
-                sb.append("（systemd 结果为 ").append(facts.result()).append("）");
+                sb.append(I18n.t("（systemd 结果为 {0}）", facts.result()));
             }
             ExitInfo exit = classify(facts);
             if (exit.exitCode() != null) {
-                sb.append("，退出码 ").append(exit.exitCode());
+                sb.append(I18n.t("，退出码 {0}", exit.exitCode()));
             }
             if (exit.signal() != null) {
-                sb.append("，被信号 ").append(exit.signal()).append(" 终止");
+                sb.append(I18n.t("，被信号 {0} 终止", exit.signal()));
             }
             String hint = firstErrorLine(tail);
             if (!hint.isEmpty()) {

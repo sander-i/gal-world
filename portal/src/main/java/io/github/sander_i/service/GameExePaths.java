@@ -5,6 +5,8 @@
 
 package io.github.sander_i.service;
 
+import io.github.sander_i.i18n.I18n;
+
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -24,7 +26,7 @@ public final class GameExePaths {
     public static String resolve(Path gameDir, String given) {
         String value = given == null ? "" : given.trim();
         if (value.isEmpty()) {
-            throw new IllegalArgumentException("必须选择可执行文件");
+            throw new IllegalArgumentException(I18n.t("必须选择可执行文件"));
         }
         Path target = Path.of(value);
         if (!target.isAbsolute()) {
@@ -36,13 +38,13 @@ public final class GameExePaths {
             real = target.toRealPath();
             realDir = gameDir.toRealPath();
         } catch (IOException e) {
-            throw new IllegalArgumentException("可执行文件不存在: " + value);
+            throw new IllegalArgumentException(I18n.t("可执行文件不存在: {0}", value));
         }
         if (!real.startsWith(realDir) || !Files.isRegularFile(real)) {
-            throw new IllegalArgumentException("可执行文件必须位于游戏目录内");
+            throw new IllegalArgumentException(I18n.t("可执行文件必须位于游戏目录内"));
         }
         if (!real.getFileName().toString().toLowerCase(Locale.ROOT).endsWith(".exe")) {
-            throw new IllegalArgumentException("可执行文件必须以 .exe 结尾");
+            throw new IllegalArgumentException(I18n.t("可执行文件必须以 .exe 结尾"));
         }
         return real.toString();
     }

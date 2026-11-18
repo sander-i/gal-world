@@ -7,6 +7,7 @@ package io.github.sander_i.deploy;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.sander_i.config.PathConfig;
+import io.github.sander_i.i18n.I18n;
 import io.github.sander_i.platform.ArtifactDownloader;
 import io.github.sander_i.platform.CommandRunner;
 import io.github.sander_i.platform.OsKind;
@@ -157,11 +158,13 @@ public class DeployService {
             String lastRunId = lastRunByStep.getOrDefault(s.id(), "");
             DeployRun run = lastRunId.isEmpty() ? null : runs.get(lastRunId);
             String state = effectState(s, probe, run);
-            out.add(new StepStatus(s.id(), s.title(), s.summary(), s.kind().name(),
+            out.add(new StepStatus(s.id(), I18n.t(s.title()), I18n.t(s.summary()),
+                    s.kind().name(),
                     state, probe.name(), lastRunId,
                     run == null ? "" : run.state().name(),
                     run == null ? "" : run.error(), s.destructive(), s.requires(),
-                    s.successHint(), DeploySteps.isUninstall(s), preview(s), s.runAs().name(),
+                    I18n.t(s.successHint()), DeploySteps.isUninstall(s), preview(s),
+                    s.runAs().name(),
                     run != null && run.state() == DeployRun.State.RUNNING,
                     run == null ? 0L : run.startedAt()));
         }
@@ -183,11 +186,11 @@ public class DeployService {
         // 有固定提权入口时，实际执行的不是这些行，预览就直接给出入口调用
         if (s.runAs() == DeployStep.RunAs.ADMIN && sub != null) {
             return List.of("sudo -n " + sudoWrapper + " " + sub,
-                    "（具体命令固定在脚本里，页面只能触发子命令）");
+                    I18n.t("（具体命令固定在脚本里，页面只能触发子命令）"));
         }
         try {
             List<String> raw = commands.resolve(s.os(), token);
-            Map<String, String> vars = vars(s, "<元件 " + s.artifactId() + ">");
+            Map<String, String> vars = vars(s, I18n.t("<元件 {0}>", s.artifactId()));
             String prefix = s.os() != OsKind.LINUX ? ""
                     : s.runAs() == DeployStep.RunAs.ADMIN ? "sudo -n sh -c " : "sh -c ";
             List<String> out = new ArrayList<>(raw.size());
@@ -196,7 +199,7 @@ public class DeployService {
             }
             return out;
         } catch (RuntimeException e) {
-            return List.of("预览不可用：" + e.getMessage());
+            return List.of(I18n.t("预览不可用：{0}", e.getMessage()));
         }
     }
 
@@ -240,11 +243,18 @@ public class DeployService {
     public String confirm(String stepId) {
         DeployStep s = steps.find(stepId);
         if (s == null) {
-            throw new IllegalArgumentException("没有这个步骤: " + stepId);
+            throw new IllegalArgumentException(I18n.t("没有这个步骤: {0}", stepId));
         }
         String token = UUID.randomUUID().toString();
         confirms.put(stepId, new Confirm(token, System.currentTimeMillis() + Duration.ofMinutes(5).toMillis()));
         return token;
+    }
+
+    /** 破坏性步骤缺少 / 使用了无效的确认令牌；控制器据此回 403 而不是 409 */
+    public static class ConfirmRequiredException extends IllegalStateException {
+        public ConfirmRequiredException(String message) {
+            super(message);
+        }
     }
 
     private void checkConfirm(DeployStep s, String token) {
@@ -253,10 +263,10 @@ public class DeployService {
         }
         Confirm c = confirms.get(s.id());
         if (c == null || c.expireAt() < System.currentTimeMillis()) {
-            throw new IllegalStateException("需要确认令牌：请先调用 /confirm");
+            throw new ConfirmRequiredException(I18n.t("需要确认令牌：请先调用 /confirm"));
         }
         if (token == null || !token.equals(c.token())) {
-            throw new IllegalStateException("确认令牌无效或已使用");
+            throw new ConfirmRequiredException(I18n.t("确认令牌无效或已使用"));
         }
         confirms.remove(s.id());   // 一次性
     }
@@ -275,31 +285,31 @@ public class DeployService {
     public String run(String stepId, String confirmToken, char[] sudoPassword) {
         DeployStep s = steps.find(stepId);
         if (s == null) {
-            throw new IllegalArgumentException("没有这个步骤: " + stepId);
+            throw new IllegalArgumentException(I18n.t("没有这个步骤: {0}", stepId));
         }
         if (s.os() != OsKind.current()) {
-            throw new IllegalStateException("该步骤不适用于当前平台: " + s.os());
+            throw new IllegalStateException(I18n.t("该步骤不适用于当前平台: {0}", s.os()));
         }
         checkConfirm(s, confirmToken);
         if (sudoPassword != null) {
             if (!allowSudoPassword) {
                 java.util.Arrays.fill(sudoPassword, '\0');
-                throw new SecurityException("服务端未开启 allow-sudo-password");
+                throw new SecurityException(I18n.t("服务端未开启 allow-sudo-password"));
             }
             SudoAttempt a = sudoAttempts.get(stepId);
             if (a != null && a.lockUntil() > System.currentTimeMillis()) {
                 java.util.Arrays.fill(sudoPassword, '\0');
-                throw new IllegalStateException("提权密码错误次数过多，请 5 分钟后再试");
+                throw new IllegalStateException(I18n.t("提权密码错误次数过多，请 5 分钟后再试"));
             }
         }
 
         for (String req : s.requires()) {
             if (!succeeded.containsKey(req) && probeOfById(req) != ProbeState.READY) {
-                throw new IllegalStateException("前置步骤未完成: " + req);
+                throw new IllegalStateException(I18n.t("前置步骤未完成: {0}", req));
             }
         }
         if (!busy.compareAndSet(false, true)) {
-            throw new IllegalStateException("已有部署任务在执行，请稍后再试");
+            throw new IllegalStateException(I18n.t("已有部署任务在执行，请稍后再试"));
         }
 
         String runId = "r-" + OffsetDateTime.now().format(java.time.format.DateTimeFormatter
@@ -308,13 +318,16 @@ public class DeployService {
         run.sudo(sudoPassword);
         runs.put(runId, run);
         lastRunByStep.put(stepId, runId);
-        queue.submit(() -> {
+        // 后台线程拿不到请求上下文：把提交时的语言固定下来，
+        // 否则日志会按站点默认语言输出，和界面语言不一致。
+        String locale = I18n.locale();
+        queue.submit(() -> I18n.runAs(locale, () -> {
             try {
                 execute(run, s);
             } finally {
                 busy.set(false);
             }
-        });
+        }));
         return runId;
     }
 
@@ -326,19 +339,19 @@ public class DeployService {
         try {
             Files.createDirectories(logFile.getParent());
             ProbeState probe = probeOf(s);
-            run.log("步骤: " + s.id() + " · " + s.title());
-            run.log("探测: " + probe);
+            run.log(I18n.t("步骤: {0} · {1}", s.id(), I18n.t(s.title())));
+            run.log(I18n.t("探测: {0}", probe));
             if (probe == ProbeState.READY) {
-                run.log("已就绪，跳过执行");
+                run.log(I18n.t("已就绪，跳过执行"));
                 finish(run, DeployRun.State.SUCCESS, 0, logFile, auditTail, t0);
                 return;
             }
 
             String artifactPath = "";
             if (s.artifactId() != null && !s.artifactId().isBlank()) {
-                run.log("下载元件: " + s.artifactId());
+                run.log(I18n.t("下载元件: {0}", s.artifactId()));
                 artifactPath = downloader.fetch(s.artifactId(), run::log).toAbsolutePath().toString();
-                run.log("元件已就绪: " + artifactPath);
+                run.log(I18n.t("元件已就绪: {0}", artifactPath));
             }
             if (s.kind() == DeployStep.Kind.DOWNLOAD) {
                 finish(run, DeployRun.State.SUCCESS, 0, logFile, auditTail, t0);
@@ -360,15 +373,15 @@ public class DeployService {
                 succeeded.put(s.id(), run.id());
                 finish(run, DeployRun.State.SUCCESS, 0, logFile, auditTail, t0);
             } else {
-                run.error("命令退出码 " + exit + "；" + s.successHint());
+                run.error(I18n.t("命令退出码 {0}；{1}", exit, s.successHint()));
                 finish(run, DeployRun.State.FAILED, exit, logFile, auditTail, t0);
             }
         } catch (UnsupportedOperationException e) {
-            run.log("未实现: " + e.getMessage());
+            run.log(I18n.t("未实现: {0}", e.getMessage()));
             run.error(e.getMessage());
             finish(run, DeployRun.State.FAILED, -1, logFile, auditTail, t0);
         } catch (Exception e) {
-            run.log("失败: " + e);
+            run.log(I18n.t("失败: {0}", e));
             run.error(String.valueOf(e.getMessage()));
             finish(run, DeployRun.State.FAILED, -1, logFile, auditTail, t0);
         } finally {
@@ -380,7 +393,7 @@ public class DeployService {
     private void finish(DeployRun run, DeployRun.State state, int exit, Path logFile,
                         StringBuilder tail, long t0) {
         run.exit(exit);
-        run.log("结果: " + state + (exit >= 0 ? "（exit=" + exit + "）" : ""));
+        run.log(I18n.t("结果: {0}", state + (exit >= 0 ? "（exit=" + exit + "）" : "")));
         run.state(state);
         try {
             Files.createDirectories(logFile.getParent());
@@ -409,19 +422,19 @@ public class DeployService {
         // 脚本/单元类步骤：先把 jar 内资产落盘，再执行赋权与注册命令
         int installed = assets.install(tokenOf(s));
         if (installed > 0) {
-            run.log("已从 jar 安装 " + installed + " 个资产文件");
+            run.log(I18n.t("已从 jar 安装 {0} 个资产文件", installed));
         }
         boolean admin = s.runAs() == DeployStep.RunAs.ADMIN;
         char[] sudo = admin ? run.sudo() : null;
         // 固定提权入口优先：不需要密码，权限边界由 sudoers 里的子命令白名单兜住
         String sub = commands.sudoSubcommand(tokenOf(s));
         if (admin && sudo == null && sub != null && Files.isExecutable(Path.of(sudoWrapper))) {
-            run.log("提权入口: " + sudoWrapper + " " + sub);
+            run.log(I18n.t("提权入口: {0} {1}", sudoWrapper, sub));
             int exit = execStreaming(run, List.of("sudo", "-n", sudoWrapper, sub), s.timeout(), null);
             if (exit != 0) {
                 if (exit == 1
                         && run.lines().stream().anyMatch(l -> l.contains("a password is required"))) {
-                    run.error("提权入口未生效：重新运行 deploy.sh 安装 sudoers 后重试");
+                    run.error(I18n.t("提权入口未生效：重新运行 deploy.sh 安装 sudoers 后重试"));
                     run.state(DeployRun.State.NEED_ELEVATION);
                 }
                 return exit;
@@ -447,8 +460,8 @@ public class DeployService {
                         && run.lines().stream().anyMatch(l -> l.contains("a password is required"))) {
                     // 有固定入口却仍要密码，多半是入口没装好或 sudoers 被改
                     run.error(commands.sudoSubcommand(tokenOf(s)) != null
-                            ? "提权入口不可用：重新运行 deploy.sh 安装 sudoers（或加 --no-sudoers 后在页面输密码）"
-                            : "需要提权：请在页面输入 sudo 密码，或先执行 sudo -v");
+                            ? I18n.t("提权入口不可用：重新运行 deploy.sh 安装 sudoers（或加 --no-sudoers 后在页面输密码）")
+                            : I18n.t("需要提权：请在页面输入 sudo 密码，或先执行 sudo -v"));
                     run.state(DeployRun.State.NEED_ELEVATION);
                 }
                 return exit;
@@ -524,7 +537,7 @@ public class DeployService {
         reader.start();
         boolean done = p.waitFor(Math.max(1, timeout.toMillis()), TimeUnit.MILLISECONDS);
         if (!done) {
-            run.log("超时（" + timeout.toSeconds() + "s），终止进程");
+            run.log(I18n.t("超时（{0}s），终止进程", timeout.toSeconds()));
             p.destroyForcibly();
         }
         reader.join(2000);
@@ -540,7 +553,7 @@ public class DeployService {
 
     private String tokenOf(DeployStep s) {
         if (s.command().isEmpty()) {
-            throw new UnsupportedOperationException("步骤没有命令: " + s.id());
+            throw new UnsupportedOperationException(I18n.t("步骤没有命令: {0}", s.id()));
         }
         return s.command().get(0);
     }
@@ -564,7 +577,7 @@ public class DeployService {
             out = out.replace("${" + e.getKey() + "}", e.getValue());
         }
         if (out.matches("(?s).*\\$\\{[^}]+}.*")) {
-            throw new IllegalArgumentException("未知占位符: " + template);
+            throw new IllegalArgumentException(I18n.t("未知占位符: {0}", template));
         }
         return out;
     }
@@ -578,13 +591,13 @@ public class DeployService {
     public void cancel(String runId) {
         DeployRun run = runs.get(runId);
         if (run == null) {
-            throw new IllegalArgumentException("没有这个 run: " + runId);
+            throw new IllegalArgumentException(I18n.t("没有这个 run: {0}", runId));
         }
         Process p = run.process();
         if (p != null && p.isAlive()) {
             p.destroyForcibly();
         }
-        run.error("已取消");
+        run.error(I18n.t("已取消"));
         run.state(DeployRun.State.CANCELLED);
     }
 }

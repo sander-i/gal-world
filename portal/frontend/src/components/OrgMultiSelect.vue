@@ -14,6 +14,7 @@
  * 中文输入法：组合态（isComposing）期间的回车一律忽略，
  * 避免用回车确认拼音候选时被当成「选中第一项」或「新建」。
  */
+import { t } from '../i18n.js'
 import { computed, nextTick, ref } from 'vue'
 import { filterOrgs, isSelected, resolveEnterAction, toggleOrg } from '../org-select'
 import { moveItem } from '../order'
@@ -21,7 +22,7 @@ import { moveItem } from '../order'
 const props = defineProps({
   modelValue: { type: Array, default: () => [] },
   options: { type: Array, default: () => [] },
-  placeholder: { type: String, default: '搜索名称或别名' },
+  placeholder: { type: String, default: '' },
   /** 允许在编辑页直接新建 */
   creatable: { type: Boolean, default: false },
   /** 新建实现：({ name, alias }) => Promise<条目|null>；实现方必须自行把条目并入 modelValue */
@@ -47,6 +48,8 @@ const open = ref(false)
 const composing = ref(false)
 const creating = ref(false)
 const searchEl = ref(null)
+/** 默认占位文案在这里求值，不放进 props 默认值——props 默认值在导入期算一次，切换语言后不更新 */
+const placeholderText = computed(() => props.placeholder || t('搜索名称或别名'))
 const filtered = computed(() => filterOrgs(props.options, query.value))
 const enterAction = computed(() =>
   resolveEnterAction(filtered.value, query.value, props.creatable))
@@ -121,13 +124,13 @@ function onFocusOut(ev) {
       >
         <span class="org-chip-name">{{ o.name }}</span>
         <span v-if="o.alias" class="org-chip-alias">{{ o.alias }}</span>
-        <button type="button" class="chip-x" title="移除" @click="toggle(o)">×</button>
+        <button type="button" class="chip-x" :title="t('移除')" @click="toggle(o)">×</button>
       </span>
       <input
         ref="searchEl"
         v-model="query"
         class="org-select-input"
-        :placeholder="modelValue.length ? '' : placeholder"
+        :placeholder="modelValue.length ? '' : placeholderText"
         @focus="open = true"
         @input="open = true"
         @compositionstart="composing = true"
@@ -151,14 +154,14 @@ function onFocusOut(ev) {
         <span v-if="o.alias" class="org-option-alias">{{ o.alias }}</span>
         <span v-if="isSelected(modelValue, o)" class="org-option-check">✓</span>
       </button>
-      <p v-if="!filtered.length && !showCreateRow" class="org-empty">没有匹配项</p>
+      <p v-if="!filtered.length && !showCreateRow" class="org-empty">{{ t("没有匹配项") }}</p>
       <button
         v-if="showCreateRow"
         type="button"
         class="org-option org-create-main"
         :disabled="creating"
         @mousedown.prevent="onCreateMousedown"
-      >{{ creating ? '新建中…' : `＋ 新建「${query.trim()}」并选中` }}</button>
+      >{{ creating ? t('新建中…') : t("＋ 新建「{0}」并选中", query.trim()) }}</button>
     </div>
   </div>
 </template>

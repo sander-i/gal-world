@@ -45,6 +45,10 @@ public class LocalizationGroup {
     @Column(name = "sort_order")
     private int sortOrder;
 
+    /** 多语言覆盖，格式见 {@link io.github.sander_i.i18n.I18nText} */
+    @Column(name = "i18n_text", length = 4000)
+    private String i18nText;
+
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
 
@@ -62,4 +66,7 @@ public class LocalizationGroup {
 
     public int getSortOrder() { return sortOrder; }
     public void setSortOrder(int sortOrder) { this.sortOrder = sortOrder; }
+
+    public String getI18nText() { return i18nText; }
+    public void setI18nText(String i18nText) { this.i18nText = i18nText; }
 }

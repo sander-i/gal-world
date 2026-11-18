@@ -11,6 +11,7 @@ import 'element-plus/theme-chalk/dark/css-vars.css'
 import './styles.css'
 import { BUILTIN_THEMES } from './theme.js'
 import { useTheme } from './theme-store.js'
+import { loadI18n } from './i18n.js'
 
 // Element Plus 的 dark 变量挂在 html.dark；applyTheme 会按主题 base 增删该类
 const theme = useTheme()
@@ -30,4 +31,10 @@ if (forced && BUILTIN_THEMES.some((t) => t.id === forced)) {
   theme.setTheme(theme.current.value.id)
 }
 
-createApp(App).use(router).mount('#app')
+/**
+ * 语言包先于挂载加载：否则首屏会闪一次中文原文，再跳成用户选择的语言。
+ * 加载失败时 i18n.js 保留内置兜底文案，页面照常渲染。
+ */
+loadI18n().finally(() => {
+  createApp(App).use(router).mount('#app')
+})

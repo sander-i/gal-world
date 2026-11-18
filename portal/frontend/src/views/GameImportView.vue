@@ -4,12 +4,13 @@
 -->
 
 <script setup>
+import { onLocaleChange, t } from '../i18n.js'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { api, getWriteToken } from '../api'
 import GameUploadPanel from '../components/GameUploadPanel.vue'
 import { notify } from '../feedback'
-import { canSubmit, mergeEvent, runPhase, stepOf, formatBytes, altOptions } from '../game-import'
+import { canSubmit, mergeEvent, runPhase, stepOf, stepStateLabel, formatBytes, altOptions } from '../game-import'
 import { playLink } from '../play-origin'
 
 const router = useRouter()
@@ -39,13 +40,14 @@ const run = ref({ lines: [], steps: [], state: 'RUNNING' })
 const busy = ref(false)
 
 const STEP_IDS = ['validate', 'allocate', 'register', 'wineboot', 'fonts']
-const STEP_TITLES = {
-  validate: '校验参数与目录',
-  allocate: '分配显示号 / 端口 / 槽位',
-  register: '写入 game.env 并入库',
-  wineboot: '初始化 Wine 前缀',
-  fonts: '安装中文字体',
-}
+/** 步骤标题：computed 而非常量，否则语言切换后不更新 */
+const stepTitles = computed(() => ({
+  validate: t('校验参数与目录'),
+  allocate: t('分配显示号 / 端口 / 槽位'),
+  register: t('写入 game.env 并入库'),
+  wineboot: t('初始化 Wine 前缀'),
+  fonts: t('安装中文字体'),
+}))
 const stepsView = computed(() => STEP_IDS.map((id) => stepOf(run.value.steps, id)))
 const phase = computed(() => runPhase(run.value.state))
 const submitReady = computed(() => canSubmit(form.value) && !!selected.value)
@@ -109,7 +111,7 @@ async function loadSlots() {
     slots.value = await api.importSlots()
   } catch (e) {
     slots.value = null
-    notify.error('无法分配槽位：' + e.message)
+    notify.error(t("无法分配槽位：{0}", e.message))
   }
 }
 
@@ -135,7 +137,7 @@ async function submit() {
       `/games/import?run=${encodeURIComponent(res.runId)}&id=${encodeURIComponent(gameId.value)}`)
     await subscribe(res.runId)
   } catch (e) {
-    notify.error('接入失败：' + e.message)
+    notify.error(t("接入失败：{0}", e.message))
   } finally {
     busy.value = false
   }
@@ -153,7 +155,7 @@ async function subscribe(id) {
       run.value = mergeEvent(run.value, name, data)
     }, abort.signal)
   } catch (e) {
-    if (e.name !== 'AbortError') notify.error('日志流中断：' + e.message)
+    if (e.name !== 'AbortError') notify.error(t("日志流中断：{0}", e.message))
   }
 }
 
@@ -169,7 +171,7 @@ async function resume(id) {
     if (['SUCCESS', 'FAILED', 'CANCELLED'].includes(snap.state)) return
     await subscribe(id)
   } catch (e) {
-    notify.error('恢复接入任务失败：' + e.message)
+    notify.error(t("恢复接入任务失败：{0}", e.message))
   }
 }
 
@@ -199,14 +201,14 @@ async function retry() {
       `/games/import?run=${encodeURIComponent(res.runId)}&id=${encodeURIComponent(gameId.value)}`)
     await subscribe(res.runId)
   } catch (e) {
-    notify.error('重试失败：' + e.message)
+    notify.error(t("重试失败：{0}", e.message))
   }
 }
 
 async function rollback() {
   try {
     await api.importRollback(runId.value)
-    notify.success('已回滚注册，游戏文件与 wineprefix 保留')
+    notify.success(t('已回滚注册，游戏文件与 wineprefix 保留'))
     step.value = 'source'
     run.value = { lines: [], steps: [], state: 'RUNNING' }
     runId.value = ''
@@ -216,7 +218,7 @@ async function rollback() {
     history.replaceState(null, '', '/games/import')
     await loadCandidates()
   } catch (e) {
-    notify.error('回滚失败：' + e.message)
+    notify.error(t("回滚失败：{0}", e.message))
   }
 }
 
@@ -225,7 +227,7 @@ async function cancel() {
     await api.importCancel(runId.value)
     await finish()
   } catch (e) {
-    notify.error('取消失败：' + e.message)
+    notify.error(t("取消失败：{0}", e.message))
   }
 }
 
@@ -242,25 +244,32 @@ onMounted(() => {
   }
 })
 
-onBeforeUnmount(() => abort?.abort())
+// 候选目录的警告由后端按请求语言翻译，切语言后要重取
+const stopLocaleWatch = onLocaleChange(() => {
+  if (!runId.value) loadCandidates()
+})
+
+onBeforeUnmount(() => {
+  abort?.abort()
+  stopLocaleWatch()
+})
 </script>
 
 <template>
   <div class="shell import-page">
     <header class="topbar">
-      <router-link to="/" class="ghost-btn">← 游戏库</router-link>
-      <span class="title">接入游戏</span>
+      <router-link to="/" class="ghost-btn">{{ t("← 游戏库") }}</router-link>
+      <span class="title">{{ t("接入游戏") }}</span>
       <div class="spacer" />
-      <router-link to="/games" class="ghost-btn">全部游戏</router-link>
+      <router-link to="/games" class="ghost-btn">{{ t("全部游戏") }}</router-link>
     </header>
 
     <p v-if="!supported" class="import-note">
-      当前平台不支持游戏接入：只能在 Linux 服务器上使用。
-    </p>
+      {{ t("当前平台不支持游戏接入：只能在 Linux 服务器上使用。") }}</p>
 
     <!-- 第一步：上传或选择目录 -->
     <section v-if="step === 'source'" class="import-section">
-      <h2>1. 上传游戏或选择服务器目录</h2>
+      <h2>{{ t("1. 上传游戏或选择服务器目录") }}</h2>
 
       <GameUploadPanel
         v-if="supported"
@@ -270,17 +279,16 @@ onBeforeUnmount(() => abort?.abort())
         @ready="onUploadReady"
       />
 
-      <div class="import-divider"><span>或选择服务器上已有目录</span></div>
+      <div class="import-divider"><span>{{ t("或选择服务器上已有目录") }}</span></div>
 
       <p class="import-note">
-        已经用 scp/sftp 传到服务器 <code>~/galworld/games/&lt;目录名&gt;/</code> 的游戏，点「重新扫描」后直接在下方选择。
-      </p>
+        {{ t("已经用 scp/sftp 传到服务器") }}<code>{{ t("~/galworld/games/&lt;目录名&gt;/") }}</code> {{ t("的游戏，点「重新扫描」后直接在下方选择。") }}</p>
       <div class="import-actions">
-        <button class="btn" :disabled="loading" @click="loadCandidates">重新扫描</button>
+        <button class="btn" :disabled="loading" @click="loadCandidates">{{ t("重新扫描") }}</button>
       </div>
       <p v-if="error" class="import-error">{{ error }}</p>
-      <p v-else-if="loading" class="import-note">正在扫描…</p>
-      <p v-else-if="!candidates.length" class="import-note">没有发现未注册的游戏目录。</p>
+      <p v-else-if="loading" class="import-note">{{ t("正在扫描…") }}</p>
+      <p v-else-if="!candidates.length" class="import-note">{{ t("没有发现未注册的游戏目录。") }}</p>
       <div v-else class="import-candidates">
         <button
           v-for="c in candidates"
@@ -289,10 +297,9 @@ onBeforeUnmount(() => abort?.abort())
           @click="pick(c)"
         >
           <span class="import-card-id">{{ c.id }}</span>
-          <span class="import-card-meta">{{ formatBytes(c.sizeBytes) }} · {{ c.exes.length }} 个 exe</span>
+          <span class="import-card-meta">{{ t("{0} · {1} 个 exe", formatBytes(c.sizeBytes), c.exes.length) }}</span>
           <span v-if="c.gameId && c.gameId !== c.id" class="import-card-meta">
-            接入为 {{ c.gameId }}
-          </span>
+            {{ t("接入为 {0}", c.gameId) }}</span>
         </button>
       </div>
       <ul v-if="warnings.length" class="import-warnings">
@@ -302,21 +309,19 @@ onBeforeUnmount(() => abort?.abort())
 
     <!-- 第二步：确认配置 -->
     <section v-else-if="step === 'configure'" class="import-section">
-      <h2>2. 确认游戏配置</h2>
+      <h2>{{ t("2. 确认游戏配置") }}</h2>
       <div class="import-form">
-        <label>显示名<input v-model="form.name" maxlength="120" /></label>
+        <label>{{ t("显示名") }}<input v-model="form.name" maxlength="120" /></label>
         <label>
-          可执行文件
-          <select v-model="form.exe">
+          {{ t("可执行文件") }}<select v-model="form.exe">
             <option v-for="e in selected?.exes || []" :key="e.path" :value="e.path">
               {{ e.path }} ({{ formatBytes(e.sizeBytes) }})
             </option>
           </select>
         </label>
         <label>
-          备用可执行文件（可选）
-          <select v-model="form.exeAlt">
-            <option value="">（无）</option>
+          {{ t("备用可执行文件（可选）") }}<select v-model="form.exeAlt">
+            <option value="">{{ t("（无）") }}</option>
             <option
               v-for="e in altOptions(selected?.exes, form.exe)"
               :key="e.path"
@@ -324,52 +329,49 @@ onBeforeUnmount(() => abort?.abort())
             >{{ e.path }}</option>
           </select>
         </label>
-        <label>宽度<input v-model.number="form.width" type="number" min="640" max="3840" /></label>
-        <label>高度<input v-model.number="form.height" type="number" min="480" max="2160" /></label>
-        <label>帧率<input v-model="form.framerate" /></label>
+        <label>{{ t("宽度") }}<input v-model.number="form.width" type="number" min="640" max="3840" /></label>
+        <label>{{ t("高度") }}<input v-model.number="form.height" type="number" min="480" max="2160" /></label>
+        <label>{{ t("帧率") }}<input v-model="form.framerate" /></label>
         <label class="import-check">
           <input v-model="chinesePatch" type="checkbox" />
-          中文汉化补丁（文本为 GBK/CP936 时勾选）
-        </label>
+          {{ t("中文汉化补丁（文本为 GBK/CP936 时勾选）") }}</label>
         <div class="import-slots">
-          接入目录名：<code>{{ selected?.gameId || selected?.id }}</code>
-          <span v-if="selected?.gameId && selected.gameId !== selected.id">（原目录 {{ selected.id }} 将被重命名）</span>
+          {{ t("接入目录名：") }}<code>{{ selected?.gameId || selected?.id }}</code>
+          <span v-if="selected?.gameId && selected.gameId !== selected.id">{{ t("（原目录 {0} 将被重命名）", selected.id) }}</span>
         </div>
         <div class="import-slots">
-          自动分配：
-          <span v-if="slots">display :{{ slots.displayNum }} · port {{ slots.port }} · slot {{ slots.loopbackSlot }}</span>
-          <span v-else>无法分配</span>
+          {{ t("自动分配：") }}<span v-if="slots">display :{{ slots.displayNum }} · port {{ slots.port }} · slot {{ slots.loopbackSlot }}</span>
+          <span v-else>{{ t("无法分配") }}</span>
         </div>
       </div>
       <p v-if="!selected?.exes?.length" class="import-error">
-        该目录没有找到 exe：请确认解压是否完整。
-      </p>
+        {{ t("该目录没有找到 exe：请确认解压是否完整。") }}</p>
       <div class="import-actions">
-        <button class="btn" @click="backToSource">上一步</button>
-        <button class="btn primary sm" :disabled="!submitReady || busy" @click="submit">开始接入</button>
+        <button class="btn" @click="backToSource">{{ t("上一步") }}</button>
+        <button class="btn primary sm" :disabled="!submitReady || busy" @click="submit">{{ t("开始接入") }}</button>
       </div>
     </section>
 
     <!-- 第三步：执行 -->
     <section v-else class="import-section">
-      <h2>3. 执行接入</h2>
+      <h2>{{ t("3. 执行接入") }}</h2>
       <ol class="import-steps">
         <li v-for="s in stepsView" :key="s.id" :class="'state-' + s.state.toLowerCase()">
-          {{ STEP_TITLES[s.id] || s.title }} — {{ s.state }}
+          {{ stepTitles[s.id] || s.title }} — {{ stepStateLabel(s.state) }}
         </li>
       </ol>
       <pre class="import-log">{{ run.lines.join('\n') }}</pre>
 
       <div v-if="phase === 'done'" class="import-actions">
-        <button class="btn primary sm" @click="router.push(playLink(gameId, 'import'))">进入游戏</button>
-        <button class="btn" @click="router.push(`/game/${gameId}`)">查看详情</button>
+        <button class="btn primary sm" @click="router.push(playLink(gameId, 'import'))">{{ t("进入游戏") }}</button>
+        <button class="btn" @click="router.push(`/game/${gameId}`)">{{ t("查看详情") }}</button>
       </div>
       <div v-else-if="phase === 'failed'" class="import-actions">
-        <button class="btn primary sm" @click="retry">重试</button>
-        <button class="btn" @click="rollback">回滚注册</button>
+        <button class="btn primary sm" @click="retry">{{ t("重试") }}</button>
+        <button class="btn" @click="rollback">{{ t("回滚注册") }}</button>
       </div>
       <div v-else class="import-actions">
-        <button class="btn" @click="cancel">取消</button>
+        <button class="btn" @click="cancel">{{ t("取消") }}</button>
       </div>
     </section>
   </div>

@@ -7,6 +7,7 @@ package io.github.sander_i.platform;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.sander_i.config.PathConfig;
+import io.github.sander_i.i18n.I18n;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -94,45 +95,46 @@ public class ArtifactDownloader {
         Path part = Path.of(target + ".part");
 
         if (Files.isRegularFile(target) && sha256Matches(target, entry.sha256())) {
-            onLog.accept("已缓存且校验通过: " + target.getFileName());
+            onLog.accept(I18n.t("已缓存且校验通过: {0}", target.getFileName()));
             return target;
         }
 
         List<String> urls = candidateUrls(entry);
         if (urls.isEmpty()) {
             throw new ArtifactUnavailableException(
-                    "元件 " + artifactId + " 没有可用下载源（Nexus 未配置且无镜像）");
+                    I18n.t("元件 {0} 没有可用下载源（Nexus 未配置且无镜像）", artifactId));
         }
 
         try {
             Files.createDirectories(target.getParent());
         } catch (IOException e) {
-            throw new ArtifactUnavailableException("无法创建元件目录: " + e.getMessage());
+            throw new ArtifactUnavailableException(I18n.t("无法创建元件目录: {0}", e.getMessage()));
         }
 
         List<String> failures = new ArrayList<>();
         for (String url : urls) {
-            onLog.accept("尝试下载: " + url);
+            onLog.accept(I18n.t("尝试下载: {0}", url));
             try {
                 downloadWithResume(url, part, onLog);
                 if (!sha256Matches(part, entry.sha256())) {
                     Files.deleteIfExists(part);
-                    String msg = "SHA256 校验失败（" + url + "），已删除并换源";
+                    String msg = I18n.t("SHA256 校验失败（{0}），已删除并换源", url);
                     onLog.accept(msg);
                     failures.add(msg);
                     continue;
                 }
                 Files.move(part, target, StandardCopyOption.REPLACE_EXISTING);
-                onLog.accept("下载完成并通过校验: " + target);
+                onLog.accept(I18n.t("下载完成并通过校验: {0}", target));
                 return target;
             } catch (Exception e) {
-                String msg = "下载失败（" + url + "）: " + e.getMessage();
+                String msg = I18n.t("下载失败（{0}）: {1}", url, e.getMessage());
                 onLog.accept(msg);
                 failures.add(msg);
             }
         }
         throw new ArtifactUnavailableException(
-                "元件 " + artifactId + " 所有源均失败:\n  " + String.join("\n  ", failures));
+                I18n.t("元件 {0} 所有源均失败:\n  {1}",
+                        artifactId, String.join("\n  ", failures)));
     }
 
     // ---- manifest ----
@@ -152,7 +154,7 @@ public class ArtifactDownloader {
                 ArtifactManifest manifest = mapper.readValue(resp.body(), ArtifactManifest.class);
                 ArtifactManifest.Entry entry = manifest.find(artifactId);
                 if (entry == null) {
-                    failures.add(base + " → manifest 中没有 " + artifactId);
+                    failures.add(I18n.t("{0} → manifest 中没有 {1}", base, artifactId));
                     continue;
                 }
                 return entry;
@@ -161,7 +163,7 @@ public class ArtifactDownloader {
             }
         }
         throw new ArtifactUnavailableException(
-                "取 manifest 失败:\n  " + String.join("\n  ", failures));
+                I18n.t("取 manifest 失败:\n  {0}", String.join("\n  ", failures)));
     }
 
     private List<String> manifestSources() {
@@ -223,7 +225,7 @@ public class ArtifactDownloader {
                 .timeout(Duration.ofMinutes(30));
         if (have > 0) {
             b.header("Range", "bytes=" + have + "-");
-            logLine.accept("断点续传，已收 " + have + " 字节");
+            logLine.accept(I18n.t("断点续传，已收 {0} 字节", have));
         }
         HttpRequest req = authorized(b).GET().build();
         HttpResponse<InputStream> resp = http.send(req, HttpResponse.BodyHandlers.ofInputStream());
@@ -236,7 +238,7 @@ public class ArtifactDownloader {
         // 服务器不支持 Range（返回 200）时只能从头写
         boolean append = have > 0 && code == 206;
         if (have > 0 && code == 200) {
-            logLine.accept("服务端不支持断点续传，从头下载");
+            logLine.accept(I18n.t("服务端不支持断点续传，从头下载"));
         }
 
         long total = resp.headers().firstValue("Content-Length")
@@ -255,13 +257,13 @@ public class ArtifactDownloader {
                 out.write(buf, 0, n);
                 written += n;
                 if (System.currentTimeMillis() - lastLog > 2000) {
-                    logLine.accept("已下载 " + human(written)
-                            + (total > 0 ? " / " + human(append ? have + total : total) : ""));
+                    logLine.accept(I18n.t("已下载 {0}{1}", human(written),
+                            total > 0 ? " / " + human(append ? have + total : total) : ""));
                     lastLog = System.currentTimeMillis();
                 }
             }
         }
-        logLine.accept("下载结束，共 " + human(written));
+        logLine.accept(I18n.t("下载结束，共 {0}", human(written)));
     }
 
     // ---- 工具 ----

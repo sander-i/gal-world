@@ -6,6 +6,7 @@
 package io.github.sander_i.web;
 
 import io.github.sander_i.deploy.DeploySecurity;
+import io.github.sander_i.i18n.I18n;
 import io.github.sander_i.service.SettingsService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
@@ -79,7 +80,7 @@ public class AdminSettingsController {
             if (!isAdminKey(k)) {
                 log.warn("运维设置修改被拒绝：来源 {} 非运维键 {}", req.getRemoteAddr(), k);
                 return ResponseEntity.badRequest()
-                        .body(Map.of("message", "非运维设置项: " + k));
+                        .body(Map.of("message", I18n.t("非运维设置项: {0}", k)));
             }
         }
         Map<String, String> before = settings.all();

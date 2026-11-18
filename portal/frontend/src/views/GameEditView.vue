@@ -14,6 +14,7 @@
  * 允许改：名称、分辨率、简介、公司、标签、封面（多图）、图标、宣传 CG（多份）、轮换规则。
  * 删除游戏：移除注册信息与媒体，保留游戏本体目录，之后可重新注册。
  */
+import { t } from '../i18n.js'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { api } from '../api'
@@ -98,7 +99,7 @@ const MB = 1024 * 1024
  */
 const availableResolutions = computed(() => {
   const cur = { w: form.value.width, h: form.value.height }
-  const current = { w: cur.w, h: cur.h, label: `当前画布 ${cur.w}×${cur.h}` }
+  const current = { w: cur.w, h: cur.h, label: t("当前画布 {0}×{1}", cur.w, cur.h) }
   const list = [current]
   if (winRect.value) {
     const rec = recommendedCanvas(winRect.value.width, winRect.value.height)
@@ -106,7 +107,7 @@ const availableResolutions = computed(() => {
       list.push({
         w: rec.width,
         h: rec.height,
-        label: `推荐 ${rec.width}×${rec.height}（匹配实际窗口）`,
+        label: t("推荐 {0}×{1}（匹配实际窗口）", rec.width, rec.height),
       })
     }
     return list
@@ -317,7 +318,7 @@ function flashProgress(label, pct) {
 
 async function save() {  if (saving.value) return
   if (uploadBusy.value.cover || uploadBusy.value.cg) {
-    notify.warning('上传仍在进行，完成后再保存更稳妥')
+    notify.warning(t('上传仍在进行，完成后再保存更稳妥'))
     return
   }
   saving.value = true
@@ -360,8 +361,8 @@ async function save() {  if (saving.value) return
     uploadPct.value = null
     uploadLabel.value = ''
     notify.success(r?.restartRequired
-      ? '已保存。启动程序/分辨率改动需要重启会话才生效'
-      : '已保存')
+      ? t('已保存。启动程序/分辨率改动需要重启会话才生效')
+      : t('已保存'))
     // 保存成功回到游戏详情页，由详情页重新拉取最新数据
     router.push(`/game/${encodeURIComponent(props.id)}`)
   } catch (e) {
@@ -369,7 +370,7 @@ async function save() {  if (saving.value) return
     // 已成功的步骤会即时从暂存里摘掉
     uploadPct.value = null
     uploadLabel.value = ''
-    notify.error('保存失败：' + e.message)
+    notify.error(t("保存失败：{0}", e.message))
   } finally {
     saving.value = false
   }
@@ -377,7 +378,7 @@ async function save() {  if (saving.value) return
 
 async function saveIcon() {
   if (iconItem.value?.file) {
-    flashProgress('上传图标', 0)
+    flashProgress(t('上传图标'), 0)
     await api.uploadIconFile(props.id, iconItem.value.file, (p) => { uploadPct.value = p })
     URL.revokeObjectURL(iconItem.value.url)
     iconItem.value = null
@@ -445,7 +446,7 @@ async function pickIcon(ev) {
   ev.target.value = ''
   if (!file) return
   if (!IMAGE_RE.test(file.name) || file.size > limits.value.imageMaxMb * MB) {
-    notify.warning(`图标只支持 png/jpg/webp/gif，且不超过 ${limits.value.imageMaxMb} MB`)
+    notify.warning(t("图标只支持 png/jpg/webp/gif，且不超过 {0} MB", limits.value.imageMaxMb))
     return
   }
   if (iconItem.value?.url) URL.revokeObjectURL(iconItem.value.url)
@@ -466,8 +467,8 @@ async function removeMedia(kind, index) {
   if (!item) return
   if (item.persisted) {
     const ok = await confirmAction(
-      `删除已保存的${kind === 'cover' ? '封面' : '宣传 CG'}「${item.filename}」？保存后生效。`,
-      { title: '删除媒体', confirmText: '删除' },
+      t("删除已保存的{0}「{1}」？保存后生效。", kind === 'cover' ? t('封面') : t('宣传 CG'), item.filename),
+      { title: t('删除媒体'), confirmText: t('删除') },
     )
     if (!ok) return
     if (kind === 'cover') removedCoverIds.value.push(item.id)
@@ -485,8 +486,8 @@ async function removeIcon() {
     return
   }
   if (!hasPersistedIcon.value) return
-  const ok = await confirmAction('删除已保存的图标？保存后生效。', {
-    title: '删除图标', confirmText: '删除',
+  const ok = await confirmAction(t('删除已保存的图标？保存后生效。'), {
+    title: t('删除图标'), confirmText: t('删除'),
   })
   if (!ok) return
   iconRemoved.value = true
@@ -508,8 +509,8 @@ function reorderMedia(kind, { from, to }) {
 /** 标签表单只存名称；选择器用对象模型，别名来自标签字典 */
 const tagModel = computed({
   get: () => form.value.tags.map((n) => {
-    const t = allTags.value.find((x) => x.name === n)
-    return { id: t?.id ?? null, name: n, alias: t?.alias || '', website: '' }
+    const hit = allTags.value.find((x) => x.name === n)
+    return { id: hit?.id ?? null, name: n, alias: hit?.alias || '', website: '' }
   }),
   set: (v) => { form.value.tags = (v || []).map((o) => o.name) },
 })
@@ -520,9 +521,9 @@ async function persistOrder(kind, list) {
   if (!ids.length) return
   try {
     await api.reorderGameRelations(props.id, kind, ids)
-    notify.success('排序已保存')
+    notify.success(t('排序已保存'))
   } catch (e) {
-    notify.error('保存排序失败：' + e.message)
+    notify.error(t("保存排序失败：{0}", e.message))
   }
 }
 
@@ -558,9 +559,9 @@ async function resetOrder(kind) {
     } else if (kind === 'tag') {
       tagModel.value = sortByMaintenanceOrder(tagModel.value, allTags.value)
     }
-    notify.success('已按维护顺序重置')
+    notify.success(t('已按维护顺序重置'))
   } catch (e) {
-    notify.error('重置排序失败：' + e.message)
+    notify.error(t("重置排序失败：{0}", e.message))
   }
 }
 
@@ -574,7 +575,7 @@ async function createCompany({ name, alias }) {
     }
     return c
   } catch (e) {
-    notify.error('新增公司失败：' + e.message)
+    notify.error(t("新增公司失败：{0}", e.message))
     return null
   }
 }
@@ -589,7 +590,7 @@ async function createLocalization({ name, alias }) {
     }
     return g
   } catch (e) {
-    notify.error('新增汉化组失败：' + e.message)
+    notify.error(t("新增汉化组失败：{0}", e.message))
     return null
   }
 }
@@ -597,22 +598,24 @@ async function createLocalization({ name, alias }) {
 /** 编辑页新增标签：名称 + 可选别名；返回新条目供下拉自动选中 */
 async function createTag({ name, alias }) {
   try {
-    const t = await api.createTag(name, alias)
-    if (!allTags.value.some((x) => x.id === t.id)) allTags.value = [...allTags.value, t]
-    if (!form.value.tags.includes(t.name)) form.value.tags.push(t.name)
-    return t
+    const created = await api.createTag(name, alias)
+    if (!allTags.value.some((x) => x.id === created.id)) {
+      allTags.value = [...allTags.value, created]
+    }
+    if (!form.value.tags.includes(created.name)) form.value.tags.push(created.name)
+    return created
   } catch (e) {
-    notify.error('新增标签失败：' + e.message)
+    notify.error(t("新增标签失败：{0}", e.message))
     return null
   }
 }
 
 function modeText(mode) {
-  if (mode === 'random') return '随机'
-  if (mode === 'autoNext') return '播完下一条'
-  if (mode === 'repeat') return '重复当前'
-  if (mode === 'stop') return '播完停'
-  return '顺序'
+  if (mode === 'random') return t('随机')
+  if (mode === 'autoNext') return t('播完下一条')
+  if (mode === 'repeat') return t('重复当前')
+  if (mode === 'stop') return t('播完停')
+  return t('顺序')
 }
 
 function onResChange(ev) {
@@ -632,19 +635,19 @@ async function deleteGame() {
     // 状态查不到时按未运行处理，交互不被阻塞
   }
   const message = running
-    ? `「${name}」正在运行。\n\n继续将先停止并关闭游戏会话，再从游戏库移除其注册信息、封面/图标/宣传 CG 与游玩记录。\n\n游戏本体目录会保留，之后仍可重新注册。此操作不可撤销。`
-    : `将从游戏库移除「${name}」的注册信息、封面/图标/宣传 CG 与游玩记录。\n\n游戏本体目录会保留，之后仍可重新注册。此操作不可撤销。`
+    ? t("「{0}」正在运行。\n\n继续将先停止并关闭游戏会话，再从游戏库移除其注册信息、封面/图标/宣传 CG 与游玩记录。\n\n游戏本体目录会保留，之后仍可重新注册。此操作不可撤销。", name)
+    : t("将从游戏库移除「{0}」的注册信息、封面/图标/宣传 CG 与游玩记录。\n\n游戏本体目录会保留，之后仍可重新注册。此操作不可撤销。", name)
   const ok = await confirmAction(message, running
-    ? { title: '游戏运行中', confirmText: '关闭并删除' }
-    : { title: '删除游戏', confirmText: '删除游戏' })
+    ? { title: t('游戏运行中'), confirmText: t('关闭并删除') }
+    : { title: t('删除游戏'), confirmText: t('删除游戏') })
   if (!ok) return
   deleting.value = true
   try {
     await api.deleteGame(props.id)
-    notify.success(running ? '游戏已关闭并删除' : '游戏已删除')
+    notify.success(running ? t('游戏已关闭并删除') : t('游戏已删除'))
     router.replace('/')
   } catch (e) {
-    notify.error('删除失败：' + e.message)
+    notify.error(t("删除失败：{0}", e.message))
   } finally {
     deleting.value = false
   }
@@ -670,31 +673,29 @@ onBeforeUnmount(() => {
 <template>
   <div class="shell">
     <header class="topbar">
-      <router-link :to="`/game/${id}`" class="ghost-btn">← 返回详情</router-link>
-      <span v-if="stagedCount" class="muted-sm">{{ stagedCount }} 项改动待保存</span>
+      <router-link :to="`/game/${id}`" class="ghost-btn">{{ t("← 返回详情") }}</router-link>
+      <span v-if="stagedCount" class="muted-sm">{{ t("{0} 项改动待保存", stagedCount) }}</span>
       <div class="spacer" />
-      <button class="btn primary sm" :disabled="saving || deleting" @click="save">{{ saving ? '保存中…' : '保存' }}</button>
+      <button class="btn primary sm" :disabled="saving || deleting" @click="save">{{ saving ? t('保存中…') : t('保存') }}</button>
     </header>
 
-    <div v-if="loading" class="loading">加载中…</div>
+    <div v-if="loading" class="loading">{{ t("加载中…") }}</div>
     <div v-else-if="error" class="empty">{{ error }}</div>
 
     <div v-else class="edit-grid">
       <div>
         <div class="field">
-          <label>游戏名称</label>
+          <label>{{ t("游戏名称") }}</label>
           <input v-model="form.name" class="input" maxlength="200">
         </div>
 
         <div class="field">
           <label class="res-label">
             <span>
-              分辨率
-              <span class="info-tip" title="当前游戏不支持的比例自动隐藏处理">!</span>
+              {{ t("分辨率") }}<span class="info-tip" :title="t('当前游戏不支持的比例自动隐藏处理')">!</span>
             </span>
             <span class="res-note">
-              修改分辨率后需要重启会话才生效。游戏正在运行时会提供「立即重启」按钮。
-            </span>
+              {{ t("修改分辨率后需要重启会话才生效。游戏正在运行时会提供「立即重启」按钮。") }}</span>
           </label>
           <div class="res-row">
             <select class="input" :value="`${form.width}x${form.height}`" @change="onResChange">
@@ -704,31 +705,24 @@ onBeforeUnmount(() => {
             </select>
           </div>
           <p v-if="winRect" class="muted-sm" style="margin-top:6px">
-            实测游戏窗口 {{ winRect.width }}×{{ winRect.height }}。
-            画布比窗口大只会多出黑边，甚至让画面显得更小；选「推荐」可让窗口占比最大。
-            保存后需要重启会话生效，游玩页右上角「校准分辨率」可直接完成测量与重启。
-          </p>
+            {{ t("实测游戏窗口 {0}×{1}。 画布比窗口大只会多出黑边，甚至让画面显得更小；选「推荐」可让窗口占比最大。 保存后需要重启会话生效，游玩页右上角「校准分辨率」可直接完成测量与重启。", winRect.width, winRect.height) }}</p>
           <p v-else class="muted-sm" style="margin-top:6px">
-            游戏未运行，无法测量实际窗口。启动后可在游玩页右上角点「校准分辨率」，
-            或在全局设置选择自动校准。
-          </p>
+            {{ t("游戏未运行，无法测量实际窗口。启动后可在游玩页右上角点「校准分辨率」， 或在全局设置选择自动校准。") }}</p>
         </div>
 
         <div class="field">
           <label class="res-label">
-            <span>启动程序</span>
+            <span>{{ t("启动程序") }}</span>
             <span class="res-note">
-              当前生效的是「主用」；「备用」用于保存另一个版本（如中文启动器）。
-              改动需重启会话才生效，点上方「保存」才落盘。
-            </span>
+              {{ t("当前生效的是「主用」；「备用」用于保存另一个版本（如中文启动器）。 改动需重启会话才生效，点上方「保存」才落盘。") }}</span>
           </label>
-          <label class="muted-sm">主用（当前生效）</label>
+          <label class="muted-sm">{{ t("主用（当前生效）") }}</label>
           <select v-model="exeCurrent" class="input">
             <option v-for="e in exeInfo.exes" :key="e.path" :value="e.path">{{ e.path }}</option>
           </select>
-          <label class="muted-sm" style="margin-top:10px">备用（可留空）</label>
+          <label class="muted-sm" style="margin-top:10px">{{ t("备用（可留空）") }}</label>
           <select v-model="exeAlt" class="input">
-            <option value="">（无）</option>
+            <option value="">{{ t("（无）") }}</option>
             <option
               v-for="e in exeInfo.exes.filter((x) => x.path !== exeCurrent)"
               :key="e.path"
@@ -736,64 +730,63 @@ onBeforeUnmount(() => {
             >{{ e.path }}</option>
           </select>
           <button class="btn sm" type="button" style="margin-top:10px" @click="swapExe">
-            交换主用 / 备用
-          </button>
-          <p v-if="!exeInfo.exes.length" class="muted-sm">目录内没有找到 exe。</p>
+            {{ t("交换主用 / 备用") }}</button>
+          <p v-if="!exeInfo.exes.length" class="muted-sm">{{ t("目录内没有找到 exe。") }}</p>
         </div>
 
         <div v-if="companyEnabled" class="field">
-          <label>公司（可多选，拖动已选项排序；维护在「公司维护」页）</label>
+          <label>{{ t("公司（可多选，拖动已选项排序；维护在「公司维护」页）") }}</label>
           <OrgMultiSelect
             v-model="form.companies"
             :options="allCompanies"
             :creatable="true"
-            placeholder="搜索公司名称或别名"
+            :placeholder="t('搜索公司名称或别名')"
             :create-fn="createCompany"
             @reorder="onCompanyReorder"
           />
-          <button class="link-btn" type="button" @click="resetOrder('company')">重置为维护顺序</button>
+          <button class="link-btn" type="button" @click="resetOrder('company')">{{ t("重置为维护顺序") }}</button>
         </div>
 
         <div v-if="localizationEnabled" class="field">
-          <label>汉化组（可多选，拖动已选项排序；维护在「汉化组维护」页）</label>
+          <label>{{ t("汉化组（可多选，拖动已选项排序；维护在「汉化组维护」页）") }}</label>
           <OrgMultiSelect
             v-model="form.localizations"
             :options="allLocalizations"
             :creatable="true"
-            placeholder="搜索汉化组名称或别名"
+            :placeholder="t('搜索汉化组名称或别名')"
             :create-fn="createLocalization"
             @reorder="onLocalizationReorder"
           />
-          <button class="link-btn" type="button" @click="resetOrder('localization')">重置为维护顺序</button>
+          <button class="link-btn" type="button" @click="resetOrder('localization')">{{ t("重置为维护顺序") }}</button>
         </div>
 
         <div class="field">
-          <label>标签（可多选，拖动已选项排序；输入名称或别名搜索或新建）</label>
+          <label>{{ t("标签（可多选，拖动已选项排序；输入名称或别名搜索或新建）") }}</label>
           <OrgMultiSelect
             v-model="tagModel"
             :options="allTags"
             :creatable="true"
-            placeholder="搜索标签名称或别名"
+            :placeholder="t('搜索标签名称或别名')"
             :create-fn="createTag"
             @reorder="onTagReorder"
           />
-          <button class="link-btn" type="button" @click="resetOrder('tag')">重置为维护顺序</button>
+          <button class="link-btn" type="button" @click="resetOrder('tag')">{{ t("重置为维护顺序") }}</button>
         </div>
 
         <div class="field">
-          <label>简介</label>
+          <label>{{ t("简介") }}</label>
           <textarea v-model="form.description" maxlength="2000"></textarea>
         </div>
 
         <MediaSection
           kind="cover"
-          title="封面（多图轮换）"
+          :title="t('封面（多图轮换）')"
           :game-id="id"
           :items="coverList"
           :max="limits.coverMaxCount"
           :image-max-mb="limits.imageMaxMb"
           :video-max-mb="limits.videoMaxMb"
-          unit="张"
+          :unit="t('张')"
           index-mode="number"
           :upload-pct="uploadPct"
           :upload-label="uploadLabel"
@@ -805,45 +798,44 @@ onBeforeUnmount(() => {
           @preview="openLightbox('cover', $event)"
         />
 
-        <div class="section-title">图标</div>
+        <div class="section-title">{{ t("图标") }}</div>
         <div class="media-list">
           <div v-if="iconItem" class="media-item pending">
-            <span class="media-thumb-btn" title="点击预览" @click="openIconLightbox">
+            <span class="media-thumb-btn" :title="t('点击预览')" @click="openIconLightbox">
               <img :src="iconItem.url" class="icon-preview" :alt="iconItem.filename">
             </span>
             <span class="name">{{ iconItem.filename }}</span>
-            <span class="pending-badge">未保存</span>
+            <span class="pending-badge">{{ t("未保存") }}</span>
             <HoverPreview :item="iconHoverItem">
-              <button class="link-btn" type="button" @click="openIconLightbox">预览</button>
+              <button class="link-btn" type="button" @click="openIconLightbox">{{ t("预览") }}</button>
             </HoverPreview>
-            <button class="link-btn danger" @click="removeIcon">删除</button>
+            <button class="link-btn danger" @click="removeIcon">{{ t("删除") }}</button>
           </div>
           <div v-else-if="hasPersistedIcon" class="media-item">
-            <span class="media-thumb-btn" title="点击预览" @click="openIconLightbox">
-              <img :src="data.iconPath" class="icon-preview" alt="图标">
+            <span class="media-thumb-btn" :title="t('点击预览')" @click="openIconLightbox">
+              <img :src="data.iconPath" class="icon-preview" :alt="t('图标')">
             </span>
             <span class="name">{{ data.paths.icon.join(', ') || 'icon' }}</span>
             <HoverPreview :item="iconHoverItem">
-              <button class="link-btn" type="button" @click="openIconLightbox">预览</button>
+              <button class="link-btn" type="button" @click="openIconLightbox">{{ t("预览") }}</button>
             </HoverPreview>
-            <button class="link-btn danger" @click="removeIcon">删除</button>
+            <button class="link-btn danger" @click="removeIcon">{{ t("删除") }}</button>
           </div>
         </div>
         <div style="margin-top:10px">
-          <label class="file-btn">上传图标
-            <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden @change="pickIcon">
+          <label class="file-btn">{{ t("上传图标") }}<input type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden @change="pickIcon">
           </label>
         </div>
 
         <MediaSection
           kind="cg"
-          title="宣传 CG（多 CG 轮换）"
+          :title="t('宣传 CG（多 CG 轮换）')"
           :game-id="id"
           :items="cgList"
           :max="limits.cgMaxCount"
           :image-max-mb="limits.imageMaxMb"
           :video-max-mb="limits.videoMaxMb"
-          unit="个"
+          :unit="t('个')"
           index-mode="media"
           allow-video
           :upload-pct="uploadPct"
@@ -856,94 +848,89 @@ onBeforeUnmount(() => {
           @preview="openLightbox('cg', $event)"
         />
 
-        <div class="section-title">轮换规则</div>
+        <div class="section-title">{{ t("轮换规则") }}</div>
         <div v-if="!globalRotationEnabled" class="warn-box" style="margin-bottom:12px">
-          全局轮换功能已在「设置」页关闭，本页的规则暂不生效；开启后按此规则轮换。
-        </div>
+          {{ t("全局轮换功能已在「设置」页关闭，本页的规则暂不生效；开启后按此规则轮换。") }}</div>
         <div class="field">
           <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
             <input type="checkbox" v-model="followGlobal">
             <span>
-              应用全局轮换规则（封面：{{ modeText(globalSettings.coverMode) }} {{ globalSettings.coverInterval }} 秒
-              · CG：{{ modeText(globalSettings.cgMode) }}<template v-if="globalSettings.cgMode === 'autoNext'"> · {{ modeText(globalSettings.cgOrder) }}</template>）
+              {{ t("应用全局轮换规则（封面：{0} {1} 秒 · CG：{2}", modeText(globalSettings.coverMode), globalSettings.coverInterval, modeText(globalSettings.cgMode)) }}<template v-if="globalSettings.cgMode === 'autoNext'"> · {{ modeText(globalSettings.cgOrder) }}</template>）
             </span>
           </label>
-          <span class="muted-sm">取消勾选后可为此游戏分别定制封面与 CG 规则；全局默认在「设置」页配置。</span>
+          <span class="muted-sm">{{ t("取消勾选后可为此游戏分别定制封面与 CG 规则；全局默认在「设置」页配置。") }}</span>
         </div>
 
         <div v-if="!followGlobal" class="field">
-          <label>封面轮换</label>
+          <label>{{ t("封面轮换") }}</label>
           <div class="res-row">
             <select v-model="coverRotMode" class="input" style="width:120px">
-              <option value="seq">顺序</option>
-              <option value="random">随机</option>
+              <option value="seq">{{ t("顺序") }}</option>
+              <option value="random">{{ t("随机") }}</option>
             </select>
             <input v-model.number="coverRotValue" class="input" type="number" min="1" max="999" style="width:90px">
             <select v-model.number="coverRotUnit" class="input" style="width:90px">
-              <option :value="1">秒</option>
-              <option :value="60">分</option>
-              <option :value="3600">时</option>
+              <option :value="1">{{ t("秒") }}</option>
+              <option :value="60">{{ t("分") }}</option>
+              <option :value="3600">{{ t("时") }}</option>
             </select>
           </div>
-          <span class="muted-sm">范围 1 秒 – 24 小时</span>
+          <span class="muted-sm">{{ t("范围 1 秒 – 24 小时") }}</span>
         </div>
 
         <div v-if="!followGlobal" class="field">
-          <label>宣传 CG 轮换</label>
+          <label>{{ t("宣传 CG 轮换") }}</label>
           <div class="res-row">
             <select v-model="cgRotMode" class="input" style="width:170px">
-              <option value="autoNext">播完自动下一条</option>
-              <option value="repeat">重复播放当前 CG</option>
-              <option value="stop">播放结束自动停</option>
+              <option value="autoNext">{{ t("播完自动下一条") }}</option>
+              <option value="repeat">{{ t("重复播放当前 CG") }}</option>
+              <option value="stop">{{ t("播放结束自动停") }}</option>
             </select>
             <select v-if="cgRotMode === 'autoNext'" v-model="cgRotOrder" class="input" style="width:110px">
-              <option value="seq">顺序</option>
-              <option value="random">随机</option>
+              <option value="seq">{{ t("顺序") }}</option>
+              <option value="random">{{ t("随机") }}</option>
             </select>
           </div>
           <span class="muted-sm">
-            播完自动下一条：视频按播放结束切下一项，图片 CG 使用固定展示时长；
-            重复播放当前 CG：视频循环；播放结束自动停：播完停在最后一帧。
-          </span>
+            {{ t("播完自动下一条：视频按播放结束切下一项，图片 CG 使用固定展示时长； 重复播放当前 CG：视频循环；播放结束自动停：播完停在最后一帧。") }}</span>
         </div>
 
         <div class="actions" style="margin-top:26px;flex-direction:row">
-          <button class="btn primary sm" :disabled="saving || deleting" @click="save">保存</button>
-          <router-link :to="`/game/${id}`" class="btn">取消</router-link>
+          <button class="btn primary sm" :disabled="saving || deleting" @click="save">{{ t("保存") }}</button>
+          <router-link :to="`/game/${id}`" class="btn">{{ t("取消") }}</router-link>
         </div>
       </div>
 
       <div>
         <div class="panel" style="margin-top:0">
-          <div class="panel-head"><h2>服务器路径</h2></div>
+          <div class="panel-head"><h2>{{ t("服务器路径") }}</h2></div>
           <div class="path-box">
-            <b>游戏实体</b><br>{{ data.paths.exe }}<br><br>
-            <b>媒体目录</b><br>{{ data.paths.mediaDir }}<br><br>
-            <b>封面</b><br>
+            <b>{{ t("游戏实体") }}</b><br>{{ data.paths.exe }}<br><br>
+            <b>{{ t("媒体目录") }}</b><br>{{ data.paths.mediaDir }}<br><br>
+            <b>{{ t("封面") }}</b><br>
             <span v-for="f in data.paths.cover" :key="f">{{ data.paths.mediaDir }}/{{ f }}<br></span>
-            <span v-if="!data.paths.cover.length">（无）<br></span>
-            <span v-if="coverFreshCount" class="muted-sm">另有 {{ coverFreshCount }} 张刚上传，保存后在列表中<br></span>
+            <span v-if="!data.paths.cover.length">{{ t("（无）") }}<br></span>
+            <span v-if="coverFreshCount" class="muted-sm">{{ t("另有 {0} 张刚上传，保存后在列表中", coverFreshCount) }}<br></span>
             <br>
-            <b>图标</b><br>
+            <b>{{ t("图标") }}</b><br>
             <span v-for="f in data.paths.icon" :key="f">{{ data.paths.mediaDir }}/{{ f }}<br></span>
-            <span v-if="!data.paths.icon.length && !iconItem">（无）<br></span>
-            <span v-if="iconItem" class="muted-sm">新图标待保存<br></span>
+            <span v-if="!data.paths.icon.length && !iconItem">{{ t("（无）") }}<br></span>
+            <span v-if="iconItem" class="muted-sm">{{ t("新图标待保存") }}<br></span>
             <br>
-            <b>宣传 CG</b><br>
+            <b>{{ t("宣传 CG") }}</b><br>
             <span v-for="f in data.paths.cg" :key="f">{{ data.paths.mediaDir }}/{{ f }}<br></span>
-            <span v-if="!data.paths.cg.length">（无）<br></span>
-            <span v-if="cgFreshCount" class="muted-sm">另有 {{ cgFreshCount }} 个刚上传，保存后在列表中<br></span>
+            <span v-if="!data.paths.cg.length">{{ t("（无）") }}<br></span>
+            <span v-if="cgFreshCount" class="muted-sm">{{ t("另有 {0} 个刚上传，保存后在列表中", cgFreshCount) }}<br></span>
           </div>
-          <p class="note" style="margin-top:12px">只读展示已保存的文件，便于在服务器上定位。</p>
+          <p class="note" style="margin-top:12px">{{ t("只读展示已保存的文件，便于在服务器上定位。") }}</p>
         </div>
 
         <div class="panel danger-zone" style="margin-top:18px">
-          <div class="panel-head"><h2>删除游戏</h2></div>
+          <div class="panel-head"><h2>{{ t("删除游戏") }}</h2></div>
           <p class="muted-sm" style="margin-bottom:14px">
-            移除注册信息、媒体与游玩记录，保留游戏本体目录。正在运行的会话会先被停止。
-          </p>
+            {{ t("移除注册信息、媒体与游玩记录，保留游戏本体目录。正在运行的会话会先被停止。") }}</p>
           <button class="btn danger-solid" :disabled="saving || deleting" @click="deleteGame">
-            {{ deleting ? '删除中…' : '删除这个游戏' }}
+            {{ deleting ? t('删除中…') : t('删除这个游戏') }}
           </button>
         </div>
       </div>

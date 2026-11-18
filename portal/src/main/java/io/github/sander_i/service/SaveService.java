@@ -8,6 +8,7 @@ package io.github.sander_i.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.sander_i.config.PathConfig;
 import io.github.sander_i.domain.Game;
+import io.github.sander_i.i18n.I18n;
 import io.github.sander_i.repo.GameRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -117,7 +118,7 @@ public class SaveService {
     /** 设置存档目录名（相对游戏目录，逗号分隔）。空列表则清除配置，回到默认约定 */
     public List<String> setSaveDirs(String gameId, List<String> dirs) {
         Game game = repo.findById(gameId)
-                .orElseThrow(() -> new IllegalArgumentException("没有这个游戏: " + gameId));
+                .orElseThrow(() -> new IllegalArgumentException(I18n.t("没有这个游戏: {0}", gameId)));
         Path root = paths.gameDir(gameId).toAbsolutePath().normalize();
         String normalized = dirs == null ? "" : String.join(",", dirs.stream()
                 .map(SaveService::normalizeRelDir)
@@ -171,7 +172,7 @@ public class SaveService {
         Path root = paths.gameDir(gameId).toAbsolutePath().normalize();
         Path target = root.resolve(relPath == null ? "" : relPath).normalize();
         if (!target.startsWith(root) || !Files.isDirectory(target, LinkOption.NOFOLLOW_LINKS)) {
-            throw new IllegalArgumentException("目录不存在: " + relPath);
+            throw new IllegalArgumentException(I18n.t("目录不存在: {0}", relPath));
         }
         List<Map<String, Object>> entries = new ArrayList<>();
         try (Stream<Path> s = Files.list(target)) {
@@ -212,7 +213,9 @@ public class SaveService {
             throws IOException {
         List<Path> dirs = saveDirs(gameId);
         if (dirs.isEmpty()) {
-            throw new IllegalStateException("游戏目录下没有找到存档目录（" + String.join("/", SAVE_DIR_NAMES) + "）");
+            throw new IllegalStateException(
+                    I18n.t("游戏目录下没有找到存档目录（{0}）",
+                            String.join("/", SAVE_DIR_NAMES)));
         }
         Path root = backupRoot(gameId);
         Files.createDirectories(root);
@@ -248,7 +251,7 @@ public class SaveService {
             }
             cmd.add(gameDir.relativize(abs).toString().replace('\\', '/'));
         }
-        runTar(cmd, "备份失败");
+        runTar(cmd, I18n.t("备份失败"));
 
         ArchiveMeta meta = new ArchiveMeta();
         meta.label = displayLabel(label);
@@ -270,7 +273,7 @@ public class SaveService {
                                   String label, String description) throws IOException {
         Path archive = resolveArchive(backupRoot(gameId), archiveName);
         if (!Files.isRegularFile(archive)) {
-            throw new IllegalArgumentException("备份不存在: " + archiveName);
+            throw new IllegalArgumentException(I18n.t("备份不存在: {0}", archiveName));
         }
         ArchiveMeta meta = readMeta(archive);
         if (meta == null) {
@@ -331,7 +334,7 @@ public class SaveService {
         Path root = backupRoot(gameId);
         Path archive = resolveArchive(root, archiveName);
         if (!Files.isRegularFile(archive)) {
-            throw new IllegalArgumentException("备份不存在: " + archiveName);
+            throw new IllegalArgumentException(I18n.t("备份不存在: {0}", archiveName));
         }
 
         // 1) 保护性快照：把「切换前的当前进度」存下来，否则切走再切回来，
@@ -339,7 +342,8 @@ public class SaveService {
         //    只保留最新一份，不会像以前那样每切一次就多堆积一份整包备份。
         if (snapshotCurrent) {
             try {
-                backup(gameId, "切换前进度", "切换存档时自动保存的当前进度", KIND_PRE_RESTORE);
+                backup(gameId, I18n.t("切换前进度"),
+                        I18n.t("切换存档时自动保存的当前进度"), KIND_PRE_RESTORE);
                 // 清理时必须避开「本次要恢复的那份」—— 它本身也可能是一份 pre-restore，
                 // 不排除的话刚拍完快照就把恢复目标删了，切换直接失败。
                 prunePreRestore(gameId, archiveName);
@@ -353,7 +357,7 @@ public class SaveService {
         Path tmp = Files.createTempDirectory(gameDir, ".galworld-restore-");
         try {
             // 2) 解压并校验
-            runTar(List.of("tar", "-xzf", archive.toString(), "-C", tmp.toString()), "解压失败");
+            runTar(List.of("tar", "-xzf", archive.toString(), "-C", tmp.toString()), I18n.t("解压失败"));
             validateExtracted(tmp);
 
             // 3) 原子替换：只搬归档里实际存在的存档目录，按相对路径定位
@@ -465,23 +469,23 @@ public class SaveService {
     public void delete(String gameId, String archiveName) throws IOException {
         Path archive = resolveArchive(backupRoot(gameId), archiveName);
         if (!Files.isRegularFile(archive)) {
-            throw new IllegalArgumentException("备份不存在: " + archiveName);
+            throw new IllegalArgumentException(I18n.t("备份不存在: {0}", archiveName));
         }
         if (KIND_ORIGINAL.equals(describe(archive).kind())) {
-            throw new IllegalStateException("原始存档不可删除：它是游戏导入时的初始状态，"
-                    + "存档全部丢失时靠它恢复");
+            throw new IllegalStateException(I18n.t("原始存档不可删除：它是游戏导入时的初始状态，"
+                    + "存档全部丢失时靠它恢复"));
         }
         if (archiveName.equals(currentArchive(gameId))) {
-            throw new IllegalStateException("当前正在游玩的存档不可删除："
-                    + "请先切换到其它存档，再删除这一份");
+            throw new IllegalStateException(I18n.t("当前正在游玩的存档不可删除："
+                    + "请先切换到其它存档，再删除这一份"));
         }
         // 没有原始存档兜底时，最后一份备份就是唯一能回退的东西，不能删
         List<SaveArchive> all = list(gameId);
         boolean hasOriginal = all.stream().anyMatch(a -> KIND_ORIGINAL.equals(a.kind()));
         long remaining = all.stream().filter(a -> !a.name().equals(archiveName)).count();
         if (!hasOriginal && remaining == 0) {
-            throw new IllegalStateException("至少要保留一份存档备份：这个游戏没有原始存档，"
-                    + "删掉最后一份就没有任何可回退的状态了");
+            throw new IllegalStateException(I18n.t("至少要保留一份存档备份：这个游戏没有原始存档，"
+                    + "删掉最后一份就没有任何可回退的状态了"));
         }
         Files.deleteIfExists(archive);
         Files.deleteIfExists(metaPath(archive));
@@ -537,7 +541,7 @@ public class SaveService {
         // 只允许备份目录下的普通文件名，挡住路径穿越
         String base = Path.of(name).getFileName().toString();
         if (!base.equals(name) || base.contains("..")) {
-            throw new IllegalArgumentException("非法的备份名: " + name);
+            throw new IllegalArgumentException(I18n.t("非法的备份名: {0}", name));
         }
         return root.resolve(base);
     }
@@ -564,7 +568,7 @@ public class SaveService {
         try (Stream<Path> s = Files.walk(tmp)) {
             for (Path p : s.toList()) {
                 if (!p.normalize().startsWith(tmp.normalize())) {
-                    throw new IOException("归档包含越界路径: " + p);
+                    throw new IOException(I18n.t("归档包含越界路径: {0}", p));
                 }
             }
         }
@@ -682,11 +686,11 @@ public class SaveService {
         try {
             if (!p.waitFor(120, java.util.concurrent.TimeUnit.SECONDS)) {
                 p.destroyForcibly();
-                throw new IOException(errMsg + ": 超时");
+                throw new IOException(errMsg + ": " + I18n.t("超时"));
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            throw new IOException(errMsg + ": 被中断", e);
+            throw new IOException(errMsg + ": " + I18n.t("被中断"), e);
         }
         if (p.exitValue() != 0) {
             throw new IOException(errMsg + ": " + out.strip().toLowerCase(Locale.ROOT));

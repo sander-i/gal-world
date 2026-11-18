@@ -7,6 +7,7 @@ package io.github.sander_i.service;
 
 import io.github.sander_i.domain.GameLocalization;
 import io.github.sander_i.domain.LocalizationGroup;
+import io.github.sander_i.i18n.I18n;
 import io.github.sander_i.repo.GameLocalizationRepository;
 import io.github.sander_i.repo.LocalizationGroupRepository;
 import org.springframework.stereotype.Service;
@@ -159,7 +160,7 @@ public class LocalizationGroupService {
     public LocalizationGroup create(String name, String alias, String website, String description) {
         String n = text(name);
         if (n.isEmpty()) {
-            throw new IllegalArgumentException("汉化组名不能为空");
+            throw new IllegalArgumentException(I18n.t("汉化组名不能为空"));
         }
         String a = text(alias);
         String w = normalizeWebsite(website);
@@ -178,21 +179,27 @@ public class LocalizationGroupService {
     public LocalizationGroup update(long id, String name, String alias, String website,
                                     String description) {
         LocalizationGroup g = groups.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("汉化组不存在: " + id));
+                .orElseThrow(() -> new IllegalArgumentException(I18n.t("汉化组不存在: {0}", id)));
         String n = text(name);
         if (n.isEmpty()) {
-            throw new IllegalArgumentException("汉化组名不能为空");
+            throw new IllegalArgumentException(I18n.t("汉化组名不能为空"));
         }
         String a = text(alias);
         String w = normalizeWebsite(website);
         if (groups.findByNameAndAliasAndWebsite(n, a, w)
                 .filter(other -> !other.getId().equals(id)).isPresent()) {
-            throw new IllegalArgumentException("汉化组名 + 别名 + 网址已存在");
+            throw new IllegalArgumentException(I18n.t("汉化组名 + 别名 + 网址已存在"));
         }
         g.setName(n);
         g.setAlias(a);
         g.setWebsite(w);
         g.setDescription(text(description));
+        return groups.save(g);
+    }
+
+    /** 保存多语言覆盖等附加字段；业务字段仍走 create / update 校验 */
+    @Transactional
+    public LocalizationGroup save(LocalizationGroup g) {
         return groups.save(g);
     }
 

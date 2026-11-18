@@ -3,6 +3,7 @@
  * Copyright (c) 2026 sander
  */
 
+import { t } from './i18n.js'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 /**
@@ -32,9 +33,9 @@ export const notify = {
  * 取消（点取消 / 关闭 / Esc）不算异常，统一返回 false。
  */
 export async function confirmAction(message, {
-  title = '确认操作',
-  confirmText = '确定',
-  cancelText = '取消',
+  title = t('确认操作'),
+  confirmText = t('确定'),
+  cancelText = t('取消'),
 } = {}) {
   try {
     await ElMessageBox.confirm(message, title, {

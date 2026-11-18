@@ -5,6 +5,7 @@
 
 package io.github.sander_i.web;
 
+import io.github.sander_i.i18n.I18n;
 import io.github.sander_i.repo.GameRepository;
 import io.github.sander_i.service.PlaytimeService;
 import org.springframework.http.ResponseEntity;
@@ -78,7 +79,7 @@ public class PlaytimeController {
             scan.syncAll();
         }
         if (!repo.existsById(id)) {
-            throw new IllegalArgumentException("没有这个游戏: " + id);
+            throw new IllegalArgumentException(I18n.t("没有这个游戏: {0}", id));
         }
     }
 }

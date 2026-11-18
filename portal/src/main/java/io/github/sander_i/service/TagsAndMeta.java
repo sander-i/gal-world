@@ -7,6 +7,7 @@ package io.github.sander_i.service;
 
 import io.github.sander_i.domain.GameTag;
 import io.github.sander_i.domain.Tag;
+import io.github.sander_i.i18n.I18n;
 import io.github.sander_i.repo.GameTagRepository;
 import io.github.sander_i.repo.TagRepository;
 import org.springframework.stereotype.Service;
@@ -65,7 +66,7 @@ public class TagsAndMeta {
     public Tag create(String name, String alias) {
         String n = name == null ? "" : name.strip();
         if (n.isEmpty()) {
-            throw new IllegalArgumentException("标签名不能为空");
+            throw new IllegalArgumentException(I18n.t("标签名不能为空"));
         }
         return tags.findByName(n).orElseGet(() -> {
             Tag fresh = new Tag();
@@ -178,19 +179,25 @@ public class TagsAndMeta {
     @Transactional
     public Tag update(long id, String name, String alias) {
         Tag t = tags.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("标签不存在: " + id));
+                .orElseThrow(() -> new IllegalArgumentException(I18n.t("标签不存在: {0}", id)));
         String n = name == null ? "" : name.strip();
         if (n.isEmpty()) {
-            throw new IllegalArgumentException("标签名不能为空");
+            throw new IllegalArgumentException(I18n.t("标签名不能为空"));
         }
         tags.findByName(n)
                 .filter(other -> !other.getId().equals(id))
                 .ifPresent(other -> {
-                    throw new IllegalArgumentException("标签名已存在");
+                    throw new IllegalArgumentException(I18n.t("标签名已存在"));
                 });
         t.setName(n);
         String a = alias == null ? "" : alias.strip();
         t.setAlias(a.isEmpty() ? null : a);
+        return tags.save(t);
+    }
+
+    /** 保存多语言覆盖等附加字段；业务字段仍走 create / update 校验 */
+    @Transactional
+    public Tag save(Tag t) {
         return tags.save(t);
     }
 

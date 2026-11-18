@@ -36,8 +36,11 @@ npm run build
 say "构建 jar"
 cd "$PORTAL_DIR"
 JAVA_HOME="$JAVA_HOME_LOCAL" mvn -q -B -DskipTests package
-# 取最新产物：target 下可能残留旧版本名的 jar，按名字排序会选错
-JAR=$(ls -1t target/gal-world-portal-*.jar | head -1)
+# 取 pom 里的版本拼产物名，而不是按 mtime 猜：target 下常残留旧版本 jar，
+# mtime 排序会选错（2026-11-17 因此部署了 0.1.4，缺新资源）。
+VERSION=$(sed -n 's|.*<version>\(.*\)</version>.*|\1|p' pom.xml | sed -n '2p')
+JAR="target/gal-world-portal-$VERSION.jar"
+[[ -f "$JAR" ]] || { echo "找不到产物 $JAR" >&2; exit 1; }
 echo "产物: $JAR ($(du -h "$JAR" | cut -f1))"
 
 if [[ "${1:-}" == "--build-only" ]]; then

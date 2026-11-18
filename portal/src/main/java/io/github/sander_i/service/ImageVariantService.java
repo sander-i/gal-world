@@ -5,6 +5,7 @@
 
 package io.github.sander_i.service;
 
+import io.github.sander_i.i18n.I18n;
 import net.coobird.thumbnailator.Thumbnails;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -237,7 +238,7 @@ public class ImageVariantService {
         boolean done = false;
         try {
             if (!ImageIO.write(img, "png", tmp.toFile())) {
-                throw new IOException("没有可用的 PNG 编码器");
+                throw new IOException(I18n.t("没有可用的 PNG 编码器"));
             }
             commit(tmp, out);
             done = true;

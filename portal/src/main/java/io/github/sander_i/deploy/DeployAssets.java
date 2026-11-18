@@ -6,6 +6,7 @@
 package io.github.sander_i.deploy;
 
 import io.github.sander_i.config.PathConfig;
+import io.github.sander_i.i18n.I18n;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -97,7 +98,7 @@ public class DeployAssets {
     private void copy(String resource, Path target) throws IOException {
         try (InputStream in = getClass().getClassLoader().getResourceAsStream(resource)) {
             if (in == null) {
-                throw new IOException("jar 内缺少资源: " + resource);
+                throw new IOException(I18n.t("jar 内缺少资源: {0}", resource));
             }
             Files.copy(in, target, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
         }

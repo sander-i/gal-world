@@ -1881,12 +1881,18 @@ select optgroup {
 .field > select { width: 100%; flex: none; }
 
 /* ===== 筛选条（公司 / 标签） ===== */
+/*
+ * 筛选行：标签列 + chip 列。
+ *
+ * 以前每行是独立 flex，标签按自身内容撑开（中文 2–3 字、英文
+ * Company / Localization group 差一倍），三行的 chip 起点参差不齐。
+ * 标签宽度由脚本量出最宽的那个写进 --filter-label-w，各行统一使用。
+ */
 .filter-row {
   display: flex;
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
-  /* 公司行与标签行之间留出呼吸空间 */
   margin-bottom: 18px;
 }
 
@@ -1897,8 +1903,9 @@ select optgroup {
   font-size: 12px;
   color: var(--muted);
   letter-spacing: .06em;
-  min-width: 40px;
+  min-width: var(--filter-label-w, 40px);
   flex: none;
+  white-space: nowrap;
 }
 
 .filter-hint {
@@ -2187,12 +2194,31 @@ tr[draggable="true"]:active { cursor: grabbing; }
 
 .meta-line { display: flex; align-items: baseline; gap: 12px; }
 
+/*
+ * 标签宽度不能写死：中文「公司」两字够用，英文 Company / Localization group
+ * 要 60–77px，写死 34px 会直接压到右边的公司名上。
+ * grid + max-content 让同一张卡里的标签列共用最宽那个的宽度，行间也对齐；
+ * meta-line 用 display:contents 把它的两个子元素提升成 grid 的直接项。
+ */
+.game-meta-card:has(.meta-line) {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  column-gap: 10px;
+  row-gap: 8px;
+  align-items: baseline;
+}
+
+.game-meta-card:has(.meta-line) .meta-line {
+  display: contents;
+}
+
 .meta-label {
   flex: none;
-  width: 34px;
+  min-width: 34px;
   color: var(--muted);
   font-size: 12px;
   letter-spacing: .06em;
+  white-space: nowrap;
 }
 
 .meta-values {
@@ -2201,6 +2227,8 @@ tr[draggable="true"]:active { cursor: grabbing; }
   align-items: center;
   gap: 6px 10px;
   font-size: 13px;
+  /* grid 子项默认 min-width:auto，长内容会把标签列挤窄 */
+  min-width: 0;
 }
 
 .meta-link {
@@ -3527,4 +3555,129 @@ tr[draggable="true"]:active { cursor: grabbing; }
 }
 @keyframes maintenance-spin {
   to { transform: rotate(360deg); }
+}
+
+/* 语言包管理：行内按钮组与导入结果提示 */
+.lang-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.lang-report {
+  margin-top: 16px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+}
+
+.lang-report-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.lang-report code,
+.lang-keymap code {
+  display: inline-block;
+  margin: 2px 6px 2px 0;
+  padding: 1px 6px;
+  border-radius: var(--r-ctl);
+  background: var(--surface-3);
+  font-size: 12px;
+}
+
+.lang-warn {
+  color: var(--warn);
+}
+
+.lang-keymap {
+  margin-top: 16px;
+}
+
+.lang-keymap summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.lang-keymap summary:hover {
+  color: var(--text);
+}
+
+/* ===== 多语言字段编辑（公司 / 标签 / 汉化组维护页） ===== */
+.i18n-fields {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.i18n-locale {
+  border: 1px solid var(--line);
+  border-radius: var(--r-ctl);
+  background: var(--surface-2);
+}
+
+.i18n-locale > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--muted);
+  list-style: none;
+}
+
+.i18n-locale > summary::-webkit-details-marker { display: none; }
+
+.i18n-locale > summary:hover { color: var(--text); }
+
+.i18n-locale-name { color: var(--text); }
+
+.i18n-locale-id {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11.5px;
+  color: var(--muted-soft);
+}
+
+.i18n-locale-dot {
+  margin-left: auto;
+  color: var(--ok);
+  font-size: 10px;
+}
+
+.i18n-locale-body {
+  display: grid;
+  gap: 8px;
+  padding: 0 12px 12px;
+}
+
+.i18n-field {
+  display: grid;
+  grid-template-columns: minmax(0, 120px) minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+}
+
+.i18n-field-label {
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+/* 窄屏下标签与输入框上下排列，避免输入框被挤成一条 */
+@media (max-width: 700px) {
+  .i18n-field { grid-template-columns: 1fr; gap: 4px; }
+}
+
+/* 编辑行下方的多语言面板：与表格隔开，视觉上从属当前编辑项 */
+.i18n-edit-panel {
+  margin-top: 16px;
+  padding: 14px 16px;
+  border: 1px solid var(--accent-line);
+  border-radius: var(--radius);
+  background: var(--accent-faint);
 }

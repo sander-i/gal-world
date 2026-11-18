@@ -13,6 +13,7 @@
  * 取消上传后延迟对账一次：abort 可能发生在服务端已落库、响应尚未返回之间，
  * 以 GET /media/{kind} 的返回为准，避免界面与服务端不一致。
  */
+import { t } from '../i18n.js'
 import { computed, onBeforeUnmount, ref } from 'vue'
 import { api } from '../api'
 
@@ -70,26 +71,26 @@ function precheck(files) {
   for (const file of files) {
     const video = isVideo(file)
     if (props.kind === 'cover' && video) {
-      rejected.push({ file, reason: '封面只支持图片' })
+      rejected.push({ file, reason: t('封面只支持图片') })
       continue
     }
     if (video && !VIDEO_RE.test(file.name)) {
-      rejected.push({ file, reason: '只支持 mp4 / webm' })
+      rejected.push({ file, reason: t('只支持 mp4 / webm') })
       continue
     }
     if (!video && !IMAGE_RE.test(file.name)) {
-      rejected.push({ file, reason: '不支持的格式' })
+      rejected.push({ file, reason: t('不支持的格式') })
       continue
     }
     const maxMb = video ? props.videoMaxMb : props.imageMaxMb
     if (file.size > maxMb * MB) {
-      rejected.push({ file, reason: `超过 ${maxMb} MB` })
+      rejected.push({ file, reason: t("超过 {0} MB", maxMb) })
       continue
     }
     if (slots <= 0) {
       rejected.push({
         file,
-        reason: `超出数量上限（${props.kind === 'cover' ? '封面' : 'CG'}最多 ${props.max} 个）`,
+        reason: t("超出数量上限（{0}最多 {1} 个）", props.kind === 'cover' ? t('封面') : 'CG', props.max),
       })
       continue
     }
@@ -156,7 +157,7 @@ function start(task) {
     (xhr) => { task.xhr = xhr })
     .then((res) => {
       const media = res?.media || res?.all?.at?.(-1)
-      if (!media) throw new Error('上传后没有返回媒体记录')
+      if (!media) throw new Error(t('上传后没有返回媒体记录'))
       stats.value.done++
       releaseTask(task)
       running.value = Math.max(0, running.value - 1)
@@ -170,7 +171,7 @@ function start(task) {
         reconcileSoon()
       } else {
         task.status = 'failed'
-        task.error = e?.message || '上传失败'
+        task.error = e?.message || t('上传失败')
       }
       pump()
     })
@@ -241,15 +242,14 @@ defineExpose({ accept, cancelAll, active })
 <template>
   <div v-if="totalCount" class="upload-summary">
     <div class="upload-summary-head">
-      <span>上传中 {{ Math.min(stats.done + active.length, stats.total) }}/{{ stats.total }}</span>
+      <span>{{ t("上传中 {0}/{1}", Math.min(stats.done + active.length, stats.total), stats.total) }}</span>
       <span>{{ overallPct }}%</span>
     </div>
     <div class="upload-progress-track">
       <div class="upload-progress-fill" :style="{ width: overallPct + '%' }" />
     </div>
     <button v-if="active.length" class="link-btn danger upload-cancel-all" type="button" @click="cancelAll">
-      全部取消
-    </button>
+      {{ t("全部取消") }}</button>
   </div>
 
   <div
@@ -262,19 +262,19 @@ defineExpose({ accept, cancelAll, active })
       <video v-if="task.video" :src="task.previewUrl" class="media-thumb" muted preload="metadata" />
       <img v-else :src="task.previewUrl" class="media-thumb" :alt="task.file.name">
     </div>
-    <span class="kind">{{ task.video ? '视频' : '图片' }}</span>
+    <span class="kind">{{ task.video ? t('视频') : t('图片') }}</span>
     <span class="name">{{ task.file.name }}</span>
 
     <template v-if="task.status === 'failed'">
-      <span class="upload-badge failed">失败</span>
+      <span class="upload-badge failed">{{ t("失败") }}</span>
       <span class="upload-status" :title="task.error">{{ task.error }}</span>
-      <button class="link-btn" type="button" @click="retry(task)">重试</button>
-      <button class="link-btn danger" type="button" @click="removeTask(task)">移除</button>
+      <button class="link-btn" type="button" @click="retry(task)">{{ t("重试") }}</button>
+      <button class="link-btn danger" type="button" @click="removeTask(task)">{{ t("移除") }}</button>
     </template>
 
     <template v-else>
       <span class="upload-badge" :class="task.status === 'waiting' ? 'waiting' : 'uploading'">
-        {{ task.status === 'waiting' ? '等待' : '上传中' }}
+        {{ task.status === 'waiting' ? t('等待') : t('上传中') }}
       </span>
       <div class="upload-row-progress">
         <div class="upload-progress-track">
@@ -282,26 +282,26 @@ defineExpose({ accept, cancelAll, active })
         </div>
       </div>
       <span class="upload-status">
-        {{ task.status === 'waiting' ? '等待中' : Math.round(task.progress * 100) + '%' }}
+        {{ task.status === 'waiting' ? t('等待中') : Math.round(task.progress * 100) + '%' }}
       </span>
-      <button class="link-btn danger" type="button" @click="cancel(task)">取消</button>
+      <button class="link-btn danger" type="button" @click="cancel(task)">{{ t("取消") }}</button>
     </template>
   </div>
 
   <Teleport to="body">
     <div v-if="dialog" class="upload-mask" @click.self="confirmDialog(false)">
-      <div class="upload-dialog" role="dialog" aria-modal="true" aria-label="上传前检查">
-        <h3>上传前检查</h3>
+      <div class="upload-dialog" role="dialog" aria-modal="true" :aria-label="t('上传前检查')">
+        <h3>{{ t("上传前检查") }}</h3>
         <p class="muted-sm">
-          可上传 {{ dialog.accepted.length }} 个<span v-if="dialog.rejected.length">，被拒绝 {{ dialog.rejected.length }} 个</span>
+          {{ t("可上传 {0} 个", dialog.accepted.length) }}<span v-if="dialog.rejected.length">{{ t("，被拒绝 {0} 个", dialog.rejected.length) }}</span>
         </p>
         <ul v-if="dialog.accepted.length" class="upload-dialog-list">
           <li v-for="a in dialog.accepted.slice(0, 6)" :key="a.file.name + a.file.size">
             <span class="fname">{{ a.file.name }}</span>
-            <span class="ok">可上传 · {{ a.video ? '视频' : '图片' }}</span>
+            <span class="ok">{{ t("可上传 · {0}", a.video ? t('视频') : t('图片')) }}</span>
           </li>
           <li v-if="dialog.accepted.length > 6">
-            <span class="fname">…另有 {{ dialog.accepted.length - 6 }} 个</span>
+            <span class="fname">{{ t("…另有 {0} 个", dialog.accepted.length - 6) }}</span>
           </li>
         </ul>
         <ul v-if="dialog.rejected.length" class="upload-dialog-list">
@@ -311,13 +311,13 @@ defineExpose({ accept, cancelAll, active })
           </li>
         </ul>
         <div class="upload-dialog-actions">
-          <button class="btn sm" type="button" @click="confirmDialog(false)">取消</button>
+          <button class="btn sm" type="button" @click="confirmDialog(false)">{{ t("取消") }}</button>
           <button
             class="btn primary sm"
             type="button"
             :disabled="!dialog.accepted.length"
             @click="confirmDialog(true)"
-          >{{ dialog.accepted.length ? `继续上传 ${dialog.accepted.length} 个` : '知道了' }}</button>
+          >{{ dialog.accepted.length ? t("继续上传 {0} 个", dialog.accepted.length) : t('知道了') }}</button>
         </div>
       </div>
     </div>

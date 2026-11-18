@@ -6,6 +6,7 @@
 package io.github.sander_i.service;
 
 import io.github.sander_i.config.PathConfig;
+import io.github.sander_i.i18n.I18n;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -87,7 +88,8 @@ public class MediaService {
     public Saved save(String gameId, String kind, int seq, String originalName, InputStream in)
             throws IOException {
         if (kind == null || !ALLOWED_KINDS.contains(kind)) {
-            throw new IllegalArgumentException("kind 必须是 " + String.join(" / ", ALLOWED_KINDS));
+            throw new IllegalArgumentException(
+                    I18n.t("kind 必须是 {0}", String.join(" / ", ALLOWED_KINDS)));
         }
         boolean isCg = kind.equals("cg");
         String ext = extension(originalName);
@@ -96,7 +98,7 @@ public class MediaService {
             String hint = isCg
                     ? String.join("/", ALLOWED_EXT) + "/" + String.join("/", ALLOWED_VIDEO_EXT)
                     : String.join("/", ALLOWED_EXT);
-            throw new IllegalArgumentException("只支持 " + hint + "，收到: " + originalName);
+            throw new IllegalArgumentException(I18n.t("只支持 {0}，收到: {1}", hint, originalName));
         }
 
         long limit = video ? settings.videoMaxBytes() : settings.imageMaxBytes();
@@ -104,13 +106,13 @@ public class MediaService {
         // 一次性 readAllBytes 会让堆里同时存在整份文件
         byte[] head = in.readNBytes(16);
         if (head.length == 0) {
-            throw new IllegalArgumentException("文件为空");
+            throw new IllegalArgumentException(I18n.t("文件为空"));
         }
         String detected = video ? sniffVideo(head) : sniff(head);
         if (detected == null) {
             throw new IllegalArgumentException(video
-                    ? "不是有效的视频文件（需要 MP4 或 WebM）"
-                    : "不是有效的图片文件");
+                    ? I18n.t("不是有效的视频文件（需要 MP4 或 WebM）")
+                    : I18n.t("不是有效的图片文件"));
         }
 
         // icon 固定名；cover / cg 带序号
@@ -141,7 +143,8 @@ public class MediaService {
                 if (total > limit) {
                     out.close();
                     Files.deleteIfExists(target);
-                    throw new IllegalArgumentException("文件超过 " + (limit / 1024 / 1024) + " MB");
+                    throw new IllegalArgumentException(
+                            I18n.t("文件超过 {0} MB", limit / 1024 / 1024));
                 }
                 out.write(buf, 0, n);
                 md.update(buf, 0, n);
@@ -165,7 +168,7 @@ public class MediaService {
         try {
             return java.security.MessageDigest.getInstance("SHA-256");
         } catch (Exception e) {
-            throw new IllegalStateException("SHA-256 不可用", e);
+            throw new IllegalStateException(I18n.t("SHA-256 不可用"), e);
         }
     }
 

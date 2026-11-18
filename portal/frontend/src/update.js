@@ -10,6 +10,8 @@
  * 这里只做映射，不碰 DOM 与网络，便于 node --test 直接覆盖。
  */
 
+import { t } from './i18n.js'
+
 export function confirmText(version) {
   // 与后端 Version.normalize 一致：去 v 前缀，并截掉 - 后缀（v0.1.4-pr7 → 0.1.4）
   const v = String(version || '').trim().replace(/^v/i, '').split('-')[0]
@@ -56,17 +58,37 @@ export function canOverride(enabled, ref, status) {
 
 export function phaseLabel(phase) {
   return {
-    idle: '空闲',
-    queued: '排队中',
-    precheck: '预检',
-    downloading: '下载更新包',
-    verifying: '校验更新包',
-    backing_up: '备份数据库',
-    stopping: '停止服务',
-    replacing: '替换版本',
-    starting: '启动服务',
-    success: '更新完成',
-    rolled_back: '已回滚',
-    failed: '更新失败',
+    idle: t('空闲'),
+    queued: t('排队中'),
+    precheck: t('预检'),
+    downloading: t('下载更新包'),
+    verifying: t('校验更新包'),
+    backing_up: t('备份数据库'),
+    stopping: t('停止服务'),
+    replacing: t('替换版本'),
+    starting: t('启动服务'),
+    success: t('更新完成'),
+    rolled_back: t('已回滚'),
+    failed: t('更新失败'),
   }[phase] || phase || ''
+}
+
+/**
+ * 更新状态里的说明文字。
+ *
+ * 这段由 deploy/bin/updater.sh 直接写进 update-status.json，后端只透传、
+ * 不经 I18n，切语言后仍是中文。已知的固定句式在这里按当前语言重排；
+ * 认不出来的（更新器里的各类失败原因）原样显示——那些是排障线索，
+ * 猜着翻译反而更糟。
+ */
+export function updateMessage(status) {
+  const raw = String(status?.message || '').trim()
+  if (!raw) return ''
+  let m = /^更新完成\s+(\S+)\s*->\s*(\S+)$/.exec(raw)
+  if (m) return t("更新完成 {0} -> {1}", m[1], m[2])
+  m = /^已回滚到\s+(\S+)$/.exec(raw)
+  if (m) return t("已回滚到 {0}", m[1])
+  m = /^当前\s+(\S+)，目标\s+(\S+)$/.exec(raw)
+  if (m) return t("当前 {0}，目标 {1}", m[1], m[2])
+  return raw
 }

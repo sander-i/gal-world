@@ -87,10 +87,15 @@ docs/                         环境搭建与各模块方案（接入、媒体�
 ### 加一个页面
 
 1. 页面放 `frontend/src/`，路由注册在现有 router 里
-2. 主题只用 `check-theme-vars.mjs` 认可的 CSS 变量，不要写死颜色（门禁用例会失败）
-3. 产物由 `npm run build` 写进 `portal/src/main/resources/static/`（gitignore，不入库）；
+2. **界面文案一律走 `t()`**（`import { t } from '../i18n.js'`），模板里写
+   `{{ t("中文原文") }}`；带变量的用 `{0}` 占位：`t("已删除 {0}", name)`。
+   键就是中文原文，漏翻译只会回退中文，不会空白。新文案要同步补
+   `portal/src/main/resources/i18n/*.json`（`tools/i18n-check.py` 会报缺失）。
+   注意别把 `t` 用作 `v-for` 变量名，会遮蔽导入的翻译函数。
+3. 主题只用 `check-theme-vars.mjs` 认可的 CSS 变量，不要写死颜色（门禁用例会失败）
+4. 产物由 `npm run build` 写进 `portal/src/main/resources/static/`（gitignore，不入库）；
    `deploy/release.sh` 打包前会自动构建
-4. **按钮只用全局 `.btn` 体系，别自造样式。** 尺寸三档（`styles.css` 的 `--ctl-h-*`）：
+5. **按钮只用全局 `.btn` 体系，别自造样式。** 尺寸三档（`styles.css` 的 `--ctl-h-*`）：
    `.btn` / `.btn.sm` = md（34px），`.btn.primary` = lg（40px，**仅每屏唯一主动作**），
    `.btn.compact` = sm（28px）。同一行按钮必须同尺寸：多按钮同排时用 `.btn primary sm`，
    裸 `.btn primary` 会比同排的 `.btn` 高 6px —— 这是历史 bug 的常见来源。
@@ -106,6 +111,17 @@ docs/                         环境搭建与各模块方案（接入、媒体�
    `portal/src/main/resources/deploy/linux/bin/<x>` 供 jar 安装（`DeployAssets`）；
    `GameAssetsScriptTest` 会校验，新增脚本还要同时登记到 `DeployAssets` 的清单，
    否则页面「一键部署」装不上，功能会在运行时才报错
+
+### 加一条后端提示文案
+
+1. 抛异常或返回 `message` 时用 `I18n.t("中文原文: {0}", arg)`，不要直接写字符串
+2. 键与前端共用一套语言包；新键要补 `portal/src/main/resources/i18n/*.json`
+3. **别用 message 文本做逻辑判断**（`msg.contains("...")`）——消息会按请求语言翻译。
+   需要区分状态时用专门的异常子类，参考 `DeployService.ConfirmRequiredException`
+4. 外部语言包可来自 .po / XLIFF / CSV / properties / Android XML / .arb / .strings，
+   解析在 `i18n/LocaleImporter`。源文即键的格式可直接映射；符号键格式靠 keyMap
+5. 后台线程（部署 / 接入 / 上传）提交任务时用 `I18n.runAs(locale, ...)` 固定语言，
+   否则日志会落到站点默认语言
 
 ### 改更新流程
 

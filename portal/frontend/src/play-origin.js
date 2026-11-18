@@ -3,6 +3,7 @@
  * Copyright (c) 2026 sander
  */
 
+import { t } from './i18n.js'
 import { listQuery, readListQuery } from './list-origin.js'
 
 /**
@@ -31,14 +32,14 @@ export function playLink(gameId, from = '', listState = null) {
 export function playBackTarget(route) {
   const q = route.query || {}
   if (q.from === 'list') {
-    return { path: '/games', query: listQuery(readListQuery(route)), label: '← 全部游戏' }
+    return { path: '/games', query: listQuery(readListQuery(route)), label: t('← 全部游戏') }
   }
   if (q.from === 'game') {
     const id = route.params?.id ?? ''
-    return { path: `/game/${encodeURIComponent(id)}`, query: {}, label: '← 游戏详情' }
+    return { path: `/game/${encodeURIComponent(id)}`, query: {}, label: t('← 游戏详情') }
   }
   if (q.from === 'import') {
-    return { path: '/games/import', query: {}, label: '← 接入游戏' }
+    return { path: '/games/import', query: {}, label: t('← 接入游戏') }
   }
-  return { path: '/', query: {}, label: '← 游戏库' }
+  return { path: '/', query: {}, label: t('← 游戏库') }
 }

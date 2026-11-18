@@ -5,6 +5,7 @@
 
 package io.github.sander_i.web;
 
+import io.github.sander_i.i18n.I18n;
 import io.github.sander_i.repo.GameRepository;
 import io.github.sander_i.service.SaveService;
 import io.github.sander_i.service.SessionService;
@@ -120,7 +121,7 @@ public class SaveController {
         if (st.state() == SessionService.State.RUNNING) {
             return ResponseEntity.status(HttpStatus.CONFLICT)
                     .body(Map.of("code", "SESSION_RUNNING",
-                            "message", "游戏正在运行，请先在门户停止会话再切换存档"));
+                            "message", I18n.t("游戏正在运行，请先在门户停止会话再切换存档")));
         }
         SaveService.SaveArchive restored = saves.restore(id, name, snapshot);
         return ResponseEntity.ok(state(id, Map.of("restored", restored.name())));
@@ -158,7 +159,7 @@ public class SaveController {
         if (original == null) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .body(Map.of("code", "NO_ORIGINAL",
-                            "message", "没有原始存档备份，无法恢复初始状态"));
+                            "message", I18n.t("没有原始存档备份，无法恢复初始状态")));
         }
         return doRestore(id, original.name(), false);
     }
@@ -170,7 +171,7 @@ public class SaveController {
         requireGame(id);
         Path archive = saves.archiveOf(id, name);
         if (!Files.isRegularFile(archive)) {
-            throw new IllegalArgumentException("备份不存在: " + name);
+            throw new IllegalArgumentException(I18n.t("备份不存在: {0}", name));
         }
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.attachment()
@@ -201,7 +202,7 @@ public class SaveController {
 
     private void requireGame(String id) {
         if (!repo.existsById(id)) {
-            throw new IllegalArgumentException("没有这个游戏: " + id);
+            throw new IllegalArgumentException(I18n.t("没有这个游戏: {0}", id));
         }
     }
 

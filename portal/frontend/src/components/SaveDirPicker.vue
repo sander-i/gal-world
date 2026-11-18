@@ -8,6 +8,7 @@
  * 存档目录选择器：浏览游戏主目录下的文件夹，勾选若干作为存档目录。
  * 只负责浏览与勾选，保存动作由父组件调 api.setSaveDirs。
  */
+import { t } from '../i18n.js'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { api } from '../api'
 import { notify } from '../feedback'
@@ -75,11 +76,11 @@ async function save() {
   saving.value = true
   try {
     await api.setSaveDirs(props.gameId, selected.value)
-    notify.success(`已设置 ${selected.value.length} 个存档目录`)
+    notify.success(t("已设置 {0} 个存档目录", selected.value.length))
     emit('saved', [...selected.value])
     close()
   } catch (e) {
-    notify.error('保存失败：' + e.message)
+    notify.error(t("保存失败：{0}", e.message))
   } finally {
     saving.value = false
   }
@@ -100,19 +101,16 @@ function fmtSize(n) {
 </script>
 
 <template>
-  <div v-if="visible" class="sdp-mask" role="dialog" aria-modal="true" aria-label="选择存档目录">
+  <div v-if="visible" class="sdp-mask" role="dialog" aria-modal="true" :aria-label="t('选择存档目录')">
     <div class="sdp-panel">
       <div class="sdp-head">
-        <h2>手动选择存档目录</h2>
-        <button class="link-btn" @click="close">关闭</button>
+        <h2>{{ t("手动选择存档目录") }}</h2>
+        <button class="link-btn" @click="close">{{ t("关闭") }}</button>
       </div>
       <p class="muted-sm">
-        勾选存放存档的<strong>文件夹或文件</strong>，可多选、可进入子目录。
-        存档有「文件夹」和「单个文件」两种形态，都支持。
-        不勾选任何项时保存会回到默认约定（savedata_cn / savedata_jp / savedata / save）。
-      </p>
+        {{ t("勾选存放存档的") }}<strong>{{ t("文件夹或文件") }}</strong>{{ t("，可多选、可进入子目录。 存档有「文件夹」和「单个文件」两种形态，都支持。 不勾选任何项时保存会回到默认约定（savedata_cn / savedata_jp / savedata / save）。") }}</p>
       <div class="sdp-crumbs">
-        <a @click="go('')">根目录</a>
+        <a @click="go('')">{{ t("根目录") }}</a>
         <template v-for="(c, i) in crumbs" :key="i">
           <span class="sdp-sep">/</span>
           <a @click="go(crumbs.slice(0, i + 1).join('/'))">{{ c }}</a>
@@ -126,12 +124,12 @@ function fmtSize(n) {
           :checked="selected.includes(path)"
           @change="toggle(path)"
         />
-        <span>选中的当前目录：<code>{{ path }}</code></span>
+        <span>{{ t("选中的当前目录：") }}<code>{{ path }}</code></span>
       </label>
       <div class="sdp-list">
-        <div v-if="loading" class="muted-sm">加载中…</div>
+        <div v-if="loading" class="muted-sm">{{ t("加载中…") }}</div>
         <div v-else-if="error" class="muted-sm" style="color:var(--warn)">{{ error }}</div>
-        <div v-else-if="!entries.length" class="muted-sm">这个目录下没有内容</div>
+        <div v-else-if="!entries.length" class="muted-sm">{{ t("这个目录下没有内容") }}</div>
         <template v-else>
           <div v-for="e in entries" :key="e.name" class="sdp-row">
             <!-- 目录与文件都可选：存档有「文件夹」和「单个文件」两种形态 -->
@@ -140,7 +138,7 @@ function fmtSize(n) {
               :checked="selected.includes(childPath(e.name))"
               @change="toggle(childPath(e.name))"
             />
-            <span v-if="e.dir" class="sdp-enter" title="进入该目录" @click="go(childPath(e.name))">▸</span>
+            <span v-if="e.dir" class="sdp-enter" :title="t('进入该目录')" @click="go(childPath(e.name))">▸</span>
             <span v-else class="sdp-enter-placeholder" />
             <span class="sdp-name">{{ e.name }}</span>
             <span v-if="!e.dir" class="muted-sm sdp-size">{{ fmtSize(e.size) }}</span>
@@ -148,9 +146,9 @@ function fmtSize(n) {
         </template>
       </div>
       <div class="sdp-actions">
-        <button class="btn" @click="close">取消</button>
+        <button class="btn" @click="close">{{ t("取消") }}</button>
         <button class="btn primary sm" :disabled="saving || !selected.length" @click="save">
-          {{ saving ? '保存中…' : `保存（${selected.length}）` }}
+          {{ saving ? t('保存中…') : t("保存（{0}）", selected.length) }}
         </button>
       </div>
     </div>

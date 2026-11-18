@@ -6,6 +6,7 @@
 package io.github.sander_i.platform;
 
 import io.github.sander_i.domain.Game;
+import io.github.sander_i.i18n.I18n;
 import io.github.sander_i.repo.GameRepository;
 import org.springframework.stereotype.Component;
 
@@ -79,18 +80,18 @@ public class LinuxEnvProbe implements EnvProbe {
         boolean libvirt = groups.contains("libvirt");
 
         List<EnvPermission> checks = List.of(
-                new EnvPermission("账号组", !groups.isEmpty(),
-                        groups.isEmpty() ? "读取失败" : String.join(" / ", groups)),
+                new EnvPermission(I18n.t("账号组"), !groups.isEmpty(),
+                        groups.isEmpty() ? I18n.t("读取失败") : String.join(" / ", groups)),
                 new EnvPermission("sudo", sudo,
-                        root ? "root 账号" : sudo ? (sudoNoPassword ? "免密" : "需密码") : "无 sudo"),
-                new EnvPermission("docker 组", dockerGroup,
-                        dockerGroup ? "已加入" : "不在 docker 组"),
+                        root ? I18n.t("root 账号") : sudo ? (sudoNoPassword ? I18n.t("免密") : I18n.t("需密码")) : I18n.t("无 sudo")),
+                new EnvPermission(I18n.t("docker 组"), dockerGroup,
+                        dockerGroup ? I18n.t("已加入") : I18n.t("不在 docker 组")),
                 new EnvPermission("Docker daemon", dockerDaemon,
-                        dockerDaemon ? "可访问" : "不可访问或无 docker"),
+                        dockerDaemon ? I18n.t("可访问") : I18n.t("不可访问或无 docker")),
                 new EnvPermission("Python venv", pythonVenv,
-                        pythonVenv ? "python3 可用" : "python3 缺失"),
-                new EnvPermission("/dev/kvm", kvm, kvm ? "可读" : "不存在或不可读"),
-                new EnvPermission("libvirt 组", libvirt, libvirt ? "已加入" : "不在 libvirt 组"));
+                        pythonVenv ? I18n.t("python3 可用") : I18n.t("python3 缺失")),
+                new EnvPermission("/dev/kvm", kvm, kvm ? I18n.t("可读") : I18n.t("不存在或不可读")),
+                new EnvPermission(I18n.t("libvirt 组"), libvirt, libvirt ? I18n.t("已加入") : I18n.t("不在 libvirt 组")));
 
         return new AccountInfo(user, sudo, groups, checks);
     }
@@ -140,22 +141,22 @@ public class LinuxEnvProbe implements EnvProbe {
         String audioHealth = !loopback ? "error" : (pulseModules > 0 || pulseSinks > 0) ? "ok" : "warn";
 
         List<String> selkiesDetails = new ArrayList<>();
-        selkiesDetails.add("可执行文件: " + selkiesPath + (selkies ? " · 存在" : " · 不存在"));
-        selkiesDetails.add("配置端口: " + ports);
+        selkiesDetails.add(I18n.t("可执行文件: {0}{1}", selkiesPath, (selkies ? I18n.t(" · 存在") : I18n.t(" · 不存在"))));
+        selkiesDetails.add(I18n.t("配置端口: {0}", ports));
         for (int p : portList) {
-            selkiesDetails.add("端口 " + p + ": " + (runner.portOpen(p) ? "监听中" : "未监听"));
+            selkiesDetails.add(I18n.t("端口 {0}: {1}", p, (runner.portOpen(p) ? I18n.t("监听中") : I18n.t("未监听"))));
         }
-        selkiesDetails.add("传输: WebRTC / WebSocket");
+        selkiesDetails.add(I18n.t("传输: WebRTC / WebSocket"));
 
         List<String> displayDetails = new ArrayList<>();
-        displayDetails.add("Xvfb: " + (xvfb ? "已安装" : "未找到"));
-        displayDetails.add("配置显示: " + displays);
+        displayDetails.add("Xvfb: " + (xvfb ? I18n.t("已安装") : I18n.t("未找到")));
+        displayDetails.add(I18n.t("配置显示: {0}", displays));
         for (int d : displayList) {
-            displayDetails.add(":" + d + " socket: "
-                    + (Files.exists(Path.of("/tmp/.X11-unix/X" + d)) ? "存在" : "不存在")
-                    + " (/tmp/.X11-unix/X" + d + ")");
+            displayDetails.add(I18n.t(":{0} socket: {1} (/tmp/.X11-unix/X{2})", d,
+                    (Files.exists(Path.of("/tmp/.X11-unix/X" + d))
+                            ? I18n.t("存在") : I18n.t("不存在")), d));
         }
-        displayDetails.add("渲染: Mesa llvmpipe 软件渲染");
+        displayDetails.add(I18n.t("渲染: Mesa llvmpipe 软件渲染"));
 
         // wow64 wine：32 位 PE 跑进 64 位进程，绕开旧式 WoW64 的 4 GiB 地址空间上限。
         // 大型 32 位 galgame 需要它，game.env 里用 WINE_HOME 指过来。
@@ -164,97 +165,95 @@ public class LinuxEnvProbe implements EnvProbe {
         String wow64Version = wow64 ? runner.output(wow64Wine.toString(), "--version") : "";
 
         List<String> wineDetails = List.of(
-                "wine --version: " + (wineVersion.isEmpty() ? "不可用" : wineVersion),
-                "WINEPREFIX 数量: " + prefixes,
-                "隔离方式: 每游戏独立前缀",
-                "wow64 构建: " + (wow64
+                "wine --version: " + (wineVersion.isEmpty() ? I18n.t("不可用") : wineVersion),
+                I18n.t("WINEPREFIX 数量: {0}", prefixes),
+                I18n.t("隔离方式: 每游戏独立前缀"),
+                I18n.t("wow64 构建: {0}", (wow64
                         ? (wow64Version.isEmpty() ? ".local/wine11" : wow64Version + " · .local/wine11")
-                        : "未安装（32 位大型作品需要）"));
+                        : I18n.t("未安装（32 位大型作品需要）"))));
         List<String> alsaDetails = List.of(
-                "设备: hw:0,0,<slot>",
-                "snd-aloop: " + (loopback ? "已加载" : "未加载"),
-                "链路: hw:0,0,<slot> → hw:0,1,<slot>");
+                I18n.t("设备: hw:0,0,<slot>"),
+                "snd-aloop: " + (loopback ? I18n.t("已加载") : I18n.t("未加载")),
+                I18n.t("链路: hw:0,0,<slot> → hw:0,1,<slot>"));
         List<String> captureDetails = List.of(
-                "PulseAudio gal_ 模块: " + (pulseModules < 0 ? "pactl 不可用" : pulseModules),
-                "命名: gal_<id>_in");
+                I18n.t("PulseAudio gal_ 模块: {0}", (pulseModules < 0 ? I18n.t("pactl 不可用") : pulseModules)),
+                I18n.t("命名: gal_<id>_in"));
         List<String> loopbackDetails = List.of(
-                "PulseAudio gal_ sink: " + (pulseSinks < 0 ? "pactl 不可用" : pulseSinks),
-                "监听: gal_<id> monitor",
-                "编码: pcmflux → Opus");
+                "PulseAudio gal_ sink: " + (pulseSinks < 0 ? I18n.t("pactl 不可用") : pulseSinks),
+                I18n.t("监听: gal_<id> monitor"),
+                I18n.t("编码: pcmflux → Opus"));
 
         List<EnvGroup> groups = new ArrayList<>();
-        groups.add(new EnvGroup("串流", streamHealth,
-                !selkies ? "Selkies 未安装"
-                        : anyPort ? "运行中 · 端口 " + ports : "已安装 · 无运行中端口",
+        groups.add(new EnvGroup(I18n.t("串流"), streamHealth,
+                !selkies ? I18n.t("Selkies 未安装")
+                        : anyPort ? I18n.t("运行中 · 端口 ") + ports : I18n.t("已安装 · 无运行中端口"),
                 List.of(new EnvItem("Selkies", selkies
-                        ? "已安装（venv） · 端口 " + ports
-                        : "未检测到 venv/bin/selkies",
+                        ? I18n.t("已安装（venv） · 端口 ") + ports
+                        : I18n.t("未检测到 venv/bin/selkies"),
                         selkies ? "active" : "planned", streamHealth, selkiesDetails))));
-        groups.add(new EnvGroup("显示", displayHealth,
-                !xvfb ? "Xvfb 未安装"
-                        : anyDisplay ? "运行中 · Xvfb " + displays : "已安装 · 无运行中显示",
-                List.of(new EnvItem("X11 采集", "Xvfb " + displays + " · Mesa llvmpipe 软渲染",
+        groups.add(new EnvGroup(I18n.t("显示"), displayHealth,
+                !xvfb ? I18n.t("Xvfb 未安装")
+                        : anyDisplay ? I18n.t("运行中 · Xvfb ") + displays : I18n.t("已安装 · 无运行中显示"),
+                List.of(new EnvItem(I18n.t("X11 采集"), I18n.t("Xvfb {0} · Mesa llvmpipe 软渲染", displays),
                         "active", displayHealth, displayDetails))));
-        groups.add(new EnvGroup("兼容层", wineHealth,
-                !wine ? "未找到 wine"
-                        : prefixes > 0 ? "正常 · " + prefixes + " 个独立前缀" : "正常 · 无 WINEPREFIX",
+        groups.add(new EnvGroup(I18n.t("兼容层"), wineHealth,
+                !wine ? I18n.t("未找到 wine")
+                        : prefixes > 0 ? I18n.t("正常 · ") + prefixes + I18n.t(" 个独立前缀") : I18n.t("正常 · 无 WINEPREFIX"),
                 List.of(new EnvItem("Wine", prefixes > 0
-                        ? "独立 WINEPREFIX × " + prefixes : "独立 WINEPREFIX",
+                        ? I18n.t("独立 WINEPREFIX × ") + prefixes : I18n.t("独立 WINEPREFIX"),
                         "active", wineHealth, wineDetails),
                         new EnvItem("wow64 Wine", wow64
-                        ? (wow64Version.isEmpty() ? "已安装 · .local/wine11"
+                        ? (wow64Version.isEmpty() ? I18n.t("已安装 · .local/wine11")
                         : wow64Version + " · .local/wine11")
-                        : "未安装（一键部署可构建）",
+                        : I18n.t("未安装（一键部署可构建）"),
                         wow64 ? "active" : "planned", wow64 ? "ok" : "warn",
-                        List.of("用途: 32 位 PE 跑进 64 位进程，避开旧式 WoW64 的 4 GiB 地址空间上限",
-                                "路径: " + wow64Wine,
-                                "指定方式: 该游戏 game.env 里写 WINE_HOME")))));
-        groups.add(new EnvGroup("音频", audioHealth,
-                !loopback ? "snd-aloop 未加载"
+                        List.of(I18n.t("用途: 32 位 PE 跑进 64 位进程，避开旧式 WoW64 的 4 GiB 地址空间上限"),
+                                I18n.t("路径: {0}", wow64Wine),
+                                I18n.t("指定方式: 该游戏 game.env 里写 WINE_HOME"))))));
+        groups.add(new EnvGroup(I18n.t("音频"), audioHealth,
+                !loopback ? I18n.t("snd-aloop 未加载")
                         : (pulseModules > 0 || pulseSinks > 0)
-                        ? "正常 · " + pulseModules + " 个采集源 / " + pulseSinks + " 个回环"
-                        : "已加载 · 无活动音频链路",
+                        ? I18n.t("正常 · ") + pulseModules + I18n.t(" 个采集源 / ") + pulseSinks + I18n.t(" 个回环")
+                        : I18n.t("已加载 · 无活动音频链路"),
                 List.of(
-                        new EnvItem("ALSA 虚拟声卡", loopback
-                                ? "hw:0,0,<slot> · snd-aloop 已加载"
-                                : "hw:0,0,<slot> · 未检测到 snd-aloop",
+                        new EnvItem(I18n.t("ALSA 虚拟声卡"), loopback
+                                ? I18n.t("hw:0,0,<slot> · snd-aloop 已加载")
+                                : I18n.t("hw:0,0,<slot> · 未检测到 snd-aloop"),
                                 loopback ? "active" : "planned", audioHealth, alsaDetails),
-                        new EnvItem("音频采集", pulseModules >= 0
+                        new EnvItem(I18n.t("音频采集"), pulseModules >= 0
                                 ? "hw:0,1,<slot> · gal_<id>_in × " + pulseModules
                                 : "hw:0,1,<slot> · PulseAudio gal_<id>_in",
                                 "active", audioHealth, captureDetails),
-                        new EnvItem("回环编码", pulseSinks >= 0
+                        new EnvItem(I18n.t("回环编码"), pulseSinks >= 0
                                 ? "gal_<id> sink × " + pulseSinks + " · monitor pcmflux → Opus"
                                 : "PulseAudio sink gal_<id> · monitor pcmflux → Opus",
                                 "active", audioHealth, loopbackDetails))));
-        groups.add(new EnvGroup("外围", nginx ? "warn" : "unknown",
-                nginx ? "已安装 · 未接入门户" : "未安装",
-                List.of(new EnvItem("Nginx", nginx ? "已安装，未接入门户（预留）" : "未接入（预留）",
+        groups.add(new EnvGroup(I18n.t("外围"), nginx ? "warn" : "unknown",
+                nginx ? I18n.t("已安装 · 未接入门户") : I18n.t("未安装"),
+                List.of(new EnvItem("Nginx", nginx ? I18n.t("已安装，未接入门户（预留）") : I18n.t("未接入（预留）"),
                         nginx ? "installed" : "planned", nginx ? "warn" : "unknown",
-                        List.of("配置: " + (nginx ? "/etc/nginx/nginx.conf 存在" : "未找到"),
-                                "门户接入: 否",
-                                "HTTPS: Spring Boot 内嵌提供")))));
+                        List.of(I18n.t("配置: {0}", (nginx ? I18n.t("/etc/nginx/nginx.conf 存在") : I18n.t("未找到"))),
+                                I18n.t("门户接入: 否"),
+                                I18n.t("HTTPS: Spring Boot 内嵌提供"))))));
 
         boolean pathOk = Files.isReadable(paths.root()) && Files.isWritable(paths.root());
-        List<EnvPermission> perms = List.of(new EnvPermission("部署目录",
-                pathOk, paths.root() + (pathOk ? " · 可读写" : " · 不可读写")));
+        List<EnvPermission> perms = List.of(new EnvPermission(I18n.t("部署目录"),
+                pathOk, paths.root() + (pathOk ? I18n.t(" · 可读写") : I18n.t(" · 不可读写"))));
 
         return new EnvScheme("selkies", "Selkies + Wine", "active",
-                "当前线上方案：WebRTC 低延迟，有音频；pip 安装，无需 Docker",
-                "Xvfb 提供虚拟 X11 显示，Wine 运行 Windows 游戏，"
-                        + "PulseAudio/snd-aloop 采集声音，Selkies 通过 WebRTC 推流到浏览器。"
-                        + "每个游戏一个 systemd user 单元，Portal 只通过状态与文件系统管理会话。",
-                List.of("WebRTC 延迟最低，音频链路完整",
-                        "pip 安装，不依赖 Docker 与镜像仓库",
-                        "Portal 与会话解耦，替换播放器不影响业务"),
-                List.of("无 GPU 时依赖 llvmpipe + x264 软编码，CPU 占用高",
-                        "Xvfb/Wine/ALSA/Pulse 组合配置复杂，排障成本高",
-                        "每游戏独立 WINEPREFIX 与声卡 slot，磁盘与配置量随游戏增长"),
+                I18n.t("当前线上方案：WebRTC 低延迟，有音频；pip 安装，无需 Docker"),
+                I18n.t("Xvfb 提供虚拟 X11 显示，Wine 运行 Windows 游戏，PulseAudio/snd-aloop 采集声音，Selkies 通过 WebRTC 推流到浏览器。每个游戏一个 systemd user 单元，Portal 只通过状态与文件系统管理会话。"),
+                List.of(I18n.t("WebRTC 延迟最低，音频链路完整"),
+                        I18n.t("pip 安装，不依赖 Docker 与镜像仓库"),
+                        I18n.t("Portal 与会话解耦，替换播放器不影响业务")),
+                List.of(I18n.t("无 GPU 时依赖 llvmpipe + x264 软编码，CPU 占用高"),
+                        I18n.t("Xvfb/Wine/ALSA/Pulse 组合配置复杂，排障成本高"),
+                        I18n.t("每游戏独立 WINEPREFIX 与声卡 slot，磁盘与配置量随游戏增长")),
                 List.of("Ubuntu 22.04+ / Debian 12+",
-                        "Python 3.10+ 与 venv",
-                        "Wine 9.0+（32 位前缀）",
-                        "snd-aloop 内核模块",
-                        "每个游戏一个空闲 TCP 端口（默认 9002 起）",
+                        I18n.t("Python 3.10+ 与 venv"),
+                        I18n.t("Wine 9.0+（32 位前缀）"),
+                        I18n.t("snd-aloop 内核模块"),
+                        I18n.t("每个游戏一个空闲 TCP 端口（默认 9002 起）"),
                         "systemd --user + loginctl enable-linger"),
                 groups,
                 List.of(), perms, List.of(), List.of());
@@ -267,127 +266,124 @@ public class LinuxEnvProbe implements EnvProbe {
         boolean daemon = Files.isReadable(Path.of("/var/run/docker.sock"))
                 || Files.isReadable(Path.of("/run/docker.sock"));
         List<EnvPermission> perms = List.of(
-                new EnvPermission("docker 组", docker,
-                        docker ? "当前账号已在 docker 组" : "不在 docker 组，需要提权后重新登录"),
+                new EnvPermission(I18n.t("docker 组"), docker,
+                        docker ? I18n.t("当前账号已在 docker 组") : I18n.t("不在 docker 组，需要提权后重新登录")),
                 new EnvPermission("Docker daemon", daemon,
-                        daemon ? "可访问" : "不可访问或无 docker"),
-                new EnvPermission("APT 提权", account.elevated(),
-                        account.elevated() ? "sudo 可用" : "无 sudo"));
+                        daemon ? I18n.t("可访问") : I18n.t("不可访问或无 docker")),
+                new EnvPermission(I18n.t("APT 提权"), account.elevated(),
+                        account.elevated() ? I18n.t("sudo 可用") : I18n.t("无 sudo")));
 
         return new EnvScheme("docker-selkies", "Docker Selkies", "rejected",
-                "未采用：账号无 docker 组，GHCR 拉取慢；与当前 Selkies 功能相同",
-                "把 Selkies 与依赖打进容器，宿主机只保留 X11/Wine/音频挂载。"
-                        + "隔离性与可复现性好，但国内拉取 GHCR 慢，且需要 docker 组权限。",
-                List.of("环境隔离，依赖不污染宿主机",
-                        "镜像版本固定，换机复现简单",
-                        "可同时运行多套串流实例"),
-                List.of("当前账号不在 docker 组，需要提权并重新登录",
-                        "国内拉取 GHCR 镜像慢，首次部署耗时长",
-                        "需要处理 X11 socket、声卡设备与 Pulse socket 的挂载"),
+                I18n.t("未采用：账号无 docker 组，GHCR 拉取慢；与当前 Selkies 功能相同"),
+                I18n.t("把 Selkies 与依赖打进容器，宿主机只保留 X11/Wine/音频挂载。隔离性与可复现性好，但国内拉取 GHCR 慢，且需要 docker 组权限。"),
+                List.of(I18n.t("环境隔离，依赖不污染宿主机"),
+                        I18n.t("镜像版本固定，换机复现简单"),
+                        I18n.t("可同时运行多套串流实例")),
+                List.of(I18n.t("当前账号不在 docker 组，需要提权并重新登录"),
+                        I18n.t("国内拉取 GHCR 镜像慢，首次部署耗时长"),
+                        I18n.t("需要处理 X11 socket、声卡设备与 Pulse socket 的挂载")),
                 List.of("Docker Engine 24+",
-                        "账号在 docker 组",
-                        "可访问 GHCR 或国内镜像"),
-                List.of(new EnvGroup("部署方式", List.of(
-                        new EnvItem("镜像", "Selkies 官方 Docker 镜像（GHCR）", "rejected"),
-                        new EnvItem("网络", "国内拉取 GHCR 缓慢，首次部署耗时长", "rejected"),
-                        new EnvItem("权限", "账号不在 docker 组，需额外授权", "rejected"))),
-                        new EnvGroup("对比", List.of(
-                                new EnvItem("功能", "与当前 pip 版 Selkies 一致", "planned"),
-                                new EnvItem("结论", "保留为可选方案，当前不部署", "planned")))),
+                        I18n.t("账号在 docker 组"),
+                        I18n.t("可访问 GHCR 或国内镜像")),
+                List.of(new EnvGroup(I18n.t("部署方式"), List.of(
+                        new EnvItem(I18n.t("镜像"), I18n.t("Selkies 官方 Docker 镜像（GHCR）"), "rejected"),
+                        new EnvItem(I18n.t("网络"), I18n.t("国内拉取 GHCR 缓慢，首次部署耗时长"), "rejected"),
+                        new EnvItem(I18n.t("权限"), I18n.t("账号不在 docker 组，需额外授权"), "rejected"))),
+                        new EnvGroup(I18n.t("对比"), List.of(
+                                new EnvItem(I18n.t("功能"), I18n.t("与当前 pip 版 Selkies 一致"), "planned"),
+                                new EnvItem(I18n.t("结论"), I18n.t("保留为可选方案，当前不部署"), "planned")))),
                 List.of(
-                        new EnvCommand("拉取镜像",
+                        new EnvCommand(I18n.t("拉取镜像"),
                                 "docker pull ghcr.io/selkies-project/selkies:latest",
-                                "国内网络可能很慢"),
-                        new EnvCommand("运行示例",
+                                I18n.t("国内网络可能很慢")),
+                        new EnvCommand(I18n.t("运行示例"),
                                 "docker run --rm --network host -e DISPLAY=:2 "
                                         + "-v /tmp/.X11-unix:/tmp/.X11-unix "
                                         + "ghcr.io/selkies-project/selkies:latest",
-                                "参考命令；音频与 Pulse socket 还需额外挂载")),
+                                I18n.t("参考命令；音频与 Pulse socket 还需额外挂载"))),
                 perms,
                 List.of(
-                        new EnvCommand("加入 docker 组",
+                        new EnvCommand(I18n.t("加入 docker 组"),
                                 "sudo usermod -aG docker $USER",
-                                "需要 sudo；执行后重新登录或 newgrp"),
-                        new EnvCommand("当前 shell 生效", "newgrp docker", "只影响当前终端")),
-                List.of(new EnvCommand("恢复权限",
-                        "sudo gpasswd -d $USER docker", "部署完成后移除 docker 组权限")));
+                                I18n.t("需要 sudo；执行后重新登录或 newgrp")),
+                        new EnvCommand(I18n.t("当前 shell 生效"), "newgrp docker", I18n.t("只影响当前终端"))),
+                List.of(new EnvCommand(I18n.t("恢复权限"),
+                        "sudo gpasswd -d $USER docker", I18n.t("部署完成后移除 docker 组权限"))));
     }
 
     private EnvScheme xpraScheme(AccountInfo account) {
         return new EnvScheme("xpra", "xpra + Wine", "planned",
-                "备选：Portal 只依赖会话状态，播放器可替换，业务代码无需改动",
-                "用 xpra 的 HTML5 客户端替代 Selkies。Portal 侧只改 /play/:id 的 iframe 地址，"
-                        + "会话仍然由 systemd 管理。适合弱网与断线重连场景。",
-                List.of("HTML5/WebSocket，无需 WebCodecs",
-                        "断线重连和带宽自适应更成熟",
-                        "Portal 业务代码几乎不改"),
-                List.of("延迟与音频链路弱于 WebRTC，未在本机实测",
-                        "xpra 与 Wine 的剪贴板、输入法兼容性需重新验证",
-                        "需要额外维护 xpra 服务与端口"),
-                List.of("Ubuntu 22.04+", "apt 可安装 xpra-html5", "空闲 TCP 端口"),
-                List.of(new EnvGroup("状态", List.of(
-                        new EnvItem("部署", "未部署", "planned"),
-                        new EnvItem("接入点", "/play/:id 的 iframe 播放器", "planned"))),
-                        new EnvGroup("取舍", List.of(
-                                new EnvItem("优势", "HTML5/WebSocket，断线重连与带宽占用更友好", "planned"),
-                                new EnvItem("代价", "延迟与音频链路弱于 WebRTC，未做实测", "planned")))),
+                I18n.t("备选：Portal 只依赖会话状态，播放器可替换，业务代码无需改动"),
+                I18n.t("用 xpra 的 HTML5 客户端替代 Selkies。Portal 侧只改 /play/:id 的 iframe 地址，会话仍然由 systemd 管理。适合弱网与断线重连场景。"),
+                List.of(I18n.t("HTML5/WebSocket，无需 WebCodecs"),
+                        I18n.t("断线重连和带宽自适应更成熟"),
+                        I18n.t("Portal 业务代码几乎不改")),
+                List.of(I18n.t("延迟与音频链路弱于 WebRTC，未在本机实测"),
+                        I18n.t("xpra 与 Wine 的剪贴板、输入法兼容性需重新验证"),
+                        I18n.t("需要额外维护 xpra 服务与端口")),
+                List.of("Ubuntu 22.04+", I18n.t("apt 可安装 xpra-html5"), I18n.t("空闲 TCP 端口")),
+                List.of(new EnvGroup(I18n.t("状态"), List.of(
+                        new EnvItem(I18n.t("部署"), I18n.t("未部署"), "planned"),
+                        new EnvItem(I18n.t("接入点"), I18n.t("/play/:id 的 iframe 播放器"), "planned"))),
+                        new EnvGroup(I18n.t("取舍"), List.of(
+                                new EnvItem(I18n.t("优势"), I18n.t("HTML5/WebSocket，断线重连与带宽占用更友好"), "planned"),
+                                new EnvItem(I18n.t("代价"), I18n.t("延迟与音频链路弱于 WebRTC，未做实测"), "planned")))),
                 List.of(
-                        new EnvCommand("安装 xpra",
-                                "sudo apt install -y xpra xpra-html5", "参考命令；未在本机执行"),
-                        new EnvCommand("启动示例",
+                        new EnvCommand(I18n.t("安装 xpra"),
+                                "sudo apt install -y xpra xpra-html5", I18n.t("参考命令；未在本机执行")),
+                        new EnvCommand(I18n.t("启动示例"),
                                 "xpra start :2 --bind-tcp=0.0.0.0:9002 --html=on "
                                         + "--start-child=\"wine game.exe\"",
-                                "端口与 Wine 命令需按游戏调整")),
-                List.of(new EnvPermission("APT 提权", account.elevated(),
-                        account.elevated() ? "sudo 可用" : "当前账号无 sudo")),
-                List.of(new EnvCommand("临时提权", "sudo -v", "用于 apt 安装")),
-                List.of(new EnvCommand("回收提权", "sudo -k", "部署完成后清掉凭据")));
+                                I18n.t("端口与 Wine 命令需按游戏调整"))),
+                List.of(new EnvPermission(I18n.t("APT 提权"), account.elevated(),
+                        account.elevated() ? I18n.t("sudo 可用") : I18n.t("当前账号无 sudo"))),
+                List.of(new EnvCommand(I18n.t("临时提权"), "sudo -v", I18n.t("用于 apt 安装"))),
+                List.of(new EnvCommand(I18n.t("回收提权"), "sudo -k", I18n.t("部署完成后清掉凭据"))));
     }
 
     private EnvScheme windowsVmScheme(AccountInfo account) {
         boolean kvm = Files.isReadable(Path.of("/dev/kvm"));
         boolean libvirt = account.groups().contains("libvirt");
         List<EnvPermission> perms = List.of(
-                new EnvPermission("/dev/kvm", kvm, kvm ? "当前账号可读" : "不存在或不可读"),
-                new EnvPermission("libvirt 组", libvirt, libvirt ? "已在 libvirt 组" : "不在 libvirt 组"),
-                new EnvPermission("APT 提权", account.elevated(),
-                        account.elevated() ? "sudo 可用" : "无 sudo"));
+                new EnvPermission("/dev/kvm", kvm, kvm ? I18n.t("当前账号可读") : I18n.t("不存在或不可读")),
+                new EnvPermission(I18n.t("libvirt 组"), libvirt, libvirt ? I18n.t("已在 libvirt 组") : I18n.t("不在 libvirt 组")),
+                new EnvPermission(I18n.t("APT 提权"), account.elevated(),
+                        account.elevated() ? I18n.t("sudo 可用") : I18n.t("无 sudo")));
 
         return new EnvScheme("windows-vm", "Windows VM", "planned",
-                "退路：Wine 兼容失败时改用 KVM 装 Windows；服务器无 GPU，性能更差",
-                "用 KVM 运行完整 Windows，再在虚拟机内跑游戏与串流端。"
-                        + "兼容性最好，但服务器无 GPU，软渲染性能明显下降。",
-                List.of("兼容性最好，不依赖 Wine",
-                        "可直接使用 Windows 原生驱动与工具链",
-                        "与现有 Portal 解耦，虚拟机内自成体系"),
-                List.of("无 GPU，QEMU 软渲染性能差",
-                        "每台虚拟机独立占用内存与 CPU，并发能力低",
-                        "需要额外的 Windows 授权与虚拟机镜像维护"),
-                List.of("CPU 支持 VT-x / AMD-V", "/dev/kvm 可读", "libvirt + QEMU",
-                        "Windows 安装镜像与授权", "≥ 8 GB 空闲内存"),
-                List.of(new EnvGroup("状态", List.of(
-                        new EnvItem("部署", "未部署", "planned"),
-                        new EnvItem("触发条件", "Wine 无法运行目标游戏时启用", "planned"))),
-                        new EnvGroup("限制", List.of(
-                                new EnvItem("图形", "无 GPU，只能软件渲染", "planned"),
-                                new EnvItem("资源", "每台虚拟机独立占用内存与 CPU", "planned")))),
+                I18n.t("退路：Wine 兼容失败时改用 KVM 装 Windows；服务器无 GPU，性能更差"),
+                I18n.t("用 KVM 运行完整 Windows，再在虚拟机内跑游戏与串流端。兼容性最好，但服务器无 GPU，软渲染性能明显下降。"),
+                List.of(I18n.t("兼容性最好，不依赖 Wine"),
+                        I18n.t("可直接使用 Windows 原生驱动与工具链"),
+                        I18n.t("与现有 Portal 解耦，虚拟机内自成体系")),
+                List.of(I18n.t("无 GPU，QEMU 软渲染性能差"),
+                        I18n.t("每台虚拟机独立占用内存与 CPU，并发能力低"),
+                        I18n.t("需要额外的 Windows 授权与虚拟机镜像维护")),
+                List.of(I18n.t("CPU 支持 VT-x / AMD-V"), I18n.t("/dev/kvm 可读"), "libvirt + QEMU",
+                        I18n.t("Windows 安装镜像与授权"), I18n.t("≥ 8 GB 空闲内存")),
+                List.of(new EnvGroup(I18n.t("状态"), List.of(
+                        new EnvItem(I18n.t("部署"), I18n.t("未部署"), "planned"),
+                        new EnvItem(I18n.t("触发条件"), I18n.t("Wine 无法运行目标游戏时启用"), "planned"))),
+                        new EnvGroup(I18n.t("限制"), List.of(
+                                new EnvItem(I18n.t("图形"), I18n.t("无 GPU，只能软件渲染"), "planned"),
+                                new EnvItem(I18n.t("资源"), I18n.t("每台虚拟机独立占用内存与 CPU"), "planned")))),
                 List.of(
-                        new EnvCommand("安装虚拟化组件",
+                        new EnvCommand(I18n.t("安装虚拟化组件"),
                                 "sudo apt install -y qemu-kvm libvirt-daemon-system virtinst",
-                                "参考命令；未在本机执行"),
-                        new EnvCommand("创建虚拟机示例",
+                                I18n.t("参考命令；未在本机执行")),
+                        new EnvCommand(I18n.t("创建虚拟机示例"),
                                 "virt-install --name gal-win --memory 8192 --vcpus 4 "
                                         + "--disk size=60 --cdrom win.iso --os-variant win10",
-                                "镜像、内存与磁盘按实际情况调整")),
+                                I18n.t("镜像、内存与磁盘按实际情况调整"))),
                 perms,
                 List.of(
-                        new EnvCommand("加入虚拟化组",
+                        new EnvCommand(I18n.t("加入虚拟化组"),
                                 "sudo usermod -aG libvirt,kvm $USER",
-                                "需要 sudo；执行后重新登录或 newgrp"),
-                        new EnvCommand("当前 shell 生效", "newgrp libvirt", "只影响当前终端")),
-                List.of(new EnvCommand("恢复权限",
+                                I18n.t("需要 sudo；执行后重新登录或 newgrp")),
+                        new EnvCommand(I18n.t("当前 shell 生效"), "newgrp libvirt", I18n.t("只影响当前终端"))),
+                List.of(new EnvCommand(I18n.t("恢复权限"),
                         "sudo gpasswd -d $USER libvirt && sudo gpasswd -d $USER kvm",
-                        "部署完成后移除虚拟化组权限")));
+                        I18n.t("部署完成后移除虚拟化组权限"))));
     }
 
     // ---- 探测辅助 ----

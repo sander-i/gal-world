@@ -78,7 +78,10 @@ class GameImportControllerTest {
     @Test
     void unknownRunIdMapsTo404() {
         GameImportController c = new GameImportController(service(), security(), OsKind.LINUX);
-        ResponseEntity<?> res = c.badRequest(new IllegalArgumentException("没有这个 run: gi-9"));
+        // run 不存在用专门的异常类型区分，不再匹配消息文本（消息会随请求语言变化）
+        ResponseEntity<?> res = c.badRequest(
+                new io.github.sander_i.service.GameImportService.RunNotFoundException(
+                        "没有这个 run: gi-9"));
         assertEquals(404, res.getStatusCode().value());
     }
 }

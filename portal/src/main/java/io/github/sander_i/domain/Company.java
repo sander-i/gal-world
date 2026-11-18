@@ -48,6 +48,15 @@ public class Company {
     @Column(name = "sort_order")
     private int sortOrder;
 
+    /**
+     * 多语言覆盖：{"en": {"name": "...", "alias": "...", "description": "..."}}。
+     *
+     * 主列存默认值，这里存按界面语言的覆盖；缺失的语言回退主列。
+     * 用 JSON 列而不是「每语言一列」，加语言时不用改表结构。
+     */
+    @Column(name = "i18n_text", length = 4000)
+    private String i18nText;
+
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
 
@@ -68,4 +77,7 @@ public class Company {
 
     public int getSortOrder() { return sortOrder; }
     public void setSortOrder(int sortOrder) { this.sortOrder = sortOrder; }
+
+    public String getI18nText() { return i18nText; }
+    public void setI18nText(String i18nText) { this.i18nText = i18nText; }
 }

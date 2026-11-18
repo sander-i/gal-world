@@ -34,7 +34,7 @@ class SettingsServiceUpdateSourceTest {
     private static final String WEB = "https://mirror.example";
 
     private SettingsService service(SettingRepository repo) {
-        SettingsService s = new SettingsService(repo, e -> { });
+        SettingsService s = new SettingsService(repo, e -> { }, i18n());
         s.setConfiguredUpdateSource(API, REPO, WEB);
         return s;
     }
@@ -61,7 +61,7 @@ class SettingsServiceUpdateSourceTest {
     @Test
     void 默认值里的斜杠会被归一化() {
         SettingRepository repo = emptyRepo();
-        SettingsService s = new SettingsService(repo, e -> { });
+        SettingsService s = new SettingsService(repo, e -> { }, i18n());
         s.setConfiguredUpdateSource(API + "/", "/" + REPO + "/", WEB + "/");
 
         assertEquals(API, s.updateApiBase());
@@ -108,5 +108,18 @@ class SettingsServiceUpdateSourceTest {
         assertEquals(true, SettingsService.ADMIN_KEYS.contains(SettingsService.KEY_UPDATE_API_BASE));
         assertEquals(true, SettingsService.ADMIN_KEYS.contains(SettingsService.KEY_UPDATE_REPO));
         assertEquals(true, SettingsService.ADMIN_KEYS.contains(SettingsService.KEY_UPDATE_WEB_BASE));
+    }
+
+    /** 语言服务：测试只关心消息模板，translate 原样返回键 */
+    private static io.github.sander_i.i18n.I18nService i18n() {
+        io.github.sander_i.i18n.I18nService s =
+                org.mockito.Mockito.mock(io.github.sander_i.i18n.I18nService.class);
+        org.mockito.Mockito.when(s.exists(org.mockito.ArgumentMatchers.anyString()))
+                .thenReturn(true);
+        org.mockito.Mockito.when(s.translate(
+                        org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyString(),
+                        org.mockito.ArgumentMatchers.any(Object[].class)))
+                .thenAnswer(inv -> inv.getArgument(1));
+        return s;
     }
 }

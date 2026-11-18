@@ -5,6 +5,7 @@
 
 package io.github.sander_i.web;
 
+import io.github.sander_i.i18n.I18n;
 import io.github.sander_i.deploy.DeployRun;
 import io.github.sander_i.deploy.DeploySecurity;
 import io.github.sander_i.deploy.DeployService;
@@ -80,7 +81,10 @@ public class DeployController {
         } catch (IllegalStateException e) {
             wipe(sudoPassword);
             String msg = String.valueOf(e.getMessage());
-            int code = msg.contains("确认令牌") ? 403 : msg.contains("已有部署任务") ? 429 : 409;
+            // 403 只在「确认令牌」相关错误上用；其余业务冲突一律 409。
+            // 这里不能靠 msg 内容判断——消息已按请求语言翻译，中文关键词匹配会失效。
+            int code = e instanceof io.github.sander_i.deploy.DeployService.ConfirmRequiredException
+                    ? 403 : 409;
             return ResponseEntity.status(code).body(Map.of("message", msg));
         }
     }
@@ -97,7 +101,7 @@ public class DeployController {
         security.check(req);
         DeployRun run = deploy.find(runId);
         if (run == null) {
-            throw new IllegalArgumentException("没有这个 run: " + runId);
+            throw new IllegalArgumentException(I18n.t("没有这个 run: {0}", runId));
         }
         // 必须直接返回 SseEmitter（不能包 ResponseEntity，否则 Spring 会当普通 body 处理）
         SseEmitter emitter = new SseEmitter(0L);
