@@ -15,7 +15,7 @@
   <artifactId>gal-world-portal</artifactId>
   <!-- 版本号唯一来源：升级只改这一行。
        application.yml 用 @project.version@ 注入，构建脚本与 README 不再硬编码。 -->
-  <version>0.0.1</version>
+  <version>0.0.2</version>
   <name>gal-world-portal</name>
   <description>Gal World 门户：游戏库、会话管理、元数据</description>
   <url>https://gitee.com/sander-o/gal-world</url>

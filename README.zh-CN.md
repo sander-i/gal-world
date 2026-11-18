@@ -6,7 +6,7 @@
 门户负责游戏库、元数据、会话、媒体、存档与运维；串流由 Selkies（Linux）或 Sunshine + Moonlight
 Web（Windows）承担。
 
-当前版本 `0.0.1`，版本号唯一来源是 `portal/pom.xml`。
+当前版本 `0.0.2`，版本号唯一来源是 `portal/pom.xml`。
 
 项目以 [MIT 许可证](LICENSE) 开源。它是按个人需求长出来的自建方案，不是商业产品；
 欢迎自建部署、提 issue 与 PR，但不承诺开箱即用或向后兼容。

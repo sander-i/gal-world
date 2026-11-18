@@ -6,7 +6,7 @@ A self-hosted cloud gaming platform for Windows visual novels (galgames): deploy
 Windows host and play them in a browser. The portal owns the game library, metadata, sessions, media,
 saves and operations; streaming is handled by Selkies (Linux) or Sunshine + Moonlight Web (Windows).
 
-Latest release: `0.0.1`. Version number lives only in `portal/pom.xml`.
+Latest release: `0.0.2`. Version number lives only in `portal/pom.xml`.
 
 Released under the [MIT License](LICENSE). This is a solution built around personal needs, not a
 commercial product; self-hosting, issues and PRs are welcome, but no out-of-the-box guarantee.

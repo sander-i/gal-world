@@ -6,24 +6,44 @@
 
 ## [Unreleased]
 
+## [0.0.2] - 2026-11-18
+
 ### 新增
 
-- **语言包市场直链安装**：后台「语言包」新增「从地址安装」，填 Crowdin / Weblate 导出链接、
-  GitHub / Gitee raw 或静态文件直链即可，服务器拉取后按扩展名走与上传相同的导入链路。
-  只接受 http / https 公网地址，回环与私网（含 CGNAT、保留段、IPv6 ULA）一律拒绝，
-  重定向自己跟且每跳重新校验，体积上限 2 MB。内网部署用
-  `galworld.i18n.market-allow-hosts` 或 `market-allow-private` 放行
-- **远程更新源可配置**：管理页新增「远程更新源」，可改发布接口根地址、仓库路径与仓库网页根地址
-  （也可用 `GALWORLD_UPDATE_API_BASE` / `GALWORLD_UPDATE_REPO` / `GALWORLD_UPDATE_WEB_BASE`）。
-  接口兼容 GitHub / Gitee 的 Release API，连不上默认站时可指向 Gitee、自建 Gitea / GitLab 或镜像；
-  Portal 把当前地址写进 `update-request.json` 的 `releaseApi`，更新器进程据此走同一来源，
-  不再依赖自身环境变量
-- **存档切换**：详情页「存档管理与切换」可把任意备份切换为当前存档；切换前自动快照当前进度
-  （`pre-restore`），切错可再切回。游戏运行中拒绝切换
-- **备份描述**：备份时可填写标签与描述，列表展示并支持行内编辑（sidecar 元数据，老备份自动兼容）
-- **原始存档留底**：游戏接入完成后自动把自带的存档备份为「原始」类型；重复接入不重复创建
-- **游戏打包下载**：新增两步式下载。先异步打包游戏目录（可轮询进度），完成后再下载 zip；
-  不含门户生成的 `game.env` 与 `wineprefix/`，产物保留 24 小时后自动清理
+- **多语言界面**：内置 English / 简体中文 / 繁體中文 / 日本語；后台支持安装外部语言包，
+  可导入 .po、XLIFF、CSV、properties、Android XML、.arb、.strings 等格式
+- **语言包市场直链安装**：后台「语言包」可从 Crowdin / Weblate 导出链接、GitHub / Gitee raw
+  或静态文件直链安装；只允许公网 HTTP(S)，逐跳校验重定向，文件上限 2 MB
+- **按语言配置元数据**：公司、标签、汉化组可分别设置多语言名称与简介
+- **远程更新源可配置**：管理页可修改 Release API 地址、仓库路径与网页根地址；支持 GitHub、
+  Gitee、自建 Gitea / GitLab 或镜像
+- **存档切换与描述**：可将备份切换为当前存档，切换前自动快照当前进度；备份支持标签和描述
+- **原始存档留底**：接入完成后自动备份游戏自带存档，重复接入不重复创建
+- **游戏打包下载**：异步打包游戏目录并显示进度；不含门户生成的 `game.env` 与 `wineprefix/`，
+  产物保留 24 小时
+- **首页会话批量刷新**：新增 `/api/sessions?ids=`，运行中游戏状态按 1 秒轮询
+
+### 性能优化
+
+- 首页路由懒加载、Element Plus 样式按需引入：入口 JS 491 KB → 161 KB，CSS 434 KB → 110 KB
+- 开启 gzip 与 HTTP/2；设置和语言包支持 ETag 缓存
+- 列表、推荐、Hero 改用批量查询，减少数据库 N+1
+- 游戏扫描跳过未变化的 `game.env` 与媒体目录；列表仅返回封面
+- 全部游戏卡片显示启停进度；跨页面返回首页后状态刷新间隔缩为 1 秒
+
+### 修复
+
+- 修复语言切换后界面文案与提示词不刷新的问题
+- 修复多语言文案变长时标签压字、筛选行错位
+- 修复 SPA 路由缺失导致直接访问与刷新返回 404
+- 修复前端 `t()` 多参数占位符残留
+- 补齐管理页与文件选择器的翻译，并修复部署产物版本选择和页面标题语言
+
+### 实测
+
+本机 Windows + H2 + 40 款构造游戏：`GET /api/games?limit=40` 从 1004 条 SQL 降到 13 条，
+推荐接口从 579 条降到 12 条。生产 Linux 实机验证了批量会话 RUNNING / STOPPED 状态映射。
+完整环境、测量边界与取舍见 `docs/PERF-PLAN.md` §8。
 
 ## [0.0.1] - 2026-11-15
 
@@ -65,5 +85,6 @@
 见 `README.md` 的「已知限制」：Wine 下 4:3 渲染、无 GPU 时软渲染 + 软编码、
 Wine 自绘标题栏、必须走 HTTPS、Windows 冒烟检查覆盖面小于 Linux。
 
-[Unreleased]: https://gitee.com/sander-o/gal-world/compare/v0.0.1...master
+[Unreleased]: https://gitee.com/sander-o/gal-world/compare/v0.0.2...master
+[0.0.2]: https://gitee.com/sander-o/gal-world/releases/tag/v0.0.2
 [0.0.1]: https://gitee.com/sander-o/gal-world/releases/tag/v0.0.1
