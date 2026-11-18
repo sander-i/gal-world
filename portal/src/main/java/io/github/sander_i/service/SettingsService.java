@@ -159,6 +159,17 @@ public class SettingsService {
     private final I18nService i18n;
 
     /**
+     * 设置快照缓存。
+     *
+     * 列表页每个游戏都要读封面/CG 轮换规则，单键查询会放大成每页数百次
+     * `select ... where setting_key=?`。设置是低频写入，5 秒 TTL 足够；
+     * 设置页保存时显式清空，改完立刻读到新值。
+     */
+    private static final long CACHE_TTL_MS = 5_000;
+    private volatile Map<String, String> snapshot;
+    private volatile long snapshotAt;
+
+    /**
      * application.yml / 环境变量里配置的元件仓库地址（GALWORLD_ARTIFACT_NEXUS）。
      *
      * 它是 {@code artifactNexusBase} 的「默认值」，只在设置里没有显式改动时生效。
@@ -277,17 +288,25 @@ public class SettingsService {
 
     @Transactional(readOnly = true)
     public Map<String, String> all() {
+        Map<String, String> cached = snapshot;
+        if (cached != null && System.currentTimeMillis() - snapshotAt < CACHE_TTL_MS) {
+            return cached;
+        }
         Map<String, String> out = new LinkedHashMap<>();
         for (String key : DEFAULTS.keySet()) {
             out.put(key, defaultOf(key));
         }
         repo.findAll().forEach(s -> out.put(s.getKey(), s.getValue()));
-        return out;
+        Map<String, String> frozen = java.util.Collections.unmodifiableMap(out);
+        snapshot = frozen;
+        snapshotAt = System.currentTimeMillis();
+        return frozen;
     }
 
     @Transactional(readOnly = true)
     public String get(String key) {
-        return repo.findById(key).map(Setting::getValue).orElseGet(() -> defaultOf(key));
+        String v = all().get(key);
+        return v != null ? v : defaultOf(key);
     }
 
     @Transactional(readOnly = true)
@@ -342,6 +361,16 @@ public class SettingsService {
 
     public int cgRotationInterval() {
         return intSetting(KEY_CG_ROTATION_INTERVAL, 6, 1, 86400);
+    }
+
+    /** 列表页一次取齐轮换相关的全部设置，避免每个游戏各查 5 次 */
+    public record RotationDefaults(String coverMode, int coverInterval, String cgMode,
+                                   String cgOrder, int cgInterval) {
+    }
+
+    public RotationDefaults rotationDefaults() {
+        return new RotationDefaults(coverRotationMode(), coverRotationInterval(),
+                cgRotationMode(), cgRotationOrder(), cgRotationInterval());
     }
 
     public int coverMaxCount() {
@@ -429,6 +458,8 @@ public class SettingsService {
         if (patch == null || patch.isEmpty()) {
             return all();
         }
+        // 任何一次保存都清快照：写失败回滚时下面还会读到库里的旧值，不会脏缓存
+        snapshot = null;
         for (Map.Entry<String, String> e : patch.entrySet()) {
             String key = e.getKey();
             String value = e.getValue() == null ? "" : e.getValue().trim();

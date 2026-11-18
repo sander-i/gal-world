@@ -7,15 +7,15 @@ package io.github.sander_i.service;
 
 import io.github.sander_i.domain.Game;
 import io.github.sander_i.repo.GameRepository;
-import io.github.sander_i.repo.PlaySessionRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
 import java.util.List;
-import java.util.Optional;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
@@ -34,20 +34,25 @@ class RecommendServiceTest {
         return g;
     }
 
+    private static PlaytimeService.PlaytimeSummary summary(long total, Instant lastPlayed) {
+        return new PlaytimeService.PlaytimeSummary(total, 0, 0, lastPlayed);
+    }
+
+    private void stats(Map<String, PlaytimeService.PlaytimeSummary> byGame) {
+        when(playtime.summaryByGame(anyCollection())).thenReturn(byGame);
+    }
+
     @BeforeEach
     void setUp() {
         games = mock(GameRepository.class);
-        PlaySessionRepository sessions = mock(PlaySessionRepository.class);
         playtime = mock(PlaytimeService.class);
         GameScanService scan = mock(GameScanService.class);
 
         when(games.findAll()).thenReturn(List.of(
                 game("a", "A", 10), game("b", "B", 20), game("c", "C", 30)));
-        when(sessions.findFirstByGameIdAndEndedAtIsNotNullOrderByEndedAtDesc(anyString()))
-                .thenReturn(Optional.empty());
-        when(playtime.summary(anyString()))
-                .thenReturn(new PlaytimeService.PlaytimeSummary(0, 0, 0, null));
-        service = new RecommendService(games, sessions, playtime, scan);
+        stats(Map.of(
+                "a", summary(0, null), "b", summary(0, null), "c", summary(0, null)));
+        service = new RecommendService(games, playtime, scan);
     }
 
     @Test
@@ -71,13 +76,44 @@ class RecommendServiceTest {
 
     @Test
     void mostPlayedRanksFirst() {
-        when(playtime.summary("a"))
-                .thenReturn(new PlaytimeService.PlaytimeSummary(5000, 0, 3, null));
-        when(playtime.summary("b"))
-                .thenReturn(new PlaytimeService.PlaytimeSummary(9000, 0, 4, null));
+        stats(Map.of(
+                "a", summary(5000, null),
+                "b", summary(9000, null),
+                "c", summary(0, null)));
         List<Game> out = service.recommend(10, null);
         assertEquals("b", out.get(0).getId());
         assertEquals("a", out.get(1).getId());
+    }
+
+    @Test
+    void recentlyPlayedRanksAbovePlaytime() {
+        Instant yesterday = Instant.now().minusSeconds(24 * 3600);
+        stats(Map.of(
+                "a", summary(0, yesterday),
+                "b", summary(9999, null),
+                "c", summary(0, null)));
+        List<Game> out = service.recommend(10, null);
+        assertEquals("a", out.get(0).getId());
+        assertEquals("b", out.get(1).getId());
+    }
+
+    @Test
+    void oldSessionDoesNotCountAsRecentlyPlayed() {
+        Instant longAgo = Instant.now().minusSeconds(30L * 24 * 3600);
+        stats(Map.of(
+                "a", summary(10, longAgo),
+                "b", summary(5000, null),
+                "c", summary(0, null)));
+        List<Game> out = service.recommend(10, null);
+        assertEquals("b", out.get(0).getId(), "超出 7 天窗口的游玩不参与最近游玩排序");
+    }
+
+    /** 排序在内存里做：一次批量统计，绝不能再回到「每次比较查一次库」 */
+    @Test
+    void sortsWithSingleBatchQuery() {
+        service.recommend(10, null);
+        verify(playtime, times(1)).summaryByGame(anyCollection());
+        verify(playtime, never()).summary(anyString());
     }
 
     @Test

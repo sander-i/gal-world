@@ -58,24 +58,40 @@ public class RecommendController {
     public List<RecommendView> recommend(
             @RequestParam(defaultValue = "10") int limit,
             @RequestParam(required = false) String exclude) {
-        return recommend.recommend(limit, exclude).stream()
-                .map(this::toView)
+        List<Game> picked = recommend.recommend(limit, exclude);
+        if (picked.isEmpty()) {
+            return List.of();
+        }
+        List<String> ids = picked.stream().map(Game::getId).toList();
+        var tagMap = meta.tagsByGame(ids);
+        var companyMap = companies.byGame(ids);
+        var coverMap = media.itemsByGames(ids, "cover");
+        var playtimes = playtime.summaryByGame(ids);
+        var states = sessions.statuses(picked);
+        return picked.stream()
+                .map(g -> toView(g, tagMap.get(g.getId()), companyMap.get(g.getId()),
+                        coverMap.get(g.getId()), playtimes.get(g.getId()), states.get(g.getId())))
                 .toList();
     }
 
-    private RecommendView toView(Game g) {
-        var comps = companies.ofGame(g.getId()).stream()
+    private RecommendView toView(Game g, List<io.github.sander_i.domain.Tag> tags,
+                                 List<io.github.sander_i.domain.Company> companies,
+                                 List<GameMediaService.MediaItem> covers,
+                                 PlaytimeService.PlaytimeSummary playtime,
+                                 SessionService.SessionStatus status) {
+        var comps = (companies == null ? List.<io.github.sander_i.domain.Company>of() : companies)
+                .stream()
                 .map(c -> new GameView.CompanyView(c.getId(), c.getName(),
                         c.getAlias() == null ? "" : c.getAlias(),
                         c.getWebsite() == null ? "" : c.getWebsite(),
                         c.getDescription() == null ? "" : c.getDescription()))
                 .toList();
-        long total = playtime.summary(g.getId()).totalSeconds();
-        String state = sessions.status(g.getId(), g.getPort()).state().name();
+        long total = playtime == null ? 0 : playtime.totalSeconds();
+        String state = status == null ? "UNKNOWN" : status.state().name();
         return new RecommendView(
                 g.getId(), g.getName(),
-                meta.ofGame(g.getId()).stream().map(t -> t.getName()).toList(),
-                comps, media.itemsOf(g.getId(), "cover"),
+                tags == null ? List.of() : tags.stream().map(t -> t.getName()).toList(),
+                comps, covers == null ? List.of() : covers,
                 state, total, reasonOf(total, state));
     }
 

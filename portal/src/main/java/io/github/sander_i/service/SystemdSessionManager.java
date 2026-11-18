@@ -6,6 +6,7 @@
 package io.github.sander_i.service;
 
 import io.github.sander_i.config.PathConfig;
+import io.github.sander_i.domain.Game;
 import io.github.sander_i.platform.CommandRunner;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -15,8 +16,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 /**
  * Linux 会话后端：通过 {@code systemctl --user} 控制每个游戏的会话单元。
@@ -28,6 +31,11 @@ public class SystemdSessionManager implements SessionManager {
 
     private static final Logger log = LoggerFactory.getLogger(SystemdSessionManager.class);
     private static final Duration SYSTEMCTL_TIMEOUT = Duration.ofSeconds(15);
+    /** 批量单元状态的缓存时长：前端 5 秒才轮询一次，2 秒足够短 */
+    private static final long UNITS_TTL_MS = 2_000;
+
+    private volatile Map<String, String> unitStates;
+    private volatile long unitStatesAt;
 
     private final PathConfig paths;
     private final CommandRunner runner;
@@ -56,12 +64,41 @@ public class SystemdSessionManager implements SessionManager {
 
     @Override
     public SessionService.SessionStatus status(String gameId, int port) {
-        String unit = unitName(gameId);
         if (!available()) {
             return new SessionService.SessionStatus(gameId,
                     SessionService.State.UNSUPPORTED, "systemctl not available", null, false);
         }
-        String value = systemctl("is-active", unit).toLowerCase(Locale.ROOT);
+        Map<String, String> states = activeStates();
+        String value = states == null
+                ? systemctl("is-active", unitName(gameId)).toLowerCase(Locale.ROOT)
+                : states.getOrDefault(unitName(gameId), "inactive").toLowerCase(Locale.ROOT);
+        return statusFrom(gameId, port, value);
+    }
+
+    /**
+     * 批量状态：一次 {@code systemctl list-units} 拿全部单元，列表页不再每游戏 fork。
+     *
+     * 缓存 2 秒：首页本来 5 秒才轮询一次，重复查询没有意义。
+     */
+    @Override
+    public Map<String, SessionService.SessionStatus> statuses(List<Game> games) {
+        if (!available()) {
+            return SessionManager.super.statuses(games);
+        }
+        Map<String, String> states = activeStates();
+        if (states == null) {
+            return SessionManager.super.statuses(games);
+        }
+        Map<String, SessionService.SessionStatus> out = new HashMap<>();
+        for (Game g : games) {
+            String value = states.getOrDefault(unitName(g.getId()), "inactive")
+                    .toLowerCase(Locale.ROOT);
+            out.put(g.getId(), statusFrom(g.getId(), g.getPort(), value));
+        }
+        return out;
+    }
+
+    private SessionService.SessionStatus statusFrom(String gameId, int port, String value) {
         SessionService.State state = switch (value) {
             case "active" -> SessionService.State.RUNNING;
             case "inactive" -> SessionService.State.STOPPED;
@@ -89,6 +126,37 @@ public class SystemdSessionManager implements SessionManager {
         // 「进程已退出」的信号，只能干等到 90 秒超时。标记只在 stop() 里清。
         return new SessionService.SessionStatus(gameId, state,
                 value.isEmpty() ? "unknown" : value, url, crashed);
+    }
+
+    /** unit → ActiveState（active/inactive/failed/activating…），短 TTL 缓存 */
+    private Map<String, String> activeStates() {
+        long now = System.currentTimeMillis();
+        Map<String, String> cached = unitStates;
+        if (cached != null && now - unitStatesAt < UNITS_TTL_MS) {
+            return cached;
+        }
+        CommandRunner.Result r = runner.exec(List.of("systemctl", "--user", "list-units",
+                "galworld-game@*", "--all", "--no-legend", "--plain"), SYSTEMCTL_TIMEOUT);
+        if (r == null || !r.ok()) {
+            // 查询失败：有旧值先用旧值，没有就让调用方退回逐条 is-active
+            return cached;
+        }
+        Map<String, String> fresh = new HashMap<>();
+        for (String line : r.output().split("\n")) {
+            String[] f = line.trim().split("\\s+");
+            if (f.length >= 3 && f[0].startsWith("galworld-game@")) {
+                fresh.put(f[0], f[2]);
+            }
+        }
+        unitStates = fresh;
+        unitStatesAt = now;
+        return fresh;
+    }
+
+    /** 启停后立刻查状态，必须让缓存失效 */
+    private void invalidateUnits() {
+        unitStates = null;
+        unitStatesAt = 0;
     }
 
     /**
@@ -130,6 +198,7 @@ public class SystemdSessionManager implements SessionManager {
         write(intentMarker(gameId));
         clear(stoppedMarker(gameId));
         systemctl("start", unitName(gameId));
+        invalidateUnits();
         return status(gameId, port);
     }
 
@@ -144,6 +213,7 @@ public class SystemdSessionManager implements SessionManager {
         // 不清的话下次打开详情页会误判成「游戏崩溃」
         systemctl("reset-failed", unitName(gameId));
         write(stoppedMarker(gameId));
+        invalidateUnits();
         return status(gameId, port);
     }
 

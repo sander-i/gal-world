@@ -53,6 +53,14 @@ async function load() {
 const anyRunning = computed(() => recommended.value.some((g) => g.state === 'RUNNING'))
 const { latency } = useLatency(anyRunning)
 
+/**
+ * 有会话在跑才值得轮询：全都停止时状态不会自己变化。
+ * Hero 也要算进来，否则只有 Hero 在跑时它的状态会一直停在旧值。
+ * 代价：从门户外（命令行 systemctl）启动的游戏，页面不会自动发现。
+ */
+const anyLive = computed(() =>
+  hero.value?.state === 'RUNNING' || recommended.value.some((g) => g.state === 'RUNNING'))
+
 /** 首页推荐卡片与 Hero 共用同一个会话操作器，按 gameId 记录进度 */
 const { busyId, launches, toggle: launchToggle } = useGameLaunch({
   idOf: (g) => g.gameId,
@@ -72,7 +80,9 @@ function setGameState(id, state) {
 
 /** 状态监听：定时拉 /session，刷新 Hero 与卡片的运行状态 */
 useSessionRefresh(
-  () => [hero.value?.gameId, ...recommended.value.map((g) => g.gameId)],
+  () => (anyLive.value
+    ? [hero.value?.gameId, ...recommended.value.map((g) => g.gameId)]
+    : []),
   (id, state, st) => {
     const cur = id === hero.value?.gameId
       ? hero.value?.state

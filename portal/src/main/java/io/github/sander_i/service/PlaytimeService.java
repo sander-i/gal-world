@@ -95,16 +95,61 @@ public class PlaytimeService {
 
     @Transactional(readOnly = true)
     public PlaytimeSummary summary(String gameId) {
+        return summaryByGame(List.of(gameId)).getOrDefault(gameId, EMPTY);
+    }
+
+    private static final PlaytimeSummary EMPTY = new PlaytimeSummary(0, 0, 0, null);
+
+    /**
+     * 批量统计：列表页、首页一次性拿到所有游戏的时长，替代每游戏 5 条查询。
+     *
+     * 固定 3 条查询：已结束聚合 / 进行中的记录 / 今日结束的记录。
+     * 返回的 map 对每个请求的 id 都有值（无记录时是零值），调用方不用判空。
+     */
+    @Transactional(readOnly = true)
+    public java.util.Map<String, PlaytimeSummary> summaryByGame(
+            java.util.Collection<String> gameIds) {
+        java.util.Map<String, PlaytimeSummary> out = new java.util.HashMap<>();
+        if (gameIds == null || gameIds.isEmpty()) {
+            return out;
+        }
+        List<String> ids = gameIds.stream().filter(java.util.Objects::nonNull)
+                .distinct().toList();
+        if (ids.isEmpty()) {
+            return out;
+        }
         Instant now = Instant.now();
-        long closed = repo.sumClosedSeconds(gameId);
-        long live = repo.findByGameIdAndEndedAtIsNull(gameId).stream()
-                .mapToLong(s -> Math.max(0, Duration.between(s.getStartedAt(), now).toSeconds()))
-                .sum();
-        long today = todaySeconds(gameId, now);
-        Instant last = repo.findFirstByGameIdAndEndedAtIsNotNullOrderByEndedAtDesc(gameId)
-                .map(PlaySession::getEndedAt)
-                .orElse(null);
-        return new PlaytimeSummary(closed + live, today, (int) repo.countByGameIdAndEndedAtIsNotNull(gameId), last);
+        Instant dayStart = now.atZone(java.time.ZoneId.systemDefault()).toLocalDate()
+                .atStartOfDay(java.time.ZoneId.systemDefault()).toInstant();
+
+        // 1) 已结束记录：最后游玩时间 + 累计秒数 + 场次
+        java.util.Map<String, long[]> agg = new java.util.HashMap<>();
+        java.util.Map<String, Instant> last = new java.util.HashMap<>();
+        for (Object[] row : repo.closedStatsByGame(ids)) {
+            String id = (String) row[0];
+            last.put(id, (Instant) row[1]);
+            agg.put(id, new long[]{((Number) row[2]).longValue(), ((Number) row[3]).longValue()});
+        }
+        // 2) 进行中的记录：按「现在 - 开始」实时计入
+        for (PlaySession s : repo.findByGameIdInAndEndedAtIsNull(ids)) {
+            long live = Math.max(0, Duration.between(s.getStartedAt(), now).toSeconds());
+            long[] a = agg.computeIfAbsent(s.getGameId(), k -> new long[2]);
+            a[0] += live;
+        }
+        // 3) 今日时长：只取今天结束的记录，不再把全部历史拉进内存遍历
+        java.util.Map<String, Long> today = new java.util.HashMap<>();
+        for (PlaySession s : repo.findEndedSince(ids, dayStart)) {
+            Instant from = s.getStartedAt().isBefore(dayStart) ? dayStart : s.getStartedAt();
+            long secs = Math.max(0, Duration.between(from, s.getEndedAt()).toSeconds());
+            today.merge(s.getGameId(), secs, Long::sum);
+        }
+
+        for (String id : ids) {
+            long[] a = agg.getOrDefault(id, new long[2]);
+            out.put(id, new PlaytimeSummary(a[0], today.getOrDefault(id, 0L),
+                    (int) a[1], last.get(id)));
+        }
+        return out;
     }
 
     /** 今日已结束的时长（按自然日） */

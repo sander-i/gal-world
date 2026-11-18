@@ -19,8 +19,8 @@ import java.nio.file.Path;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
@@ -48,10 +48,31 @@ public class GameScanService {
     private final GameRepository repo;
     private final GameMediaService mediaSync;
 
+    /** 列表页扫描节流：5 秒内的重复请求直接读库 */
+    private static final long SCAN_TTL_MS = 5_000;
+    private volatile long lastScanAt;
+
     public GameScanService(PathConfig paths, GameRepository repo, GameMediaService mediaSync) {
         this.paths = paths;
         this.repo = repo;
         this.mediaSync = mediaSync;
+    }
+
+    /**
+     * 带节流的同步：列表页翻页、改筛选时用。
+     *
+     * 全量扫描要遍历 games 目录、每游戏读 game.env 写库、还要扫媒体目录；
+     * 每翻一页做一次纯属浪费。取舍：命令行新加的游戏最多延迟 5 秒出现，
+     * 页面上的「重新扫描」按钮走 {@code POST /api/games/scan}，仍然强制全量。
+     */
+    @Transactional
+    public synchronized List<Game> syncIfStale() {
+        long now = System.currentTimeMillis();
+        if (now - lastScanAt < SCAN_TTL_MS) {
+            return repo.findAllByOrderByNameAsc();
+        }
+        lastScanAt = now;
+        return syncAll();
     }
 
     @Transactional
@@ -62,6 +83,12 @@ public class GameScanService {
             log.warn("games 目录不存在: {}", dir);
             return found;
         }
+        // 一次取全库：既用于「文件没变就跳过」的判断，也用于清理已删除的游戏
+        Map<String, Game> existing = new java.util.HashMap<>();
+        for (Game g : repo.findAll()) {
+            existing.put(g.getId(), g);
+        }
+        Set<String> onDisk = new java.util.HashSet<>();
         try (Stream<Path> entries = Files.list(dir)) {
             entries.filter(Files::isDirectory)
                     // <id>.meta 是 Gal World 的附属数据目录，不是游戏
@@ -69,11 +96,26 @@ public class GameScanService {
                     .map(d -> d.resolve("game.env"))
                     .filter(Files::isRegularFile)
                     .forEach(envFile -> {
+                        String stamp = stampOf(envFile);
+                        EnvSnapshot prev = envSnapshots.get(envFile);
+                        // game.env 的修改时间与大小都没变、且库里还有这行：整段跳过
+                        // （不重新解析、不写库）。否则每 5 秒一次全量写回，
+                        // 40 个游戏就是几百条 SQL，节流等于没节流。
+                        if (stamp != null && prev != null && stamp.equals(prev.stamp())
+                                && existing.containsKey(prev.id())) {
+                            onDisk.add(prev.id());
+                            reconcileMediaIfChanged(prev.id());
+                            return;
+                        }
                         Game g = syncOne(envFile);
                         if (g != null) {
                             found.add(g);
+                            onDisk.add(g.getId());
+                            if (stamp != null) {
+                                envSnapshots.put(envFile, new EnvSnapshot(g.getId(), stamp));
+                            }
                             // 磁盘上有但库里没有的媒体，顺手补上
-                            mediaSync.reconcile(g.getId());
+                            reconcileMediaIfChanged(g.getId());
                         }
                     });
         } catch (IOException e) {
@@ -82,15 +124,55 @@ public class GameScanService {
 
         // 目录已被删除的游戏，从库里摘掉，避免列表里留着已不存在的条目
         // （压测实例、手工删掉的游戏都走这条）
-        Set<String> onDisk = found.stream().map(Game::getId).collect(Collectors.toSet());
-        List<Game> stale = repo.findAll().stream()
+        List<Game> stale = existing.values().stream()
                 .filter(g -> !onDisk.contains(g.getId()))
                 .toList();
         for (Game g : stale) {
             log.info("游戏目录已不存在，从注册表移除: {}", g.getId());
             repo.delete(g);
+            envSnapshots.values().removeIf(s -> s.id().equals(g.getId()));
+            mediaDirStamps.remove(g.getId());
         }
         return found;
+    }
+
+    /** game.env 的「修改时间 + 大小」，用来判断是否真的变了 */
+    private record EnvSnapshot(String id, String stamp) {
+    }
+
+    private final Map<Path, EnvSnapshot> envSnapshots = new java.util.concurrent.ConcurrentHashMap<>();
+    private final Map<String, Long> mediaDirStamps = new java.util.concurrent.ConcurrentHashMap<>();
+
+    private String stampOf(Path file) {
+        try {
+            return Files.getLastModifiedTime(file).toMillis() + ":" + Files.size(file);
+        } catch (IOException e) {
+            return null;
+        }
+    }
+
+    /**
+     * 媒体目录没变就不重扫。
+     *
+     * 上传/删除媒体都会改目录的修改时间，所以这里不会漏掉变化；
+     * 派生图由 GameMediaService 自己的短 TTL 缓存处理。
+     */
+    private void reconcileMediaIfChanged(String gameId) {
+        Path mediaDir = paths.gameMediaDir(gameId);
+        Long stamp;
+        try {
+            stamp = Files.isDirectory(mediaDir)
+                    ? Files.getLastModifiedTime(mediaDir).toMillis() : -1L;
+        } catch (IOException e) {
+            stamp = null;
+        }
+        if (stamp != null && stamp.equals(mediaDirStamps.get(gameId))) {
+            return;
+        }
+        mediaSync.reconcile(gameId);
+        if (stamp != null) {
+            mediaDirStamps.put(gameId, stamp);
+        }
     }
 
     @Transactional

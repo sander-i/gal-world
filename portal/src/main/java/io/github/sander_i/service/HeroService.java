@@ -7,9 +7,7 @@ package io.github.sander_i.service;
 
 import io.github.sander_i.i18n.I18n;
 import io.github.sander_i.domain.Game;
-import io.github.sander_i.domain.PlaySession;
 import io.github.sander_i.repo.GameRepository;
-import io.github.sander_i.repo.PlaySessionRepository;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
@@ -32,15 +30,13 @@ public class HeroService {
     private static final Duration RECENT_WINDOW = Duration.ofDays(7);
 
     private final GameRepository games;
-    private final PlaySessionRepository sessions;
     private final PlaytimeService playtime;
     private final GameScanService scan;
     private final SessionService runtime;
 
-    public HeroService(GameRepository games, PlaySessionRepository sessions, PlaytimeService playtime,
+    public HeroService(GameRepository games, PlaytimeService playtime,
                        GameScanService scan, SessionService runtime) {
         this.games = games;
-        this.sessions = sessions;
         this.playtime = playtime;
         this.scan = scan;
         this.runtime = runtime;
@@ -61,42 +57,58 @@ public class HeroService {
             return Optional.empty();
         }
         Instant now = Instant.now();
+        // 一次批量取全部游戏的时长/最后游玩，避免每游戏各查几次库
+        var stats = playtime.summaryByGame(all.stream().map(Game::getId).toList());
 
         // 1) 最近玩过（7 天内）
-        Optional<Game> recent = all.stream()
+        record Recent(Game game, Instant at) {
+        }
+        Optional<Recent> recent = all.stream()
                 .map(g -> {
-                    Optional<PlaySession> last = sessions
-                            .findFirstByGameIdAndEndedAtIsNotNullOrderByEndedAtDesc(g.getId());
-                    return last.map(s -> new Object[]{g, s.getEndedAt()}).orElse(null);
+                    Instant at = lastPlayed(g.getId(), stats);
+                    if (at == null
+                            || Duration.between(at, now).compareTo(RECENT_WINDOW) > 0) {
+                        return null;
+                    }
+                    return new Recent(g, at);
                 })
-                .filter(o -> o != null)
-                .filter(o -> Duration.between((Instant) o[1], now).compareTo(RECENT_WINDOW) <= 0)
-                .max(Comparator.comparing(o -> (Instant) o[1]))
-                .map(o -> (Game) o[0]);
+                .filter(java.util.Objects::nonNull)
+                .max(Comparator.comparing(Recent::at));
 
         if (recent.isPresent()) {
-            Game g = recent.get();
-            Instant last = sessions.findFirstByGameIdAndEndedAtIsNotNullOrderByEndedAtDesc(g.getId())
-                    .map(PlaySession::getEndedAt).orElse(null);
-            return Optional.of(hero(g, I18n.t("最近游玩"), last));
+            Recent r = recent.get();
+            return Optional.of(hero(r.game(), I18n.t("最近游玩"), r.at(), stats));
         }
 
         // 2) 时长最高
         Optional<Game> most = all.stream()
-                .filter(g -> playtime.summary(g.getId()).totalSeconds() > 0)
-                .max(Comparator.comparingLong(g -> playtime.summary(g.getId()).totalSeconds()));
+                .filter(g -> totalSeconds(g.getId(), stats) > 0)
+                .max(Comparator.comparingLong(g -> totalSeconds(g.getId(), stats)));
         if (most.isPresent()) {
-            return Optional.of(hero(most.get(), I18n.t("游玩时间最长"), null));
+            return Optional.of(hero(most.get(), I18n.t("游玩时间最长"), null, stats));
         }
 
         // 3) 最近添加
         Optional<Game> newest = all.stream()
                 .max(Comparator.comparing(g -> g.getCreatedAt() == null ? Instant.EPOCH : g.getCreatedAt()));
-        return newest.map(g -> hero(g, I18n.t("新加入"), null));
+        return newest.map(g -> hero(g, I18n.t("新加入"), null, stats));
     }
 
-    private Hero hero(Game g, String reason, Instant lastPlayed) {
-        long total = playtime.summary(g.getId()).totalSeconds();
+    private long totalSeconds(String gameId,
+                              java.util.Map<String, PlaytimeService.PlaytimeSummary> stats) {
+        var s = stats.get(gameId);
+        return s == null ? 0 : s.totalSeconds();
+    }
+
+    private Instant lastPlayed(String gameId,
+                               java.util.Map<String, PlaytimeService.PlaytimeSummary> stats) {
+        var s = stats.get(gameId);
+        return s == null ? null : s.lastPlayed();
+    }
+
+    private Hero hero(Game g, String reason, Instant lastPlayed,
+                      java.util.Map<String, PlaytimeService.PlaytimeSummary> stats) {
+        long total = totalSeconds(g.getId(), stats);
         String state = runtime.status(g.getId(), g.getPort()).state().name();
         return new Hero(g.getId(), g.getName(), g.getCoverPath(), reason, total, lastPlayed, state);
     }

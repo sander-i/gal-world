@@ -85,10 +85,34 @@ public class GameMediaService {
     /** 列表页/详情页用：原图 URL + 已存在的派生图 URL（按宽度升序）；开关关闭时 variants 恒为空 */
     public List<MediaItem> itemsOf(String gameId, String kind) {
         boolean enabled = settings.imageVariantEnabled();
+        Map<String, List<Integer>> variantWidths = enabled
+                ? variantWidths(gameId, media.mediaDir(gameId)) : Map.of();
+        return toItems(ofGame(gameId, kind), variantWidths);
+    }
+
+    /**
+     * 批量版本：列表页 40 款游戏一次取齐，避免每游戏各查一次库 + 扫一次目录。
+     *
+     * @return gameId → 该类型的媒体项；没有媒体的游戏不在 map 里
+     */
+    public Map<String, List<MediaItem>> itemsByGames(List<String> gameIds, String kind) {
+        Map<String, List<MediaItem>> out = new HashMap<>();
+        if (gameIds == null || gameIds.isEmpty()) {
+            return out;
+        }
+        boolean enabled = settings.imageVariantEnabled();
+        byGames(gameIds, kind).forEach((gameId, views) -> {
+            Map<String, List<Integer>> widths = enabled
+                    ? variantWidths(gameId, media.mediaDir(gameId)) : Map.of();
+            out.put(gameId, toItems(views, widths));
+        });
+        return out;
+    }
+
+    private List<MediaItem> toItems(List<MediaView> views,
+                                    Map<String, List<Integer>> variantWidths) {
         List<MediaItem> out = new ArrayList<>();
-        java.nio.file.Path dir = media.mediaDir(gameId);
-        Map<String, List<Integer>> variantWidths = enabled ? scanVariantWidths(dir) : Map.of();
-        for (MediaView m : ofGame(gameId, kind)) {
+        for (MediaView m : views) {
             String path = m.path();
             int q = path.indexOf('?');
             String file = q < 0 ? path : path.substring(0, q);
@@ -100,6 +124,33 @@ public class GameMediaService {
             out.add(new MediaItem(path, variants));
         }
         return out;
+    }
+
+    /**
+     * 派生图宽度缓存：媒体目录只在上传/删除/重排/补建时变化，
+     * 列表页每次翻页都 Files.list 整个目录是纯浪费。
+     */
+    private static final long VARIANT_TTL_MS = 20_000;
+    private final Map<String, CachedWidths> variantWidthCache =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
+    private record CachedWidths(long at, Map<String, List<Integer>> widths) {
+    }
+
+    private Map<String, List<Integer>> variantWidths(String gameId, java.nio.file.Path dir) {
+        long now = System.currentTimeMillis();
+        CachedWidths cached = variantWidthCache.get(gameId);
+        if (cached != null && now - cached.at() < VARIANT_TTL_MS) {
+            return cached.widths();
+        }
+        Map<String, List<Integer>> fresh = scanVariantWidths(dir);
+        variantWidthCache.put(gameId, new CachedWidths(now, fresh));
+        return fresh;
+    }
+
+    /** 媒体目录变动后调用；后台补生成派生图的任务走 TTL 自然过期 */
+    public void invalidateVariantCache(String gameId) {
+        variantWidthCache.remove(gameId);
     }
 
     /** 扫描目录里的 `<文件名>.s<宽度>` 派生图，按原文件名分组并按宽度升序 */
@@ -187,6 +238,7 @@ public class GameMediaService {
             m.setSortOrder(seq);
             m.setCreatedAt(Instant.now());
             repo.save(m);
+            invalidateVariantCache(gameId);
 
             syncCoverCache(gameId, g);
             log.info("媒体已加入 {} {} 序号 {}（共 {}）", gameId, kind, seq, seq + 1);
@@ -241,6 +293,7 @@ public class GameMediaService {
         if (g != null) {
             syncCoverCache(gameId, g);
         }
+        invalidateVariantCache(gameId);
     }
 
     /** 按给定 id 顺序重排；未列出的项排在后面保持原相对顺序 */
@@ -280,6 +333,7 @@ public class GameMediaService {
         if (g != null) {
             syncCoverCache(gameId, g);
         }
+        invalidateVariantCache(gameId);
     }
 
     /** 把 sort_order=0 的封面写进 Game.coverPath，作为置顶封面缓存 */
@@ -340,6 +394,8 @@ public class GameMediaService {
         } catch (IOException e) {
             log.warn("同步媒体失败 {}: {}", gameId, e.toString());
         }
+        // 新补建的记录可能带来新文件，派生图宽度要重扫
+        invalidateVariantCache(gameId);
     }
 
     /** 把某类媒体的 sortOrder 重排为 0..n-1，并同步文件名 */

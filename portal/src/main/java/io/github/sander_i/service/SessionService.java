@@ -56,6 +56,11 @@ public class SessionService {
         return delegate.status(gameId, port);
     }
 
+    /** 批量状态：列表页用，Linux 上一次 systemctl 拿全部单元 */
+    public java.util.Map<String, SessionStatus> statuses(java.util.List<io.github.sander_i.domain.Game> games) {
+        return delegate.statuses(games);
+    }
+
     public SessionStatus start(String gameId, int port) {
         return delegate.start(gameId, port);
     }

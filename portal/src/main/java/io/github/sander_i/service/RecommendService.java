@@ -7,7 +7,6 @@ package io.github.sander_i.service;
 
 import io.github.sander_i.domain.Game;
 import io.github.sander_i.repo.GameRepository;
-import io.github.sander_i.repo.PlaySessionRepository;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
@@ -37,14 +36,12 @@ public class RecommendService {
     private static final Duration RECENT_WINDOW = Duration.ofDays(7);
 
     private final GameRepository games;
-    private final PlaySessionRepository sessions;
     private final PlaytimeService playtime;
     private final GameScanService scan;
 
-    public RecommendService(GameRepository games, PlaySessionRepository sessions,
-                            PlaytimeService playtime, GameScanService scan) {
+    public RecommendService(GameRepository games, PlaytimeService playtime,
+                            GameScanService scan) {
         this.games = games;
-        this.sessions = sessions;
         this.playtime = playtime;
         this.scan = scan;
     }
@@ -78,15 +75,19 @@ public class RecommendService {
     /** 排序规则集中在这里，替换算法时只改本方法 */
     List<Game> rank(List<Game> candidates) {
         Instant now = Instant.now();
+        // 排序前一次取全：Comparator 会被调用 O(n log n) 次，逐次查库等于
+        // 「几十款游戏几千次查询」（原实现每比较 12 次查询）
+        var stats = playtime.summaryByGame(candidates.stream().map(Game::getId).toList());
         return candidates.stream()
-                .sorted((x, y) -> compare(x, y, now))
+                .sorted((x, y) -> compare(x, y, now, stats))
                 .toList();
     }
 
-    private int compare(Game x, Game y, Instant now) {
+    private int compare(Game x, Game y, Instant now,
+                        java.util.Map<String, PlaytimeService.PlaytimeSummary> stats) {
         // 1) 最近玩过优先，按最后游玩时间降序
-        Instant lx = lastPlayed(x.getId(), now);
-        Instant ly = lastPlayed(y.getId(), now);
+        Instant lx = lastPlayed(x.getId(), now, stats);
+        Instant ly = lastPlayed(y.getId(), now, stats);
         if (lx != null || ly != null) {
             if (lx == null) return 1;
             if (ly == null) return -1;
@@ -94,8 +95,8 @@ public class RecommendService {
             if (c != 0) return c;
         }
         // 2) 累计时长降序
-        long sx = playtime.summary(x.getId()).totalSeconds();
-        long sy = playtime.summary(y.getId()).totalSeconds();
+        long sx = totalSeconds(x.getId(), stats);
+        long sy = totalSeconds(y.getId(), stats);
         if (sx != sy) return Long.compare(sy, sx);
         // 3) 加入时间降序
         Instant cx = x.getCreatedAt() == null ? Instant.EPOCH : x.getCreatedAt();
@@ -103,11 +104,20 @@ public class RecommendService {
         return cy.compareTo(cx);
     }
 
+    private long totalSeconds(String gameId,
+                              java.util.Map<String, PlaytimeService.PlaytimeSummary> stats) {
+        var s = stats.get(gameId);
+        return s == null ? 0 : s.totalSeconds();
+    }
+
     /** 7 天内玩过才参与「最近游玩」排序，否则返回 null */
-    private Instant lastPlayed(String gameId, Instant now) {
-        return sessions.findFirstByGameIdAndEndedAtIsNotNullOrderByEndedAtDesc(gameId)
-                .map(s -> s.getEndedAt())
-                .filter(t -> Duration.between(t, now).compareTo(RECENT_WINDOW) <= 0)
-                .orElse(null);
+    private Instant lastPlayed(String gameId, Instant now,
+                               java.util.Map<String, PlaytimeService.PlaytimeSummary> stats) {
+        var s = stats.get(gameId);
+        Instant t = s == null ? null : s.lastPlayed();
+        if (t == null) {
+            return null;
+        }
+        return Duration.between(t, now).compareTo(RECENT_WINDOW) <= 0 ? t : null;
     }
 }
