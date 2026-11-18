@@ -2,6 +2,17 @@ server:
   # 服务器上 8080/8090/9080 已被其他服务占用，默认 8088
   port: ${GALWORLD_PORTAL_PORT:8088}
   shutdown: graceful
+  # 文本资源压缩。图片/视频是预压缩的，不列进 mime-types，避免白花 CPU。
+  # 入口 JS 从 491 KB 降到约 165 KB，CSS 从 434 KB 降到约 62 KB。
+  # 注意 Spring 6 的静态资源返回 text/javascript（不是 application/javascript），
+  # 两个都列，否则 JS 不压缩。
+  compression:
+    enabled: true
+    mime-types: application/json,application/javascript,text/javascript,text/css,text/html,text/plain,image/svg+xml,application/manifest+json
+    min-response-size: 1024
+  # HTTP/2 仅在 HTTPS 下生效（GALWORLD_TLS=true 时浏览器走 h2）
+  http2:
+    enabled: true
   tomcat:
     # 大视频上传（100 MB+）在慢网络下耗时长，默认 2 秒的连接超时会让 Tomcat
     # 在上传完成前断开，浏览器侧表现为"上传失败"且拿不到状态码

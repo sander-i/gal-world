@@ -171,7 +171,9 @@ export async function fetchLanguages() {
 
 /** 拉某语言的消息表 */
 async function fetchMessages(id) {
-  const res = await fetch(`/api/i18n/${encodeURIComponent(id)}`, { cache: 'no-store' })
+  // no-cache：每次都向服务端确认，但不重复下载 body。
+  // 语言包一百多 KB，服务端按 ETag 回 304，既省流量又不会用到过期包。
+  const res = await fetch(`/api/i18n/${encodeURIComponent(id)}`, { cache: 'no-cache' })
   if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
   const data = await res.json()
   return data && typeof data.messages === 'object' ? data.messages : {}

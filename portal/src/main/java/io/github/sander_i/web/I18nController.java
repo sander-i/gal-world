@@ -55,7 +55,9 @@ public class I18nController {
 
     /** 某语言的完整消息表；前端启动时加载当前语言 */
     @GetMapping("/{locale}")
-    public ResponseEntity<?> messages(@PathVariable String locale) {
+    public ResponseEntity<?> messages(@PathVariable String locale,
+            @org.springframework.web.bind.annotation.RequestHeader(
+                    name = "If-None-Match", required = false) String ifNoneMatch) {
         if (!i18n.exists(locale)) {
             return ResponseEntity.status(404)
                     .body(Map.of("message", I18n.t("没有这个语言包: {0}", locale)));
@@ -64,6 +66,13 @@ public class I18nController {
         out.put("id", LocalePack.normalize(locale));
         out.put("name", i18n.displayName(locale));
         out.put("messages", i18n.messages(locale));
-        return ResponseEntity.ok(out);
+        // 语言包体积一百多 KB、很少变：允许缓存 1 小时，未变时只回 304
+        String etag = ETags.of(out);
+        var cache = org.springframework.http.CacheControl
+                .maxAge(java.time.Duration.ofHours(1)).cachePublic();
+        if (ETags.matches(etag, ifNoneMatch)) {
+            return ResponseEntity.status(304).eTag(etag).cacheControl(cache).build();
+        }
+        return ResponseEntity.ok().eTag(etag).cacheControl(cache).body(out);
     }
 }
