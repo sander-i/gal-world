@@ -6,7 +6,15 @@
 import { createApp } from 'vue'
 import App from './App.vue'
 import router from './router'
-import 'element-plus/dist/index.css'
+// 只引 Element Plus 实际用到的组件样式（全站在 feedback.js 里只用
+// ElMessage / ElMessageBox）。全量 index.css 有 434 KB，其中 361 KB 用不上。
+// MessageBox 自带按钮与关闭图标，所以 el-button / el-icon 也要带上。
+import 'element-plus/theme-chalk/base.css'
+import 'element-plus/theme-chalk/el-message.css'
+import 'element-plus/theme-chalk/el-message-box.css'
+import 'element-plus/theme-chalk/el-button.css'
+import 'element-plus/theme-chalk/el-icon.css'
+import 'element-plus/theme-chalk/el-overlay.css'
 import 'element-plus/theme-chalk/dark/css-vars.css'
 import './styles.css'
 import { BUILTIN_THEMES } from './theme.js'

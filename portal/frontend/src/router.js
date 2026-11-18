@@ -5,30 +5,24 @@
 
 import { createRouter, createWebHistory } from 'vue-router'
 import LibraryView from './views/LibraryView.vue'
-import GameListView from './views/GameListView.vue'
-import GameView from './views/GameView.vue'
-import PlayView from './views/PlayView.vue'
-import SettingsView from './views/SettingsView.vue'
-import AdminView from './views/AdminView.vue'
-import GameEditView from './views/GameEditView.vue'
-import CompanyManageView from './views/CompanyManageView.vue'
-import LocalizationGroupManageView from './views/LocalizationGroupManageView.vue'
-import TagManageView from './views/TagManageView.vue'
-import GameImportView from './views/GameImportView.vue'
+
+// 除首页外全部按需加载：AdminView / PlayView / GameEditView 都是上千行，
+// 静态导入会把它们塞进首屏 bundle。路由路径增删要同步
+// SpaFallbackController 的回退清单，否则直接访问会 404。
 
 export default createRouter({
   history: createWebHistory(),
   routes: [
     { path: '/', name: 'library', component: LibraryView },
-    { path: '/games', name: 'games', component: GameListView },
-    { path: '/games/import', name: 'game-import', component: GameImportView },
-    { path: '/game/:id', name: 'game', component: GameView, props: true },
-    { path: '/game/:id/edit', name: 'game-edit', component: GameEditView, props: true },
-    { path: '/play/:id', name: 'play', component: PlayView, props: true },
-    { path: '/settings', name: 'settings', component: SettingsView },
-    { path: '/admin', name: 'admin', component: AdminView },
-    { path: '/companies', name: 'companies', component: CompanyManageView },
-    { path: '/localization-groups', name: 'localization-groups', component: LocalizationGroupManageView },
-    { path: '/tags', name: 'tags', component: TagManageView },
+    { path: '/games', name: 'games', component: () => import('./views/GameListView.vue') },
+    { path: '/games/import', name: 'game-import', component: () => import('./views/GameImportView.vue') },
+    { path: '/game/:id', name: 'game', component: () => import('./views/GameView.vue'), props: true },
+    { path: '/game/:id/edit', name: 'game-edit', component: () => import('./views/GameEditView.vue'), props: true },
+    { path: '/play/:id', name: 'play', component: () => import('./views/PlayView.vue'), props: true },
+    { path: '/settings', name: 'settings', component: () => import('./views/SettingsView.vue') },
+    { path: '/admin', name: 'admin', component: () => import('./views/AdminView.vue') },
+    { path: '/companies', name: 'companies', component: () => import('./views/CompanyManageView.vue') },
+    { path: '/localization-groups', name: 'localization-groups', component: () => import('./views/LocalizationGroupManageView.vue') },
+    { path: '/tags', name: 'tags', component: () => import('./views/TagManageView.vue') },
   ],
 })
