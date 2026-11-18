@@ -91,7 +91,7 @@ useSessionRefresh(
     if (state === 'UNKNOWN' && cur === 'RUNNING') return
     setGameState(id, st.crashed ? 'FAILED' : state)
   },
-  { intervalMs: 5000 },
+  { intervalMs: 1000 },
 )
 
 const heroAction = computed(() => (hero.value ? launches[hero.value.gameId] : null))
