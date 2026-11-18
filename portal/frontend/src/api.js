@@ -329,6 +329,11 @@ export const api = {
   getGame: (id) => req(`/api/games/${encodeURIComponent(id)}`),
   /** 游玩页轮询：只有状态与串流端口就绪，不触发全量查询 */
   session: (id) => req(`/api/games/${encodeURIComponent(id)}/session`),
+  /** 首页轮询：一次拿多个游戏的状态；返回 { [gameId]: status } */
+  sessions: (ids) => {
+    const qs = new URLSearchParams({ ids: (ids || []).join(',') })
+    return req('/api/sessions?' + qs.toString())
+  },
   /** 崩溃诊断：退出码、信号、日志尾部（只读） */
   sessionDiagnostics: (id) =>
     req(`/api/games/${encodeURIComponent(id)}/session/diagnostics`),
@@ -504,7 +509,8 @@ export const api = {
   leave: (id) =>
     req(`/api/games/${encodeURIComponent(id)}/playtime/leave`, { method: 'POST' }),
 
-  settings: () => req('/api/settings'),
+  // 设置变化频率低：no-cache 每次校验 ETag，未变时服务端回 304
+  settings: () => req('/api/settings', { cache: 'no-cache' }),
   saveSettings: (patch) =>
     req('/api/settings', { method: 'POST', body: JSON.stringify(patch) }),
   /** 派生图清理：仅开关关闭时可用 */

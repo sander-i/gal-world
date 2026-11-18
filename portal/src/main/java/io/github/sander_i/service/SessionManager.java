@@ -14,6 +14,20 @@ public interface SessionManager {
 
     SessionService.SessionStatus status(String gameId, int port);
 
+    /**
+     * 批量状态：列表页一次取全部，避免每游戏 fork 一次查询进程。
+     *
+     * 默认实现逐条查询；Linux 后端会覆盖成一次 systemctl 调用。
+     */
+    default java.util.Map<String, SessionService.SessionStatus> statuses(
+            java.util.List<io.github.sander_i.domain.Game> games) {
+        java.util.Map<String, SessionService.SessionStatus> out = new java.util.HashMap<>();
+        for (io.github.sander_i.domain.Game g : games) {
+            out.put(g.getId(), status(g.getId(), g.getPort()));
+        }
+        return out;
+    }
+
     SessionService.SessionStatus start(String gameId, int port);
 
     SessionService.SessionStatus stop(String gameId, int port);

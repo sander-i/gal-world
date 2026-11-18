@@ -47,27 +47,34 @@ class GameControllerPagingTest {
 
         GameMediaService media = mock(GameMediaService.class);
         when(media.itemsOf(anyString(), anyString())).thenReturn(List.of());
+        when(media.itemsByGames(anyList(), anyString())).thenReturn(Map.of());
 
         PlaytimeService playtime = mock(PlaytimeService.class);
         when(playtime.summary(anyString()))
                 .thenReturn(new PlaytimeService.PlaytimeSummary(0, 0, 0, null));
+        when(playtime.summaryByGame(anyCollection())).thenReturn(Map.of());
 
         SessionService sessions = mock(SessionService.class);
         when(sessions.status(anyString(), anyInt()))
                 .thenReturn(new SessionService.SessionStatus(
                         "g", SessionService.State.STOPPED, "stopped", null, false));
+        when(sessions.statuses(anyList())).thenReturn(Map.of());
 
         CompanyService companies = mock(CompanyService.class);
         when(companies.ofGame(anyString())).thenReturn(List.of());
+        when(companies.byGame(anyCollection())).thenReturn(Map.of());
         this.companies = companies;
         LocalizationGroupService localizations = mock(LocalizationGroupService.class);
         when(localizations.ofGame(anyString())).thenReturn(List.of());
+        when(localizations.byGame(anyCollection())).thenReturn(Map.of());
         this.localizations = localizations;
 
         SettingsService settings = mock(SettingsService.class);
         when(settings.coverRotationMode()).thenReturn("seq");
         when(settings.cgRotationMode()).thenReturn("autoNext");
         when(settings.cgRotationOrder()).thenReturn("seq");
+        when(settings.rotationDefaults()).thenReturn(new SettingsService.RotationDefaults(
+                "seq", 6, "autoNext", "seq", 6));
 
         controller = new GameController(repo, mock(GameScanService.class), sessions, playtime,
                 meta, companies, localizations, media, settings,

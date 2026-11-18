@@ -26,15 +26,15 @@ class SettingsServiceCanvasModeTest {
     @Test
     void defaultsToAuto() {
         SettingRepository repo = mock(SettingRepository.class);
-        when(repo.findById(anyString())).thenReturn(Optional.empty());
+        when(repo.findAll()).thenReturn(List.of());
         assertTrue(service(repo).canvasAutoCalibrate());
     }
 
     @Test
     void manualDisablesAuto() {
         SettingRepository repo = mock(SettingRepository.class);
-        when(repo.findById("canvasCalibrateMode"))
-                .thenReturn(Optional.of(new Setting("canvasCalibrateMode", "manual")));
+        // 设置读的是 all() 快照，按行返回整表而不是单键查询
+        when(repo.findAll()).thenReturn(List.of(new Setting("canvasCalibrateMode", "manual")));
         assertFalse(service(repo).canvasAutoCalibrate());
     }
 

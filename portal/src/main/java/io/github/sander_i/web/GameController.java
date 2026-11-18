@@ -76,8 +76,8 @@ public class GameController {
                                @RequestParam(name = "offset", defaultValue = "0") int offset,
                                @RequestParam(name = "limit", defaultValue = DEFAULT_PAGE) int limit,
                                HttpServletResponse response) {
-        // 每次列表都同步一次磁盘，命令行新加的游戏能立刻出现
-        scan.syncAll();
+        // 5 秒节流：翻页/改筛选不必每次全量扫盘；「重新扫描」接口仍强制全量
+        scan.syncIfStale();
         List<Game> games = repo.findAllByOrderByNameAsc();
         Map<String, List<io.github.sander_i.domain.Tag>> tagMap =
                 meta.tagsByGame(games.stream().map(Game::getId).toList());
@@ -102,9 +102,8 @@ public class GameController {
         int to = Math.min(filtered.size(), from + size);
         // 总数放响应头：保持响应体仍是数组，现有调用方不用改解析
         response.setHeader("X-Total-Count", String.valueOf(filtered.size()));
-        return ResponseEntity.ok(filtered.subList(from, to).stream()
-                .map(g -> toView(g, tagMap.get(g.getId())))
-                .toList());
+        // 列表页只用封面：CG 不返回，省掉一半媒体查询与响应体
+        return ResponseEntity.ok(views(filtered.subList(from, to), tagMap, false));
     }
 
     /** 筛选参数既接受数字 id（前端），也兼容公司/汉化组名称（旧链接） */
@@ -140,16 +139,14 @@ public class GameController {
     @GetMapping("/{id}")
     public ResponseEntity<GameView> one(@PathVariable String id) {
         return repo.findById(id)
-                .map(game -> ResponseEntity.ok(toView(game, meta.ofGame(game.getId()))))
+                .map(game -> ResponseEntity.ok(views(List.of(game), null, true).get(0)))
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
     @PostMapping("/scan")
     public List<GameView> rescan() {
         scan.syncAll();
-        return repo.findAllByOrderByNameAsc().stream()
-                .map(g -> toView(g, meta.ofGame(g.getId())))
-                .toList();
+        return views(repo.findAllByOrderByNameAsc(), null, true);
     }
 
     @PostMapping("/{id}/start")
@@ -157,7 +154,7 @@ public class GameController {
         return repo.findById(id)
                 .map(g -> {
                     var st = sessions.start(g.getId(), g.getPort());
-                    return ResponseEntity.ok(toView(g, st, meta.ofGame(g.getId())));
+                    return ResponseEntity.ok(oneView(g, st, true));
                 })
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
@@ -168,7 +165,7 @@ public class GameController {
                 .map(g -> {
                     try {
                         var st = sessions.stop(g.getId(), g.getPort());
-                        return ResponseEntity.ok(toView(g, st, meta.ofGame(g.getId())));
+                        return ResponseEntity.ok(oneView(g, st, true));
                     } finally {
                         // 兜底结算：用户点了停止，就算 systemctl 调用失败也要把时长落账，
                         // 否则进行中的记录会一直涨（开发环境无 systemctl 时正是如此）
@@ -221,39 +218,73 @@ public class GameController {
                 .anyMatch(name -> name != null && needle.equals(name.strip()));
     }
 
-    private GameView toView(Game g, List<io.github.sander_i.domain.Tag> tags) {
-        var st = sessions.status(g.getId(), g.getPort());
-        return toView(g, st, tags);
+    /** 批量组装视图：标签/公司/汉化组/会话/时长/媒体各一次查询，替代每游戏 N+1 */
+    private List<GameView> views(List<Game> games, Map<String, List<io.github.sander_i.domain.Tag>> tags,
+                                 boolean includeCgs) {
+        return views(games, tags, includeCgs, null);
+    }
+
+    private List<GameView> views(List<Game> games, Map<String, List<io.github.sander_i.domain.Tag>> tags,
+                                 boolean includeCgs,
+                                 Map<String, SessionService.SessionStatus> statusOverride) {
+        if (games.isEmpty()) {
+            return List.of();
+        }
+        List<String> ids = games.stream().map(Game::getId).toList();
+        var tagMap = tags == null ? meta.tagsByGame(ids) : tags;
+        var companies = companyService.byGame(ids);
+        var groups = localizationService.byGame(ids);
+        var states = statusOverride != null ? statusOverride : sessions.statuses(games);
+        var playtimes = playtime.summaryByGame(ids);
+        var covers = gameMedia.itemsByGames(ids, "cover");
+        Map<String, List<io.github.sander_i.service.GameMediaService.MediaItem>> cgs =
+                includeCgs ? gameMedia.itemsByGames(ids, "cg") : Map.of();
+        var rotation = settings.rotationDefaults();
+        return games.stream()
+                .map(g -> toView(g, states.get(g.getId()), tagMap.get(g.getId()), companies,
+                        groups, covers, cgs, playtimes, rotation))
+                .toList();
+    }
+
+    /** 启停接口用：状态是操作直接返回的，不必再批量查一遍 */
+    private GameView oneView(Game g, SessionService.SessionStatus st, boolean includeCgs) {
+        return views(List.of(g), null, includeCgs, Map.of(g.getId(), st)).get(0);
     }
 
     private GameView toView(Game g, SessionService.SessionStatus st,
-                            List<io.github.sander_i.domain.Tag> tags) {
+                            List<io.github.sander_i.domain.Tag> tags,
+                            Map<String, List<io.github.sander_i.domain.Company>> companies,
+                            Map<String, List<io.github.sander_i.domain.LocalizationGroup>> groups,
+                            Map<String, List<io.github.sander_i.service.GameMediaService.MediaItem>> covers,
+                            Map<String, List<io.github.sander_i.service.GameMediaService.MediaItem>> cgs,
+                            Map<String, PlaytimeService.PlaytimeSummary> playtimes,
+                            SettingsService.RotationDefaults rotation) {
         String locale = I18n.locale();
-        var comps = companyService.ofGame(g.getId()).stream()
+        var comps = companies.getOrDefault(g.getId(), List.of()).stream()
                 .map(c -> {
                     var text = LocalizedText.of(c, locale);
                     return new GameView.CompanyView(c.getId(), text.name(), text.alias(),
                             text.website(), text.description());
                 })
                 .toList();
-        var groups = localizationService.ofGame(g.getId()).stream()
+        var groupViews = groups.getOrDefault(g.getId(), List.of()).stream()
                 .map(c -> {
                     var text = LocalizedText.of(c, locale);
                     return new GameView.GroupView(c.getId(), text.name(), text.alias(),
                             text.website(), text.description());
                 })
                 .toList();
-        var covers = gameMedia.itemsOf(g.getId(), "cover");
-        var cgs = gameMedia.itemsOf(g.getId(), "cg");
+        var coverItems = covers.getOrDefault(g.getId(), List.of());
+        var cgItems = cgs.getOrDefault(g.getId(), List.of());
         // 单游戏覆盖优先：新字段 -> 旧字段 -> 全局规则
         String legacyMode = g.getRotationMode();
         Integer legacyInterval = g.getRotationInterval();
         String coverMode = g.getCoverRotationMode() != null ? g.getCoverRotationMode()
-                : legacyMode != null ? legacyMode : settings.coverRotationMode();
+                : legacyMode != null ? legacyMode : rotation.coverMode();
         int coverInterval = g.getCoverRotationInterval() != null ? g.getCoverRotationInterval()
-                : legacyInterval != null ? legacyInterval : settings.coverRotationInterval();
+                : legacyInterval != null ? legacyInterval : rotation.coverInterval();
         String cgRaw = g.getCgRotationMode() != null ? g.getCgRotationMode()
-                : legacyMode != null ? legacyMode : settings.cgRotationMode();
+                : legacyMode != null ? legacyMode : rotation.cgMode();
         String cgMode;
         String cgOrder;
         if (cgRaw.equals("seq") || cgRaw.equals("random") || cgRaw.equals("videoEnd")) {
@@ -264,12 +295,14 @@ public class GameController {
             cgMode = cgRaw;
             cgOrder = g.getCgRotationOrder() != null ? g.getCgRotationOrder()
                     : legacyMode != null && legacyMode.equals("random") ? "random"
-                    : settings.cgRotationOrder();
+                    : rotation.cgOrder();
         }
         int cgInterval = g.getCgRotationInterval() != null ? g.getCgRotationInterval()
-                : legacyInterval != null ? legacyInterval : settings.cgRotationInterval();
-        return GameView.of(g, st, playtime.summary(g.getId()).totalSeconds(), tags, comps,
-                groups, covers, cgs, coverMode, coverInterval, coverMode, coverInterval,
+                : legacyInterval != null ? legacyInterval : rotation.cgInterval();
+        long totalSeconds = playtimes.containsKey(g.getId())
+                ? playtimes.get(g.getId()).totalSeconds() : 0;
+        return GameView.of(g, st, totalSeconds, tags, comps,
+                groupViews, coverItems, cgItems, coverMode, coverInterval, coverMode, coverInterval,
                 cgMode, cgOrder, cgInterval);
     }
 }

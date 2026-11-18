@@ -26,23 +26,21 @@ class SettingsServiceHeroSizeTest {
     @Test
     void defaultsToMedium() {
         SettingRepository repo = mock(SettingRepository.class);
-        when(repo.findById(anyString())).thenReturn(Optional.empty());
+        when(repo.findAll()).thenReturn(List.of());
         assertEquals("medium", service(repo).homeHeroSize());
     }
 
     @Test
     void acceptsOff() {
         SettingRepository repo = mock(SettingRepository.class);
-        when(repo.findById("homeHeroSize"))
-                .thenReturn(Optional.of(new Setting("homeHeroSize", "off")));
+        when(repo.findAll()).thenReturn(List.of(new Setting("homeHeroSize", "off")));
         assertEquals("off", service(repo).homeHeroSize());
     }
 
     @Test
     void fallsBackOnUnknownValue() {
         SettingRepository repo = mock(SettingRepository.class);
-        when(repo.findById("homeHeroSize"))
-                .thenReturn(Optional.of(new Setting("homeHeroSize", "huge")));
+        when(repo.findAll()).thenReturn(List.of(new Setting("homeHeroSize", "huge")));
         assertEquals("medium", service(repo).homeHeroSize());
     }
 

@@ -23,14 +23,15 @@ export function useSessionRefresh(idsOf, apply, { intervalMs = 5000 } = {}) {
     if (!ids.length) return
     inflight = true
     try {
-      await Promise.all(ids.map(async (id) => {
-        try {
-          const st = await api.session(id)
-          apply(id, st.crashed ? 'FAILED' : st.state, st)
-        } catch {
-          // 单次失败忽略，下一轮再试
-        }
-      }))
+      // 一次批量请求：首页 10 个游戏原本是每 5 秒 10 个 /api/games/{id}/session
+      const all = await api.sessions(ids)
+      for (const id of ids) {
+        const st = all && all[id]
+        if (!st) continue
+        apply(id, st.crashed ? 'FAILED' : st.state, st)
+      }
+    } catch {
+      // 单次失败忽略，下一轮再试
     } finally {
       inflight = false
     }

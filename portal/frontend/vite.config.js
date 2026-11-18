@@ -12,6 +12,16 @@ export default defineConfig({
   build: {
     outDir: '../src/main/resources/static',
     emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        // 第三方库单独成块：业务代码改动不会冲掉 vendor 的浏览器缓存。
+        // 不要把 element-plus 整体塞进 manualChunks —— 那会让 tree-shaking 失效，
+        // 未使用的组件全被打进首屏（实测 938 KB）。只分 vue 运行时。
+        manualChunks: {
+          'vendor-vue': ['vue', 'vue-router'],
+        },
+      },
+    },
   },
   server: {
     port: 5173,

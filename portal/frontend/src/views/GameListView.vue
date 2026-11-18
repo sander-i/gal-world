@@ -12,6 +12,7 @@ import { notify } from '../feedback'
 import { gameLink, listQuery, readListQuery } from '../list-origin'
 import { playLink } from '../play-origin'
 import GameCard from '../components/GameCard.vue'
+import { useGameLaunch } from '../use-game-launch'
 import { companyEnabled, localizationEnabled } from '../feature-flags'
 import { rankFilterItems } from '../filter-chips'
 
@@ -40,8 +41,25 @@ const query = ref(initial.q)
 const companiesOpen = ref(false)
 const localizationsOpen = ref(false)
 const density = ref(initial.density || localStorage.getItem(DENSITY_KEY) || 'cozy')
-const busyId = ref('')
 const rotationEnabled = ref(true)
+
+/**
+ * 启停操作与进度跟踪：与首页共用同一套逻辑。
+ *
+ * 关闭接口返回后游戏进程可能还要 10~15 秒才真正退出（KiriKiri 类会自己存盘），
+ * 进度条靠 /session 轮询确认会话真正停止后才收尾。
+ */
+const { busyId, launches, toggle: launchToggle } = useGameLaunch({
+  idOf: (g) => g.id ?? g.gameId,
+  onError: (msg) => notify.error(msg),
+  onStarted: (id) => setGameState(id, 'RUNNING'),
+  onStopped: (id) => setGameState(id, 'STOPPED'),
+})
+
+function setGameState(id, state) {
+  const i = games.value.findIndex((x) => x.id === id)
+  if (i >= 0) games.value[i] = { ...games.value[i], state }
+}
 
 /** 密度选项：computed 而非常量，否则语言切换后不更新 */
 const densities = computed(() => [
@@ -207,19 +225,7 @@ function enterGame(g) {
 
 async function quickToggle(g, ev) {
   ev.stopPropagation()
-  if (busyId.value) return
-  busyId.value = g.id
-  try {
-    const updated = g.state === 'RUNNING'
-      ? await api.stopGame(g.id)
-      : await api.startGame(g.id)
-    const i = games.value.findIndex((x) => x.id === g.id)
-    if (i >= 0) games.value[i] = updated
-  } catch (e) {
-    notify.error(t("操作失败：{0}", e.message))
-  } finally {
-    busyId.value = ''
-  }
+  await launchToggle(g)
 }
 
 let sentinel = null
@@ -438,6 +444,10 @@ function hostOf(url) {
           <GameCard
             :game="g"
             :busy="busyId === g.id"
+            :launching="!!launches[g.id]"
+            :action="launches[g.id]?.action || ''"
+            :progress="launches[g.id]?.percent ?? null"
+            :progress-label="launches[g.id]?.label || ''"
             :rotation-enabled="rotationEnabled"
             @toggle="quickToggle(g, $event)"
             @open="enterGame(g)"

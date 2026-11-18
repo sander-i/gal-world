@@ -27,8 +27,18 @@ public class SettingsController {
     }
 
     @GetMapping
-    public Map<String, String> get() {
-        return settings.all();
+    public ResponseEntity<Map<String, String>> get(
+            @org.springframework.web.bind.annotation.RequestHeader(
+                    name = "If-None-Match", required = false) String ifNoneMatch) {
+        Map<String, String> all = settings.all();
+        String etag = ETags.of(all);
+        var cache = org.springframework.http.CacheControl
+                .maxAge(java.time.Duration.ofSeconds(30)).cachePrivate();
+        // 低频变化：允许浏览器私有缓存 30 秒，命中时只回 304 不传 body
+        if (ETags.matches(etag, ifNoneMatch)) {
+            return ResponseEntity.status(304).eTag(etag).cacheControl(cache).build();
+        }
+        return ResponseEntity.ok().eTag(etag).cacheControl(cache).body(all);
     }
 
     @PostMapping
