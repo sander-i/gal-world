@@ -53,7 +53,9 @@ docs/                         环境搭建与各模块方案（接入、媒体�
 ## 铁律（改动前先读）
 
 1. **版本号只写一处。** `portal/pom.xml` 的 `<version>` 是唯一来源；`application.yml`
-   用 `@project.version@`、`release.sh` 从 pom 读。不要在任何脚本或文档里硬编码版本。
+   用 `@project.version@`、`release.sh` 从 pom 读。不要在任何脚本、文档或
+   `frontend/package.json` 里重复当前版本；前端要展示版本就读 `/api/health`。
+   发布流程里的 `MIN_FROM_VERSION`（升级下限）是兼容性策略值，不是产品版本。
 
 2. **`deploy.sh` 只做基础环境。** 系统依赖、JDK、目录、jar、证书、systemd、linger、防火墙、
    健康检查。Wine / Selkies / Sunshine / 音频链一律走页面「一键部署」，不要塞进 `deploy.sh`。

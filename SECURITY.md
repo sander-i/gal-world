@@ -36,8 +36,8 @@ Other notes:
 
 ## Supported versions
 
-Security fixes are provided only for the latest release (currently `0.0.1`); historical tags are not
-patched.
+Security fixes are provided only for the latest release (see the Releases page); historical tags are
+not patched.
 
 ## Reporting a vulnerability
 

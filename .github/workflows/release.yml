@@ -10,14 +10,15 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Release tag，形如 v0.0.2'
+        description: 'Release tag，形如 v<version>'
         required: true
 
 permissions:
   contents: write
 
 env:
-  # 低于该版本的安装不能自动升级；jar/H2 结构不兼容时抬高它
+  # 升级下限是策略值，不是产品版本：低于该版本的安装不能自动升级；
+  # jar/H2 结构不兼容时抬高它。产品版本只来自 portal/pom.xml。
   MIN_FROM_VERSION: ${{ vars.GALWORLD_MIN_FROM_VERSION || '0.0.1' }}
 
 jobs:
@@ -49,8 +50,8 @@ jobs:
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "jar=gal-world-portal-$VERSION.jar" >> "$GITHUB_OUTPUT"
 
-      # 版本号唯一来源是 portal/pom.xml。忘了改就推 tag 的话，会发布一个「tag 说 0.0.2、
-      # jar 说 0.0.1」的包：更新器按 manifest 版本比对，版本偏低会被当成无需升级。
+      # 版本号唯一来源是 portal/pom.xml。忘了改就推 tag 的话，会发布一个「tag 说 X.Y.Z、
+      # jar 说旧版本」的包：更新器按 manifest 版本比对，版本偏低会被当成无需升级。
       - name: 校验 pom 版本与 tag 一致
         env:
           TAG: ${{ steps.ver.outputs.tag }}
