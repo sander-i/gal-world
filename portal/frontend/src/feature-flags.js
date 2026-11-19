@@ -82,12 +82,7 @@ export function invalidateSettings() {
   cachedSettings = null
 }
 
-/** 首次进入时加载一次；失败时保持默认开启 */
+/** 首次进入时加载一次；失败已由 loadSettings 兜底为空对象，开关保持默认启用 */
 export async function loadFeatureFlags() {
-  try {
-    // loadSettings 内部已应用开关；共享 Promise，重复调用不会重复请求
-    await loadSettings()
-  } catch {
-    // 后端不可用时不影响页面渲染，保持默认启用
-  }
+  await loadSettings()
 }

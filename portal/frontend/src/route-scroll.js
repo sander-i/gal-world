@@ -17,8 +17,44 @@
  * - 其余情况：跨页跳转一律回到顶部。从滚到第 6 屏的列表点进详情，
  *   详情页也停在第 6 屏比任何动画都伤体验。
  */
+
+/**
+ * 本次导航要恢复到的滚动位置。
+ *
+ * vue-router 在 popstate 时把位置放进 savedPosition，但视图拿不到它，
+ * 而列表页骨架期高度不足会把目标位置钳制到骨架底部，数据铺开后需要再对齐一次。
+ * 这里在真正返回 savedPosition 时记下目标，供视图在数据渲染完后取用；
+ * 只依赖 scrollBehavior 的参数，不读 history.state 这种 vue-router 内部字段。
+ */
+let pending = null
+
 export function scrollBehavior(to, from, savedPosition) {
-  if (savedPosition) return savedPosition
+  if (savedPosition) {
+    pending = { path: to.path, top: savedPosition.top ?? 0 }
+    return savedPosition
+  }
+  // 普通导航（push/replace）不清掉旧记录的话，上一次 popstate 留下却没被
+  // 消费的位置（例如同 path 只改 query、列表没有重挂）可能被之后某次
+  // router.push('/games') 误用，把新页面滚到旧位置而不是顶部
+  pending = null
   if (to.path === from.path) return false
   return { top: 0 }
+}
+
+/**
+ * 取出并清除「本次导航要恢复到的滚动位置」；没有匹配记录返回 null。
+ *
+ * path 不匹配时保留记录、不消耗：调用方可能先问一次别的路径，
+ * 真正的目标页稍后仍应取得到。
+ */
+export function takeSavedScroll(path) {
+  if (!pending || pending.path !== path) return null
+  const top = pending.top
+  pending = null
+  return top
+}
+
+/** 仅供测试：清掉 pending 记录，避免用例之间互相污染 */
+export function __resetForTests() {
+  pending = null
 }

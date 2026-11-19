@@ -7,7 +7,8 @@
 import { onLocaleChange, t } from '../i18n.js'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { prefetch } from '../router'
+import { prefetch } from '../prefetch'
+import { takeSavedScroll } from '../route-scroll'
 import { activateSkeleton } from '../skeleton-fx.js'
 import { api } from '../api'
 import { notify } from '../feedback'
@@ -156,19 +157,26 @@ function setDensity(id) {
  * 所以那种情况直接替换列表。
  */
 let booted = false
+/**
+ * 组件是否已卸载。请求可能晚于卸载返回：此时不能再消费 route-scroll 的
+ * 待恢复位置，否则会替下一个刚挂载的列表实例把位置取走，导致返回时不对齐。
+ */
+let disposed = false
 
 /**
  * 从详情页返回时，浏览器/路由的 savedPosition 在骨架期就被应用：
  * 那时只有 12 张骨架卡，页面高度不够，目标位置被钳制到骨架底部；
  * 首屏数据到达、40 张卡铺开之后不会自动回来（浏览器只会保持相对位置）。
  *
- * 所以首屏数据渲染完再按 history.state 里记录的位置对齐一次。
+ * 所以首屏数据渲染完再按 route-scroll.js 记录的位置对齐一次。
+ * 滚动位置由 route-scroll.js 在 popstate 恢复时记录，不依赖 vue-router 内部字段。
  * 只在首屏（骨架）这条路径上调用：筛选变化不重铺骨架，那时用户已经在
  * 当前位置看得好好的，再滚一次反而是干扰。
  */
 async function restoreSavedScroll() {
-  const top = history.state?.scroll?.top
-  if (!top) return
+  if (disposed) return
+  const top = takeSavedScroll(route.path)
+  if (top == null || top === 0) return
   await nextTick()
   window.scrollTo(0, top)
 }
@@ -345,6 +353,7 @@ const stopLocaleWatch = onLocaleChange(async () => {
 })
 
 onBeforeUnmount(() => {
+  disposed = true
   clearTimeout(queryTimer)
   observer?.disconnect()
   filterResizeObserver?.disconnect()
@@ -546,7 +555,8 @@ function hostOf(url) {
       {{ hasFilter ? t('没有符合筛选条件的游戏。') : t('游戏库为空。用 galworld add 注册游戏后刷新。') }}
     </div>
     <template v-else>
-      <!-- 首屏骨架：与真实卡片同结构、同密度布局，数据到达时不产生高度跳变 -->
+      <!-- 首屏骨架：只铺 12 张覆盖首屏，不追求与整页 40 张等高；
+           逐卡尺寸与真实卡片对齐，所以单卡不跳 -->
       <div v-if="firstLoading" ref="listSkeletonEl" class="grid list-grid page-skeleton" :data-density="density">
         <article v-for="i in 12" :key="i" class="card sk-card">
           <div class="cover"><SkeletonBlock class="sk-cover" height="100%" :radius="0" /></div>

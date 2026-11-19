@@ -27,7 +27,7 @@ import ClosingBanner from './components/ClosingBanner.vue'
 import MaintenanceOverlay from './components/MaintenanceOverlay.vue'
 import RouteProgress from './components/RouteProgress.vue'
 import { loadFeatureFlags } from './feature-flags'
-import { prefetch } from './router'
+import { prefetch } from './prefetch'
 
 /**
  * 全局悬停预取委托。

@@ -1,6 +1,6 @@
 # 页面跳转加载动效方案
 
-> 状态：待实施
+> 状态：已实施（2026-11-19）
 > 编写日期：2026-11-19
 > 分支：`feat/loading-skeleton`
 > 上游文档：`LOADING-UX-PLAN.md`（骨架屏与请求编排）
@@ -78,7 +78,10 @@ L4 让块按视觉行错峰入场，把静态灰块变成有方向的推进感�
 
 ### L1 路由预取
 
-`router.js` 追加具名导出（默认导出不动）：
+新建 `src/prefetch.js`（默认导出与 routes 之外的东西不动）：
+
+`prefetch` 单独成模块，避免 `router.js → LibraryView → router.js` 的循环依赖；
+`router.js` 创建实例后调用 `bindRouter(router)` 注入，模块本身不导入 `router.js`。
 
 ```js
 const warmed = new Set()
@@ -114,11 +117,16 @@ document.addEventListener('pointerover', (e) => {
 }, { passive: true })
 ```
 
-2. 卡片与 Hero 是 `router.push` 而非 `<a>`，在组件上加 `@pointerenter`：
+2. 卡片与 Hero 是 `router.push` 而非 `<a>`，在**包裹卡片的宿主元素**上加 `@pointerenter`：
 
 ```vue
-<GameCard ... @pointerenter="prefetch(gameLink(g.gameId, listState))" />
+<article class="card" @pointerenter="prefetch(gameLink(g.gameId, listState))">
+  <GameCard ... />
+</article>
 ```
+
+不能把 `@pointerenter` 直接写在 `<GameCard>` 上：它是多根节点组件（`.cover` + `.card-body`），
+Vue 对多根组件不做属性透传，监听器会静默失效并产生告警。原因详见 §7 第 8 条。
 
 **不做 idle 全量预取**：那等于放弃路由级 code split，首屏白付 3 个 chunk 的流量。
 只预热「用户已经指向的目标」。
@@ -530,11 +538,13 @@ D = L0 + L1 + L2 + L3 + L4。相对 A 只多 6px 位移、一层 2px 进度条�
 | 2 | `portal/frontend/src/route-progress.js` | 新建，模块级进度状态 |
 | 3 | `portal/frontend/src/components/RouteProgress.vue` | 新建，2px 进度条 |
 | 4 | `portal/frontend/src/App.vue` | 套 `<transition>`、挂 `<RouteProgress>`、注册 pointerover 委托 |
-| 5 | `portal/frontend/src/router.js` | `prefetch()` 导出、`scrollBehavior`、三个全局钩子 |
-| 6 | `portal/frontend/src/components/GameCard.vue` | 根节点加 `@pointerenter`（透传 emit） |
-| 7 | `portal/frontend/src/views/LibraryView.vue` | Hero 与卡片加 `@pointerenter` |
-| 8 | `portal/frontend/src/skeleton-fx.js` | 新建，`numberSkeleton()` 按视觉行写 `--i` + `replaySkeletonFx()` |
-| 9 | 各骨架页（`LibraryView` / `GameListView` / `GameView`） | 骨架渲染后调用一次 `numberSkeleton` |
+| 5 | `portal/frontend/src/router.js` | 三个全局钩子；创建实例后 `bindRouter(router)` |
+| 6 | `portal/frontend/src/route-scroll.js` | 新建，`scrollBehavior` + `takeSavedScroll()`（弹出导航位置供列表页数据到达后二次对齐） |
+| 7 | `portal/frontend/src/prefetch.js` | 新建，`prefetch()` + `bindRouter()`；避免 router ↔ 视图循环依赖 |
+| 8 | `portal/frontend/src/components/GameCard.vue` | **不改**。它是多根节点组件（`.cover` + `.card-body`），Vue 对多根组件不做属性透传，把 `@pointerenter` 挂在组件上会静默失效并告警；改为挂在调用方的 `<article class="card">` 上（第 9 条） |
+| 9 | `portal/frontend/src/views/LibraryView.vue`、`portal/frontend/src/views/GameListView.vue` | Hero `<section class="hero">` 与卡片外层 `<article class="card">`（包着 `<GameCard>` 的宿主元素）加 `@pointerenter`，而不是挂在 `<GameCard>` 上（原因见第 8 条） |
+| 10 | `portal/frontend/src/skeleton-fx.js` | 新建，`numberSkeleton()` 按视觉行写 `--i` + `replaySkeletonFx()` |
+| 11 | 各骨架页（`LibraryView` / `GameListView` / `GameView`） | 骨架渲染后调用一次 `numberSkeleton` |
 
 不改后端，不改 `index.html`（首屏骨架已独立）。
 

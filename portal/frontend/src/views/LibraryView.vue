@@ -7,7 +7,7 @@
 import { onLocaleChange, t } from '../i18n.js'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { prefetch } from '../router'
+import { prefetch } from '../prefetch'
 import { activateSkeleton } from '../skeleton-fx.js'
 import { api } from '../api'
 import { notify } from '../feedback'
