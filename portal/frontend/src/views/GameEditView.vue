@@ -27,6 +27,7 @@ import HoverPreview from '../components/HoverPreview.vue'
 import MediaLightbox from '../components/MediaLightbox.vue'
 import MediaSection from '../components/MediaSection.vue'
 import OrgMultiSelect from '../components/OrgMultiSelect.vue'
+import SkeletonBlock from '../components/SkeletonBlock.vue'
 
 const props = defineProps({ id: { type: String, required: true } })
 const router = useRouter()
@@ -679,7 +680,16 @@ onBeforeUnmount(() => {
       <button class="btn primary sm" :disabled="saving || deleting" @click="save">{{ saving ? t('保存中…') : t('保存') }}</button>
     </header>
 
-    <div v-if="loading" class="loading">{{ t("加载中…") }}</div>
+    <!-- 加载态：沿用真实表单的列宽与字段间距，数据到达时不产生高度跳变 -->
+    <div v-if="loading" class="edit-grid" aria-busy="true">
+      <div>
+        <div v-for="i in 3" :key="i" class="field">
+          <SkeletonBlock :width="80" :height="13" />
+          <SkeletonBlock :height="34" :radius="8" />
+        </div>
+      </div>
+      <div />
+    </div>
     <div v-else-if="error" class="empty">{{ error }}</div>
 
     <div v-else class="edit-grid">

@@ -7,13 +7,17 @@
 import { onLocaleChange, t } from '../i18n.js'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { prefetch } from '../prefetch'
+import { takeSavedScroll } from '../route-scroll'
+import { activateSkeleton } from '../skeleton-fx.js'
 import { api } from '../api'
 import { notify } from '../feedback'
 import { gameLink, listQuery, readListQuery } from '../list-origin'
 import { playLink } from '../play-origin'
 import GameCard from '../components/GameCard.vue'
+import SkeletonBlock from '../components/SkeletonBlock.vue'
 import { useGameLaunch } from '../use-game-launch'
-import { companyEnabled, localizationEnabled } from '../feature-flags'
+import { companyEnabled, localizationEnabled, loadSettings } from '../feature-flags'
 import { rankFilterItems } from '../filter-chips'
 
 const router = useRouter()
@@ -26,6 +30,15 @@ const total = ref(0)
 const loading = ref(false)
 const error = ref('')
 const done = ref(false)
+/**
+ * 首屏骨架：只有「列表还空着」的第一次 reset 才为 true。
+ *
+ * 筛选变化也会 reset，但那时用户已经看到内容，再铺整块骨架只会闪一下，
+ * 所以那种情况直接替换列表，不显示网格骨架。
+ */
+const firstLoading = ref(false)
+/** 标签 / 公司 / 汉化组 / 设置四组元数据返回前，筛选栏显示骨架 chip */
+const metaLoading = ref(true)
 
 /** 首次进入时从 URL 还原筛选（从详情页返回走的就是这条路径） */
 const initial = readListQuery(route)
@@ -138,15 +151,46 @@ function setDensity(id) {
  *
  * reset=true 用于筛选变化：先清空，再从 offset 0 开始。
  * 并发保护用 loading 标志——IntersectionObserver 在滚动时会连续触发。
+ *
+ * 首屏骨架只在「还没加载过任何一页、列表也是空的」时出现；
+ * 之后筛选变化同样会清空列表，但用户已经在看内容了，再铺整块骨架只会闪一下，
+ * 所以那种情况直接替换列表。
  */
+let booted = false
+/**
+ * 组件是否已卸载。请求可能晚于卸载返回：此时不能再消费 route-scroll 的
+ * 待恢复位置，否则会替下一个刚挂载的列表实例把位置取走，导致返回时不对齐。
+ */
+let disposed = false
+
+/**
+ * 从详情页返回时，浏览器/路由的 savedPosition 在骨架期就被应用：
+ * 那时只有 12 张骨架卡，页面高度不够，目标位置被钳制到骨架底部；
+ * 首屏数据到达、40 张卡铺开之后不会自动回来（浏览器只会保持相对位置）。
+ *
+ * 所以首屏数据渲染完再按 route-scroll.js 记录的位置对齐一次。
+ * 滚动位置由 route-scroll.js 在 popstate 恢复时记录，不依赖 vue-router 内部字段。
+ * 只在首屏（骨架）这条路径上调用：筛选变化不重铺骨架，那时用户已经在
+ * 当前位置看得好好的，再滚一次反而是干扰。
+ */
+async function restoreSavedScroll() {
+  if (disposed) return
+  const top = takeSavedScroll(route.path)
+  if (top == null || top === 0) return
+  await nextTick()
+  window.scrollTo(0, top)
+}
+
 async function fetchPage(reset) {
   if (loading.value) return
   loading.value = true
+  const first = reset && !booted && games.value.length === 0 && !done.value
   if (reset) {
     games.value = []
     done.value = false
     error.value = ''
   }
+  if (first) firstLoading.value = true
   try {
     const { items, total: t } = await api.listGames({
       tag: activeTag.value,
@@ -163,6 +207,10 @@ async function fetchPage(reset) {
     error.value = e.message
   } finally {
     loading.value = false
+    firstLoading.value = false
+    booted = true
+    // 首屏数据已进 DOM：这时再对齐返回位置才滚得到（骨架期高度不够）
+    if (first) restoreSavedScroll()
   }
 }
 
@@ -256,18 +304,30 @@ function syncFilterLabelWidth() {
 }
 
 onMounted(async () => {
-  try {
-    const [t, c, g, s] = await Promise.all([
-      api.listTags(), api.listCompanies(), api.listLocalizationGroups(), api.settings(),
-    ])
-    tags.value = t
-    companies.value = c
-    localizations.value = g
-    rotationEnabled.value = s.rotationEnabled !== 'false'
-  } catch {
-    // 标签 / 公司拉取失败不影响主列表，列表自身的错误由 fetchPage 报告
-  }
-  await fetchPage(true)
+  // 四组元数据与首页列表同时发出：谁先回来谁先渲染，不再串成两个 RTT。
+  // 元数据失败不影响主列表（列表自身的错误由 fetchPage 报告）。
+  const metaPromise = Promise.all([
+    api.listTags(), api.listCompanies(), api.listLocalizationGroups(),
+  ])
+    .then(([tagList, companyList, localizationList]) => {
+      tags.value = tagList
+      companies.value = companyList
+      localizations.value = localizationList
+    })
+    .catch(() => {})
+
+  // 设置走共享缓存：App.vue / 库页可能已经拉过，这里通常零请求
+  const settingsPromise = loadSettings()
+    .then((s) => { rotationEnabled.value = s.rotationEnabled !== 'false' })
+    .catch(() => {})
+
+  // 四组元数据全部落地才撤掉筛选栏骨架；allSettled 保证失败也不会卡住骨架
+  Promise.allSettled([metaPromise, settingsPromise])
+    .then(() => { metaLoading.value = false })
+
+  const pagePromise = fetchPage(true)
+
+  await Promise.all([metaPromise, settingsPromise, pagePromise])
 
   sentinel = document.getElementById('listSentinel')
   if (sentinel && typeof IntersectionObserver !== 'undefined') {
@@ -293,11 +353,36 @@ const stopLocaleWatch = onLocaleChange(async () => {
 })
 
 onBeforeUnmount(() => {
+  disposed = true
   clearTimeout(queryTimer)
   observer?.disconnect()
   filterResizeObserver?.disconnect()
   stopLocaleWatch()
 })
+
+/**
+ * 骨架入场分组：卡片网格与筛选 chip 各自激活。
+ *
+ * chip 骨架是三段 <template v-if>，拿不到元素引用，所以复用常驻的 .filter-rows
+ * 容器（已有 filterRowsEl 引用，一个元素不能挂两个 ref）；它初始展开即可见。
+ */
+const listSkeletonEl = ref(null)
+
+// nextTick 之后 v-if 分支的骨架才进入 DOM，el 才有值；immediate 覆盖首屏直接进骨架的情形
+watch(firstLoading, async (v) => {
+  if (!v) return
+  await nextTick()
+  activateSkeleton(listSkeletonEl.value)
+}, { immediate: true })
+
+watch(metaLoading, async (v) => {
+  if (!v) return
+  await nextTick()
+  // 筛选栏被收起时是 display:none，此时量位置全为 0，会把整屏压成一行（D9）。
+  // 隐藏期间本来也看不到错峰，直接跳过；下次进入该页会重新挂载并重跑。
+  if (filtersCollapsed.value) return
+  activateSkeleton(filterRowsEl.value)
+}, { immediate: true })
 
 function hostOf(url) {
   if (!url) return ''
@@ -344,72 +429,108 @@ function hostOf(url) {
           <span v-else class="filter-collapsed-hint is-empty">{{ t("未设置") }}</span>
         </button>
 
-        <div v-show="!filtersCollapsed" ref="filterRowsEl" class="filter-rows">
+        <div v-show="!filtersCollapsed" ref="filterRowsEl" class="filter-rows page-skeleton">
           <div v-if="companyEnabled" class="filter-row">
             <span class="filter-label">{{ t("公司") }}</span>
-            <button
-              class="tag-chip company"
-              :class="{ active: activeCompany == null }"
-              @click="activeCompany = null"
-            >{{ t("全部") }}</button>
-            <button
-              v-for="c in visibleCompanies"
-              :key="c.id"
-              class="tag-chip company"
-              :class="{ active: activeCompany === c.id }"
-              :title="c.website || c.name"
-              @click="activeCompany = activeCompany === c.id ? null : c.id"
-            >
-              {{ c.name }}<span v-if="c.website" class="chip-site">{{ hostOf(c.website) }}</span>
-              <span class="chip-count">{{ c.count }}</span>
-            </button>
-            <button
-              v-if="hasMoreCompanies"
-              class="tag-chip more"
-              @click="companiesOpen = !companiesOpen"
-            >{{ companiesOpen ? t('收起 ▴') : t("更多 {0} ▾", companyChips.length - CHIP_LIMIT) }}</button>
-            <span v-if="!companies.length" class="filter-hint">
-              {{ t("还没有公司，可在「公司维护」里添加") }}</span>
+            <template v-if="metaLoading">
+              <SkeletonBlock
+                v-for="i in 6"
+                :key="i"
+                class="sk-chip"
+                :height="26"
+                :width="72"
+                :radius="999"
+              />
+            </template>
+            <template v-else>
+              <button
+                class="tag-chip company"
+                :class="{ active: activeCompany == null }"
+                @click="activeCompany = null"
+              >{{ t("全部") }}</button>
+              <button
+                v-for="c in visibleCompanies"
+                :key="c.id"
+                class="tag-chip company"
+                :class="{ active: activeCompany === c.id }"
+                :title="c.website || c.name"
+                @click="activeCompany = activeCompany === c.id ? null : c.id"
+              >
+                {{ c.name }}<span v-if="c.website" class="chip-site">{{ hostOf(c.website) }}</span>
+                <span class="chip-count">{{ c.count }}</span>
+              </button>
+              <button
+                v-if="hasMoreCompanies"
+                class="tag-chip more"
+                @click="companiesOpen = !companiesOpen"
+              >{{ companiesOpen ? t('收起 ▴') : t("更多 {0} ▾", companyChips.length - CHIP_LIMIT) }}</button>
+              <span v-if="!companies.length" class="filter-hint">
+                {{ t("还没有公司，可在「公司维护」里添加") }}</span>
+            </template>
           </div>
 
           <div v-if="localizationEnabled" class="filter-row">
             <span class="filter-label">{{ t("汉化组") }}</span>
-            <button
-              class="tag-chip company"
-              :class="{ active: activeLocalization == null }"
-              @click="activeLocalization = null"
-            >{{ t("全部") }}</button>
-            <button
-              v-for="g in visibleLocalizations"
-              :key="g.id"
-              class="tag-chip company"
-              :class="{ active: activeLocalization === g.id }"
-              :title="g.website || g.description || g.name"
-              @click="activeLocalization = activeLocalization === g.id ? null : g.id"
-            >
-              {{ g.name }}<span v-if="g.alias" class="chip-site">{{ g.alias }}</span>
-              <span class="chip-count">{{ g.count }}</span>
-            </button>
-            <button
-              v-if="hasMoreLocalizations"
-              class="tag-chip more"
-              @click="localizationsOpen = !localizationsOpen"
-            >{{ localizationsOpen ? t('收起 ▴') : t("更多 {0} ▾", localizationChips.length - CHIP_LIMIT) }}</button>
-            <span v-if="!localizations.length" class="filter-hint">
-              {{ t("还没有汉化组，可在「汉化组维护」里添加") }}</span>
+            <template v-if="metaLoading">
+              <SkeletonBlock
+                v-for="i in 6"
+                :key="i"
+                class="sk-chip"
+                :height="26"
+                :width="72"
+                :radius="999"
+              />
+            </template>
+            <template v-else>
+              <button
+                class="tag-chip company"
+                :class="{ active: activeLocalization == null }"
+                @click="activeLocalization = null"
+              >{{ t("全部") }}</button>
+              <button
+                v-for="g in visibleLocalizations"
+                :key="g.id"
+                class="tag-chip company"
+                :class="{ active: activeLocalization === g.id }"
+                :title="g.website || g.description || g.name"
+                @click="activeLocalization = activeLocalization === g.id ? null : g.id"
+              >
+                {{ g.name }}<span v-if="g.alias" class="chip-site">{{ g.alias }}</span>
+                <span class="chip-count">{{ g.count }}</span>
+              </button>
+              <button
+                v-if="hasMoreLocalizations"
+                class="tag-chip more"
+                @click="localizationsOpen = !localizationsOpen"
+              >{{ localizationsOpen ? t('收起 ▴') : t("更多 {0} ▾", localizationChips.length - CHIP_LIMIT) }}</button>
+              <span v-if="!localizations.length" class="filter-hint">
+                {{ t("还没有汉化组，可在「汉化组维护」里添加") }}</span>
+            </template>
           </div>
 
           <div class="filter-row">
             <span class="filter-label">{{ t("标签") }}</span>
-            <button class="tag-chip" :class="{ active: !activeTag }" @click="activeTag = ''">{{ t("全部") }}</button>
-            <button
-              v-for="tag in tagChips"
-              :key="tag.id"
-              class="tag-chip"
-              :class="{ active: activeTag === tag.name }"
-              @click="activeTag = activeTag === tag.name ? '' : tag.name"
-            >{{ tag.name }}</button>
-            <span v-if="!tags.length" class="filter-hint">{{ t("还没有标签") }}</span>
+            <template v-if="metaLoading">
+              <SkeletonBlock
+                v-for="i in 6"
+                :key="i"
+                class="sk-chip"
+                :height="26"
+                :width="72"
+                :radius="999"
+              />
+            </template>
+            <template v-else>
+              <button class="tag-chip" :class="{ active: !activeTag }" @click="activeTag = ''">{{ t("全部") }}</button>
+              <button
+                v-for="tag in tagChips"
+                :key="tag.id"
+                class="tag-chip"
+                :class="{ active: activeTag === tag.name }"
+                @click="activeTag = activeTag === tag.name ? '' : tag.name"
+              >{{ tag.name }}</button>
+              <span v-if="!tags.length" class="filter-hint">{{ t("还没有标签") }}</span>
+            </template>
           </div>
         </div>
       </div>
@@ -434,11 +555,24 @@ function hostOf(url) {
       {{ hasFilter ? t('没有符合筛选条件的游戏。') : t('游戏库为空。用 galworld add 注册游戏后刷新。') }}
     </div>
     <template v-else>
-      <div class="grid list-grid" :data-density="density">
+      <!-- 首屏骨架：只铺 12 张覆盖首屏，不追求与整页 40 张等高；
+           逐卡尺寸与真实卡片对齐，所以单卡不跳 -->
+      <div v-if="firstLoading" ref="listSkeletonEl" class="grid list-grid page-skeleton" :data-density="density">
+        <article v-for="i in 12" :key="i" class="card sk-card">
+          <div class="cover"><SkeletonBlock class="sk-cover" height="100%" :radius="0" /></div>
+          <div class="card-body">
+            <SkeletonBlock :height="12" width="70%" />
+            <SkeletonBlock :height="11" width="45%" />
+            <SkeletonBlock :height="11" width="30%" />
+          </div>
+        </article>
+      </div>
+      <div v-else class="grid list-grid" :data-density="density">
         <article
           v-for="g in games"
           :key="g.id"
           class="card"
+          @pointerenter="prefetch(`/game/${g.id}`)"
           @click="openGame(g.id)"
         >
           <GameCard
@@ -461,3 +595,10 @@ function hostOf(url) {
     </template>
   </div>
 </template>
+
+<style scoped>
+/* 筛选栏骨架 chip：与 .tag-chip 同尺寸；flex:none 保证不被行内压缩 */
+.sk-chip {
+  flex: none;
+}
+</style>

@@ -15,6 +15,7 @@ import { api } from '../api'
 import { confirmAction, notify } from '../feedback'
 import { idsOf, moveItem } from '../order'
 import I18nFields from '../components/I18nFields.vue'
+import SkeletonBlock from '../components/SkeletonBlock.vue'
 
 const tags = ref([])
 const loading = ref(true)
@@ -178,7 +179,25 @@ onBeforeUnmount(stopLocaleWatch)
         <span class="muted-sm">{{ t("共 {0} 个 · 拖动行排序", total) }}</span>
       </div>
 
-      <div v-if="loading" class="loading">{{ t("加载中…") }}</div>
+      <!-- 加载态：沿用真实表格的行高与列结构，数据到达时不产生高度跳变 -->
+      <table v-if="loading" class="company-table" aria-busy="true">
+        <thead>
+          <tr>
+            <th style="width:32px"></th>
+            <th>{{ t("名称") }}</th>
+            <th>{{ t("别名") }}</th>
+            <th style="text-align:right">{{ t("操作") }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="i in 6" :key="i">
+            <td><SkeletonBlock :width="12" :height="14" /></td>
+            <td><SkeletonBlock :width="120" :height="14" /></td>
+            <td><SkeletonBlock :width="'40%'" :height="14" /></td>
+            <td><div class="sk-actions"><SkeletonBlock :width="60" :height="14" /></div></td>
+          </tr>
+        </tbody>
+      </table>
       <p v-else-if="!tags.length" class="muted-sm">{{ t("还没有标签。") }}</p>
 
       <table v-else class="company-table">
@@ -231,3 +250,8 @@ onBeforeUnmount(stopLocaleWatch)
     </section>
   </div>
 </template>
+
+<style scoped>
+/* 加载态表格：操作列右对齐，与真实行一致 */
+.sk-actions { display: flex; justify-content: flex-end; }
+</style>

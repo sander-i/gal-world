@@ -15,8 +15,8 @@ test('内置主题包含四套且 id 唯一', () => {
   assert.deepEqual(BUILTIN_THEMES.map((t) => t.base).sort(), ['dark', 'dark', 'dark', 'light'])
 })
 
-test('未知 id 回退到 obsidian', () => {
-  assert.equal(resolveTheme('nope', []).id, 'obsidian')
+test('未知 id 回退到默认主题 paper', () => {
+  assert.equal(resolveTheme('nope', []).id, 'paper')
 })
 
 test('自定义主题按 id 命中', () => {

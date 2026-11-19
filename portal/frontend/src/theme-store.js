@@ -5,13 +5,13 @@
 
 import { computed, ref } from 'vue'
 import {
-  BUILTIN_THEMES, THEME_STORAGE_KEY, applyTheme, parseStoredTheme, resolveTheme,
+  BUILTIN_THEMES, DEFAULT_THEME_ID, THEME_STORAGE_KEY, applyTheme, parseStoredTheme, resolveTheme,
 } from './theme.js'
 
 const CUSTOM_KEY = 'galworld.themes.custom'
 const stored = parseStoredTheme(localStorage.getItem(THEME_STORAGE_KEY))
 const customThemes = ref(loadCustom())
-const currentId = ref(stored?.id || 'obsidian')
+const currentId = ref(stored?.id || DEFAULT_THEME_ID)
 const current = computed(() => resolveTheme(currentId.value, customThemes.value))
 const allThemes = computed(() => [...BUILTIN_THEMES, ...customThemes.value])
 
@@ -45,10 +45,15 @@ function saveCustom(theme) {
   setTheme(theme.id)
 }
 
+/**
+ * 删除自定义主题。正在使用的主题拒绝删除（返回 false），
+ * 由调用方提示「先切换到其它主题」——静默回退会让界面在用户没预期时换色。
+ */
 function removeCustom(id) {
+  if (currentId.value === id) return false
   customThemes.value = customThemes.value.filter((t) => t.id !== id)
-  if (currentId.value === id) setTheme('obsidian')
-  else persist()
+  persist()
+  return true
 }
 
 export function useTheme() {

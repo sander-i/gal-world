@@ -7,9 +7,10 @@
 import { t, useI18n } from '../i18n.js'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { api, getWriteToken, setWriteToken as persistWriteToken } from '../api'
-import { applySettings } from '../feature-flags'
+import { primeSettings } from '../feature-flags'
 import { notify } from '../feedback'
 import ThemePicker from '../components/ThemePicker.vue'
+import SkeletonBlock from '../components/SkeletonBlock.vue'
 
 /** 语言切换：写 localStorage 并重新拉取消息表，页面即时生效 */
 const { locale, languages, currentName, loading: i18nLoading, loadError, setLocale } = useI18n()
@@ -157,7 +158,8 @@ async function save(patch) {
   busy.value = true
   try {
     settings.value = await api.saveSettings(patch)
-    applySettings(settings.value)
+    // 保存成功后同时覆盖共享缓存，其它页面的 loadSettings() 立刻拿到新值
+    primeSettings(settings.value)
     notify.success(t('已保存'))
   } catch (e) {
     notify.error(t("保存失败：{0}", e.message))
@@ -233,20 +235,25 @@ onBeforeUnmount(() => {
       <div class="brand" style="font-size:15px;letter-spacing:.1em">{{ t("设置") }}</div>
     </header>
 
-    <div v-if="!settings" class="loading">{{ t("加载中…") }}</div>
+    <div class="settings-layout">
+      <aside class="settings-nav">
+        <button
+          v-for="n in navItems"
+          :key="n.id"
+          :class="{ active: activeNav === n.id }"
+          @click="gotoSection(n.id)"
+        >{{ n.label }}</button>
+      </aside>
 
-    <template v-else>
-      <div class="settings-layout">
-        <aside class="settings-nav">
-          <button
-            v-for="n in navItems"
-            :key="n.id"
-            :class="{ active: activeNav === n.id }"
-            @click="gotoSection(n.id)"
-          >{{ n.label }}</button>
-        </aside>
+      <!-- 加载态：内容区按真实面板结构出 3 块骨架，左侧导航保持可用 -->
+      <div v-if="!settings" class="settings-content" aria-busy="true">
+        <section v-for="i in 3" :key="i" class="panel">
+          <div class="panel-head"><SkeletonBlock :width="140" :height="16" /></div>
+          <SkeletonBlock :lines="2" :height="13" />
+        </section>
+      </div>
 
-        <div class="settings-content">
+      <div v-else class="settings-content">
       <section id="language" class="panel">
         <div class="panel-head">
           <h2>{{ t("界面语言") }}</h2>
@@ -612,6 +619,5 @@ onBeforeUnmount(() => {
       </section>
         </div>
       </div>
-    </template>
   </div>
 </template>

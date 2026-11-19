@@ -65,7 +65,16 @@ const stateText = computed(() => ({
 
   <div class="card-body">
     <div class="card-title">
-      <img v-if="game.iconPath" :src="game.iconPath" class="card-icon" :alt="game.name" />
+      <!-- 卡片图标不在首屏关键路径上：延迟加载，解码异步，避免阻塞首屏渲染。
+           注意不要给 MediaRotator 加同样的属性，它用游离 Image 预加载，lazy 会让 onload 永不触发。 -->
+      <img
+        v-if="game.iconPath"
+        :src="game.iconPath"
+        class="card-icon"
+        :alt="game.name"
+        loading="lazy"
+        decoding="async"
+      />
       {{ game.name }}
     </div>
     <div v-if="companyEnabled && game.companies && game.companies.length" class="card-company">
