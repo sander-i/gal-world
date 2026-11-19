@@ -1,0 +1,909 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="obsidian">
+<head>
+<meta charset="utf-8">
+<title>Gal World · 页面跳转加载动效预览</title>
+<style>
+/* ---------- 主题种子：与 src/theme.js 的 BUILTIN_THEMES 一致 ---------- */
+html[data-theme="obsidian"]{--bg:#0e1013;--surface:#16191f;--line:#262b33;--text:#e9e6e0;--muted:#8a9099;--accent:#d8a05c}
+html[data-theme="midnight"]{--bg:#0b1119;--surface:#121a24;--line:#1e2a38;--text:#e2ecf5;--muted:#7d8fa3;--accent:#4fa8c8}
+html[data-theme="sakura"]  {--bg:#16111a;--surface:#221a28;--line:#3a2d43;--text:#f4ecf4;--muted:#a495ae;--accent:#f2a6c0}
+html[data-theme="paper"]   {--bg:#efe9dd;--surface:#fffcf5;--line:#d8cdbb;--text:#2a2520;--muted:#6f6558;--accent:#b06a1e}
+
+/* 派生色：与 styles.css 的 :root 与 deriveVars 同规则，只由种子色算出 */
+:root{
+  --surface-2:color-mix(in srgb,var(--surface) 88%,var(--text));
+  --surface-3:color-mix(in srgb,var(--surface) 70%,var(--bg));
+  --line-strong:color-mix(in srgb,var(--line) 70%,var(--text));
+  --accent-hi:color-mix(in srgb,var(--accent) 70%,var(--text));
+  --accent-dim:color-mix(in srgb,var(--accent) 55%,var(--bg));
+  --accent-ring:color-mix(in srgb,var(--accent) 25%,transparent);
+  --accent-faint:color-mix(in srgb,var(--accent) 10%,transparent);
+  --accent-line:color-mix(in srgb,var(--accent) 30%,transparent);
+  --muted-soft-bg:color-mix(in srgb,var(--muted) 14%,transparent);
+  --muted-soft-line:color-mix(in srgb,var(--muted) 28%,transparent);
+  --ok:#6fbf8b;
+  --ok-soft:color-mix(in srgb,var(--ok) 16%,transparent);
+  --ok-line:color-mix(in srgb,var(--ok) 35%,transparent);
+  --cover-gradient:linear-gradient(135deg,var(--surface-2),var(--surface-3));
+  --hero-body-gradient:linear-gradient(100deg,var(--surface),var(--surface-3));
+  --radius:10px;--r-ctl:8px;
+  --ctl-h-sm:28px;--ctl-h-md:34px;--ctl-h-lg:40px;
+  --ctl-fs-sm:12.5px;--ctl-fs-md:13.5px;--ctl-fs-lg:14px;
+  --shadow:0 10px 30px color-mix(in srgb,#000 40%,transparent);
+  color-scheme:light;
+}
+html[data-theme="obsidian"],html[data-theme="midnight"],html[data-theme="sakura"]{color-scheme:dark}
+
+*{box-sizing:border-box}
+body{
+  margin:0;background:var(--bg);color:var(--text);
+  font:15px/1.6 "PingFang SC","Microsoft YaHei","Noto Sans CJK SC",system-ui,sans-serif;
+  -webkit-font-smoothing:antialiased;
+}
+a{color:inherit;text-decoration:none}
+button{font:inherit;color:inherit;border:0;background:none;cursor:pointer}
+
+/* ---------- 演示控制台（不属于门户，仅预览用） ---------- */
+.demo{max-width:1500px;margin:0 auto;padding:20px 24px 48px}
+.demo-head{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin-bottom:14px}
+.demo-head h1{font-size:17px;margin:0;letter-spacing:.02em}
+.demo-head .hint{color:var(--muted);font-size:12.5px}
+.ctrl{
+  display:flex;align-items:center;gap:18px;flex-wrap:wrap;
+  padding:12px 16px;border:1px solid var(--line);border-radius:var(--radius);
+  background:var(--surface);margin-bottom:18px;
+}
+.ctrl-group{display:flex;align-items:center;gap:8px}
+.ctrl-label{font-size:12px;color:var(--muted);letter-spacing:.04em;white-space:nowrap}
+.seg{display:flex;border:1px solid var(--line);border-radius:999px;overflow:hidden}
+.seg button{height:var(--ctl-h-sm);padding:0 13px;font-size:var(--ctl-fs-sm);color:var(--muted);border-right:1px solid var(--line)}
+.seg button:last-child{border-right:0}
+.seg button:hover{color:var(--text)}
+.seg button.on{background:var(--accent);color:var(--bg);font-weight:600}
+input[type=range]{width:150px;accent-color:var(--accent)}
+select{
+  height:var(--ctl-h-sm);padding:0 26px 0 10px;font:inherit;font-size:var(--ctl-fs-sm);
+  color:var(--text);background:var(--bg);border:1px solid var(--line);border-radius:var(--r-ctl);
+  -webkit-appearance:none;appearance:none;cursor:pointer;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%238a9099' stroke-width='1.4' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 9px center;
+}
+.ghost-btn{
+  display:inline-flex;align-items:center;height:var(--ctl-h-sm);padding:0 13px;
+  border:1px solid var(--line);border-radius:999px;color:var(--muted);
+  font-size:var(--ctl-fs-sm);white-space:nowrap;transition:border-color .15s,color .15s,transform .06s;
+}
+.ghost-btn:hover{border-color:var(--accent-dim);color:var(--text)}
+.ghost-btn:active{transform:scale(.97)}
+.ghost-btn.on{border-color:var(--accent-line);color:var(--accent);background:var(--accent-faint)}
+.demo-note{
+  font-size:12.5px;color:var(--muted);margin:-6px 0 16px;line-height:1.7;
+  padding-left:12px;border-left:2px solid var(--accent-line);
+}
+
+/* ---------- 假浏览器 ---------- */
+.frame{
+  border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--surface);
+  box-shadow:var(--shadow);position:relative;
+}
+.chrome{
+  display:flex;align-items:center;gap:10px;height:38px;padding:0 14px;
+  background:var(--surface-3);border-bottom:1px solid var(--line);
+}
+.dots{display:flex;gap:6px}
+.dots i{width:9px;height:9px;border-radius:999px;background:var(--line-strong);display:block}
+.urlbar{
+  flex:1;height:22px;line-height:22px;padding:0 12px;border-radius:999px;
+  background:var(--bg);border:1px solid var(--line);color:var(--muted);
+  font-size:12px;font-family:ui-monospace,Menlo,Consolas,monospace;overflow:hidden;white-space:nowrap;
+}
+.urlbar .host{color:var(--muted)}
+.urlbar .path{color:var(--text)}
+
+/* 进度条：z-index 低于遮罩，高于吸顶筛选栏 */
+.progress{
+  position:absolute;top:38px;left:0;right:0;height:2px;z-index:40;
+  opacity:0;transition:opacity .18s ease;pointer-events:none;
+}
+.progress.on{opacity:1}
+.progress i{
+  display:block;height:100%;width:0;
+  background:linear-gradient(90deg,var(--accent-dim),var(--accent));
+  box-shadow:0 0 8px var(--accent-ring);
+  transition:width .2s ease;
+}
+
+/* ---------- 视口与页面切换 ---------- */
+/* 所有页面叠在同一网格单元：离场页保留在文档流里，不会因为脱流把容器高度
+   压成 0、把滚动位置夹回顶部（那是 position:absolute 方案的坑）。 */
+.viewport{display:grid;grid-template-columns:minmax(0,1fr);height:640px;overflow-y:auto;overflow-x:hidden;background:var(--bg)}
+.page{grid-area:1/1;display:none}
+.page.active{display:block}
+.page.enter{animation:page-enter .18s ease both}
+.page.leave{pointer-events:none;animation:page-leave .12s ease forwards}
+@keyframes page-enter{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+@keyframes page-leave{to{opacity:0}}
+
+/* ---------- 骨架（与 styles.css 的 .sk 同构） ---------- */
+.sk{display:block;width:100%;height:14px;background:var(--surface-2);border-radius:6px;overflow:hidden;position:relative}
+.sk::after{
+  content:'';position:absolute;inset:0;transform:translateX(-100%);
+  background:linear-gradient(90deg,transparent,color-mix(in srgb,var(--surface-hover,var(--surface-2)) 55%,transparent),transparent);
+  animation:sk-shimmer 1.4s ease-in-out infinite;
+}
+@keyframes sk-shimmer{to{transform:translateX(100%)}}
+.sk-lines{display:flex;flex-direction:column;gap:8px}
+.sk-cover{width:100%;height:100%;border-radius:0}
+.sk-btn{height:var(--ctl-h-lg);width:120px;border-radius:999px}
+@media (prefers-reduced-motion:reduce){.sk::after{animation:none}}
+
+/* ---------- 骨架动效（D 方案新增） ----------
+ * 原状：整屏骨架共用一条同步流光，像一条横带扫过，看不出正在加载什么。
+ * 新增：每块按 DOM 顺序错峰（--i 由 JS 写入），进场逐块淡入、流光错峰成波浪。
+ * 三种效果可叠加，由 .fx-* 类开关：
+ *   fade  —— 逐块淡入 + 上浮 4px
+ *   wave  —— 流光错峰，从左上向右下推
+ *   breathe —— 底色缓慢呼吸
+ */
+.fx-fade .page-skeleton.active .sk,
+.fx-combo .page-skeleton.active .sk {
+  animation: sk-in calc(.36s * var(--fx-speed, 1)) cubic-bezier(.22,.8,.28,1) both;
+  animation-delay: calc(var(--i, 0) * 26ms * var(--fx-speed, 1));
+}
+
+.fx-wave .page-skeleton.active .sk::after,
+.fx-combo .page-skeleton.active .sk::after {
+  animation-delay: calc((var(--i, 0) * 55ms + 140ms) * var(--fx-speed, 1));
+}
+
+/* 呼吸与进场作用在不同属性（background-color vs opacity/transform），可并列 */
+.fx-breathe .page-skeleton.active .sk,
+.fx-combo .page-skeleton.active .sk {
+  animation-name: sk-in, sk-breathe;
+  animation-duration: calc(.36s * var(--fx-speed, 1)), calc(2.6s * var(--fx-speed, 1));
+  animation-timing-function: cubic-bezier(.22,.8,.28,1), ease-in-out;
+  animation-iteration-count: 1, infinite;
+  animation-fill-mode: both, none;
+  animation-delay: calc(var(--i, 0) * 26ms * var(--fx-speed, 1)), 0s;
+}
+
+@keyframes sk-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: none; }
+}
+
+@keyframes sk-breathe {
+  0%, 100% { background-color: var(--surface-2); }
+  50%      { background-color: color-mix(in srgb, var(--surface-2) 86%, var(--text)); }
+}
+
+@media (prefers-reduced-motion:reduce){
+  .page-skeleton.active .sk,
+  .page-skeleton.active .sk::after { animation: none !important; }
+}
+
+/* ---------- 门户布局（从 styles.css 摘录，保证视觉一致） ---------- */
+.shell{max-width:1416px;margin:0 auto;padding:0 24px 64px}
+.topbar{display:flex;align-items:center;gap:16px;padding:24px 0 18px;border-bottom:1px solid var(--line);margin-bottom:34px}
+.brand{font-size:20px;letter-spacing:.16em;font-weight:600}
+.brand em{font-style:normal;color:var(--accent)}
+.topbar .spacer{flex:1}
+
+.hero{
+  position:relative;display:grid;grid-template-columns:minmax(0,420px) minmax(0,1fr);gap:0;
+  margin-bottom:34px;border-radius:12px;overflow:hidden;border:1px solid var(--line);
+  background:var(--surface);cursor:pointer;transition:border-color .18s,transform .18s;
+}
+.hero:hover{border-color:var(--accent-dim);transform:translateY(-2px)}
+.hero:active{transform:translateY(-1px) scale(.998);transition-duration:.06s}
+.hero-bg{position:relative;aspect-ratio:16/9;background:var(--cover-gradient);display:grid;place-items:center;overflow:hidden}
+.hero-bg img{width:100%;height:100%;object-fit:cover}
+.hero-body{padding:22px 28px;display:flex;flex-direction:column;justify-content:center;background:var(--hero-body-gradient)}
+.hero-head{display:flex;align-items:center;gap:12px;margin-bottom:8px}
+.hero-title{font-size:25px;font-weight:600;margin:0;letter-spacing:.02em;line-height:1.25}
+.hero-reason{
+  flex:0 0 auto;font-size:11.5px;letter-spacing:.06em;padding:2px 10px;border-radius:999px;
+  color:var(--accent);background:var(--accent-faint);border:1px solid var(--accent-line);white-space:nowrap;
+}
+.hero-meta{color:var(--muted);font-size:13px}
+.hero-actions{display:flex;gap:10px;align-self:flex-start;margin-top:14px}
+
+.section-head{display:flex;align-items:baseline;gap:12px;margin:26px 0 14px}
+.section-head h2{font-size:16px;font-weight:600;margin:0;letter-spacing:.04em}
+
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:22px}
+.grid-fixed-5{grid-template-columns:repeat(5,minmax(0,1fr));gap:16px}
+.grid-fixed-5 .card-title{font-size:14px}
+.grid-fixed-5 .card-company,.grid-fixed-5 .card-tags{display:none}
+
+.card{
+  background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;
+  transition:transform .18s ease,border-color .18s ease,box-shadow .18s ease;
+  display:flex;flex-direction:column;cursor:pointer;
+}
+.card:hover{transform:translateY(-3px);border-color:var(--accent-dim);box-shadow:var(--shadow)}
+.card:active{transform:translateY(-1px) scale(.995);transition-duration:.06s}
+.cover{aspect-ratio:16/9;background:var(--cover-gradient);display:grid;place-items:center;position:relative;overflow:hidden}
+.cover img{width:100%;height:100%;object-fit:cover}
+.cover .initial{font-size:40px;color:var(--placeholder-ink,var(--muted));letter-spacing:.1em}
+.card-body{padding:14px 16px 16px;display:flex;flex-direction:column;gap:4px;flex:1}
+.card-title{font-size:15.5px;font-weight:600;letter-spacing:.02em}
+.card-meta{color:var(--muted);font-size:12.5px}
+.badge{
+  position:absolute;top:10px;left:10px;padding:2px 9px;border-radius:999px;font-size:11.5px;
+  backdrop-filter:blur(6px);border:1px solid var(--ok-line);background:var(--ok-soft);color:var(--ok);
+}
+
+/* 详情页骨架与真实内容同尺寸 */
+.detail-hero{display:grid;grid-template-columns:minmax(0,380px) minmax(0,1fr);gap:34px;align-items:start}
+.hero-left h1{font-size:26px;margin:0 0 6px;letter-spacing:.02em}
+.hero-left .sub{color:var(--muted);font-size:13px;margin-bottom:20px}
+.hero-title-row{display:flex;align-items:center;gap:12px;margin-bottom:6px}
+.hero-icon{width:34px;height:34px;border-radius:8px;background:var(--surface-2);flex:none}
+.stats{display:flex;gap:10px;margin-bottom:20px}
+.stat{padding:10px 14px;border:1px solid var(--line);border-radius:var(--r-ctl);background:var(--surface);display:flex;flex-direction:column;gap:6px;flex:1}
+.actions{display:flex;flex-direction:column;gap:10px;margin-bottom:20px}
+.hero-center{aspect-ratio:16/9;border-radius:var(--radius);overflow:hidden;border:1px solid var(--line);background:var(--cover-gradient)}
+.panel{margin-top:34px;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:22px 24px 24px}
+.panel-head{display:flex;align-items:baseline;gap:14px;margin-bottom:18px}
+.panel-head h2{font-size:16px;font-weight:600;margin:0;letter-spacing:.04em}
+.intro{color:var(--muted);font-size:14px;line-height:1.85;margin:0}
+
+/* 筛选栏（列表页） */
+.list-fixed{position:sticky;top:0;z-index:20;background:var(--bg);border-bottom:1px solid var(--line);padding-bottom:10px}
+.filter-row{display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap}
+.filter-label{font-size:12px;color:var(--muted);min-width:34px;letter-spacing:.06em}
+.chip{
+  padding:4px 14px;border-radius:999px;font-size:12.5px;color:var(--muted);background:var(--surface);
+  border:1px solid var(--line);transition:color .15s,border-color .15s,background .15s;
+}
+.chip:hover{color:var(--text);border-color:var(--line-strong)}
+.chip.active{color:var(--bg);background:var(--accent);border-color:var(--accent);font-weight:600}
+.chip-sk{display:inline-flex}
+.chip-sk .sk{height:26px;width:72px;border-radius:999px}
+.list-grid{margin-top:16px}
+
+/* ---------- 变体 A：只有进度条 ---------- */
+.mode-a .page.enter{animation:none}
+.mode-a .page.leave{animation:none}
+.mode-a .card:active,.mode-a .hero:active{transform:none}
+.mode-a .sk::after{animation:none}
+/* 变体 A 不显示骨架：等待期停留在旧页，靠进度条反馈 */
+.mode-a .page-skeleton{display:none}
+
+/* ---------- 变体 B：骨架直切（无过渡） ---------- */
+.mode-b .page.enter{animation:none}
+.mode-b .page.leave{animation:none}
+.mode-b .card:active,.mode-b .hero:active{transform:none}
+
+/* ---------- 变体 C：交叉淡入（无进度条、无点击反馈） ---------- */
+.mode-c .progress{display:none}
+.mode-c .card:active,.mode-c .hero:active{transform:none}
+.mode-c .page.leave{animation:page-leave .09s ease forwards}
+.mode-c .page.enter{animation:page-enter .18s ease both}
+
+/* 慢放：动画时长 ×4，便于看清 */
+.slow .page.enter{animation-duration:.72s}
+.slow .page.leave{animation-duration:.48s}
+.slow .progress i{transition-duration:.8s}
+.slow .progress{transition-duration:.72s}
+
+/* 预取就绪标记：悬停 120 ms 后出现，用来证明 L1 真的发生了 */
+.card{position:relative}
+[data-go].warmed::after{
+  content:'chunk 已就绪';
+  position:absolute;top:8px;right:8px;z-index:2;
+  padding:2px 8px;border-radius:999px;
+  font-size:10.5px;letter-spacing:.04em;
+  color:var(--ok);background:var(--ok-soft);border:1px solid var(--ok-line);
+  pointer-events:none;
+}
+.hero.warmed::after{
+  content:'chunk 已就绪';
+  position:absolute;top:12px;right:12px;z-index:2;
+  padding:2px 9px;border-radius:999px;
+  font-size:11px;letter-spacing:.04em;
+  color:var(--ok);background:var(--ok-soft);border:1px solid var(--ok-line);
+  pointer-events:none;
+}
+</style>
+</head>
+<body>
+<div class="demo">
+  <div class="demo-head">
+    <h1>页面跳转加载动效 · 预览</h1>
+    <span class="hint">点卡片或 Hero 跳转；下方可切换方案、调模拟延迟、慢放对照</span>
+  </div>
+
+  <div class="ctrl">
+    <div class="ctrl-group">
+      <span class="ctrl-label">方案</span>
+      <div class="seg" id="segMode">
+        <button data-mode="d" class="on">D 组合（推荐）</button>
+        <button data-mode="a">A 仅进度条</button>
+        <button data-mode="b">B 骨架直切</button>
+        <button data-mode="c">C 交叉淡入</button>
+      </div>
+    </div>
+    <div class="ctrl-group">
+      <span class="ctrl-label">模拟延迟</span>
+      <input type="range" id="delay" min="0" max="1200" step="50" value="300">
+      <span class="ctrl-label" id="delayVal" style="min-width:52px">300 ms</span>
+    </div>
+    <div class="ctrl-group">
+      <span class="ctrl-label">主题</span>
+      <select id="theme">
+        <option value="obsidian">黑曜石</option>
+        <option value="midnight">深海</option>
+        <option value="sakura">樱</option>
+        <option value="paper">素纸</option>
+      </select>
+    </div>
+    <div class="ctrl-group">
+      <span class="ctrl-label">骨架动效</span>
+      <div class="seg" id="segFx">
+        <button data-fx="combo" class="on">全开（推荐）</button>
+        <button data-fx="fade">逐块淡入</button>
+        <button data-fx="wave">流光波浪</button>
+        <button data-fx="breathe">呼吸</button>
+        <button data-fx="none">无</button>
+      </div>
+    </div>
+    <div class="ctrl-group">
+      <button class="ghost-btn on" id="btnPrefetch">预取 开</button>
+      <button class="ghost-btn" id="btnSlow">慢放 ×4</button>
+      <button class="ghost-btn" id="btnReset">回到首页</button>
+    </div>
+  </div>
+
+  <p class="demo-note" id="note">
+    D：点击缩一下 → 骨架立即出现（预取命中）或旧页停留 + 80 ms 后进度条（预取未命中）→ 内容到达淡入。
+  </p>
+  <p class="demo-note" style="border-left-color:var(--line-strong);color:var(--muted-soft,var(--muted))">
+    提示：先把鼠标在卡片上停 0.3 秒（右上角出现「chunk 已就绪」），再点 —— 那是预取命中，点击后骨架一帧内到位；
+    直接快速点击是预取未命中，能看到进度条兜底。两种路径的差别就是这个方案的核心。
+  </p>
+
+  <div class="frame" id="frame">
+    <div class="chrome">
+      <div class="dots"><i></i><i></i><i></i></div>
+      <div class="urlbar"><span class="host">galworld.lan</span><span class="path" id="urlPath">/</span></div>
+    </div>
+    <div class="progress" id="progress"><i id="progressBar"></i></div>
+
+    <div class="viewport" id="viewport">
+
+      <!-- ========== 首页 ========== -->
+      <div class="page active" data-page="library">
+        <div class="shell">
+          <header class="topbar">
+            <div class="brand">GAL <em>WORLD</em></div>
+            <div class="spacer"></div>
+            <button class="ghost-btn" data-go="games">全部游戏</button>
+            <button class="ghost-btn">设置</button>
+            <button class="ghost-btn">管理</button>
+          </header>
+
+          <section class="hero" data-go="game">
+            <div class="hero-bg"><span class="initial">S</span></div>
+            <div class="hero-body">
+              <div class="hero-head">
+                <h2 class="hero-title">千恋＊万花</h2>
+                <span class="hero-reason">上次游玩</span>
+              </div>
+              <div class="hero-meta">累计 12.4 小时 · 上次 11月18日</div>
+              <div class="hero-actions">
+                <button class="ghost-btn" style="height:var(--ctl-h-lg);padding:0 22px;font-size:var(--ctl-fs-lg);border-radius:999px;color:var(--bg);background:var(--accent);border-color:var(--accent);font-weight:600">继续游玩</button>
+              </div>
+            </div>
+          </section>
+
+          <div class="section-head"><h2>为你推荐</h2></div>
+          <div class="grid grid-fixed-5" id="recGrid"></div>
+        </div>
+      </div>
+
+      <!-- ========== 全部游戏 ========== -->
+      <div class="page" data-page="games">
+        <div class="shell">
+          <div class="list-fixed">
+            <header class="topbar" style="margin-bottom:14px">
+              <button class="ghost-btn" data-go="library">← 首页</button>
+              <div class="spacer"></div>
+              <input class="ghost-btn" style="width:200px" placeholder="搜索游戏名 / 简介" readonly>
+            </header>
+            <div class="filter-row">
+              <span class="filter-label">会社</span>
+              <button class="chip active">全部</button>
+              <button class="chip">ゆずソフト <span style="opacity:.7">6</span></button>
+              <button class="chip">Navel <span style="opacity:.7">3</span></button>
+              <button class="chip">minori <span style="opacity:.7">3</span></button>
+              <button class="chip">Key <span style="opacity:.7">5</span></button>
+            </div>
+            <div class="filter-row">
+              <span class="filter-label">标签</span>
+              <button class="chip active">全部</button>
+              <button class="chip">校园</button>
+              <button class="chip">纯爱</button>
+              <button class="chip">悬疑</button>
+              <button class="chip">日常</button>
+            </div>
+          </div>
+          <div class="grid list-grid" id="listGrid"></div>
+        </div>
+      </div>
+
+      <!-- ========== 全部游戏（骨架） ========== -->
+      <div class="page page-skeleton" data-page="games-sk">
+        <div class="shell">
+          <div class="list-fixed">
+            <header class="topbar" style="margin-bottom:14px">
+              <span class="ghost-btn">← 首页</span>
+              <div class="spacer"></div>
+              <span class="sk" style="width:200px;height:28px;border-radius:999px"></span>
+            </header>
+            <div class="filter-row">
+              <span class="filter-label">会社</span>
+              <span class="chip-sk"><span class="sk"></span></span>
+              <span class="chip-sk"><span class="sk" style="width:96px"></span></span>
+              <span class="chip-sk"><span class="sk" style="width:80px"></span></span>
+              <span class="chip-sk"><span class="sk" style="width:88px"></span></span>
+            </div>
+            <div class="filter-row">
+              <span class="filter-label">标签</span>
+              <span class="chip-sk"><span class="sk"></span></span>
+              <span class="chip-sk"><span class="sk" style="width:64px"></span></span>
+              <span class="chip-sk"><span class="sk" style="width:64px"></span></span>
+            </div>
+          </div>
+          <div class="grid list-grid" id="gamesSkGrid"></div>
+        </div>
+      </div>
+
+      <!-- ========== 游戏详情（骨架） ========== -->
+      <div class="page page-skeleton" data-page="game-sk">
+        <div class="shell">
+          <header class="topbar">
+            <span class="ghost-btn">← 全部游戏</span>
+            <div class="spacer"></div>
+            <span class="ghost-btn">⚙ 编辑</span>
+          </header>
+          <div class="detail-hero">
+            <div class="hero-left">
+              <div class="hero-title-row">
+                <span class="sk" style="width:34px;height:34px;border-radius:8px"></span>
+                <span class="sk" style="width:55%;height:24px"></span>
+              </div>
+              <span class="sk" style="width:40%;height:13px;margin-bottom:20px"></span>
+              <div class="stats">
+                <div class="stat"><span class="sk" style="width:56px;height:12px"></span><span class="sk" style="width:72px;height:16px"></span></div>
+                <div class="stat"><span class="sk" style="width:56px;height:12px"></span><span class="sk" style="width:72px;height:16px"></span></div>
+                <div class="stat"><span class="sk" style="width:56px;height:12px"></span><span class="sk" style="width:72px;height:16px"></span></div>
+              </div>
+              <div class="actions">
+                <span class="sk sk-btn" style="width:100%"></span>
+                <span class="sk sk-btn" style="width:100%"></span>
+              </div>
+            </div>
+            <div class="hero-center"><span class="sk sk-cover"></span></div>
+          </div>
+          <section class="panel">
+            <div class="panel-head"><h2>简介</h2></div>
+            <div class="sk-lines">
+              <span class="sk" style="height:12px"></span>
+              <span class="sk" style="height:12px"></span>
+              <span class="sk" style="height:12px;width:60%"></span>
+            </div>
+          </section>
+        </div>
+      </div>
+
+      <!-- ========== 游戏详情（真实内容） ========== -->
+      <div class="page" data-page="game">
+        <div class="shell">
+          <header class="topbar">
+            <button class="ghost-btn" data-go="games">← 全部游戏</button>
+            <div class="spacer"></div>
+            <button class="ghost-btn">⚙ 编辑</button>
+          </header>
+          <div class="detail-hero">
+            <div class="hero-left">
+              <div class="hero-title-row">
+                <span class="hero-icon"></span>
+                <h1>千恋＊万花</h1>
+              </div>
+              <div class="sub">1920×1080 · 状态 已停止</div>
+              <div class="stats">
+                <div class="stat"><span style="font-size:12px;color:var(--muted)">累计时长</span><span style="font-size:16px;font-weight:600">12.4 小时</span></div>
+                <div class="stat"><span style="font-size:12px;color:var(--muted)">存档</span><span style="font-size:16px;font-weight:600">8 个</span></div>
+                <div class="stat"><span style="font-size:12px;color:var(--muted)">上次游玩</span><span style="font-size:16px;font-weight:600">昨天</span></div>
+              </div>
+              <div class="actions">
+                <button class="ghost-btn" style="height:var(--ctl-h-lg);justify-content:center;font-size:var(--ctl-fs-lg);border-radius:999px;color:var(--bg);background:var(--accent);border-color:var(--accent);font-weight:600">开始游玩</button>
+                <button class="ghost-btn" style="height:var(--ctl-h-lg);justify-content:center;font-size:var(--ctl-fs-lg);border-radius:999px">存档备份</button>
+              </div>
+            </div>
+            <div class="hero-center"><span class="initial" style="display:grid;place-items:center;height:100%;font-size:64px;color:var(--muted)">S</span></div>
+          </div>
+          <section class="panel">
+            <div class="panel-head"><h2>简介</h2></div>
+            <p class="intro">在古老的小镇里，主人公与几位少女的相遇拉开了故事的帷幕。这里是预览用的占位简介，真实内容由门户从游戏元数据读取。</p>
+          </section>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+<script>
+(() => {
+  const $ = (s) => document.querySelector(s)
+  const $$ = (s) => Array.from(document.querySelectorAll(s))
+
+  const viewport = $('#viewport')
+  const progress = $('#progress')
+  const progressBar = $('#progressBar')
+  const urlPath = $('#urlPath')
+  const note = $('#note')
+  const frame = $('#frame')
+
+  /** 当前生效的方案：d / a / b / c */
+  let mode = 'd'
+  /** chunk 加载耗时（模拟网络） */
+  let chunkDelay = 300
+  /** 挂载后取数据耗时：固定 450ms，让骨架有机会被看见 */
+  const DATA_DELAY = 450
+  /** 慢放倍数 */
+  let slowFactor = 1
+  /** 悬停预取开关：开则悬停 120ms 后标记该路由已预热 */
+  let prefetchOn = true
+
+  /** 已预热的页面 key */
+  const warmed = new Set()
+  const warmTimers = new Map()
+
+  const PATH = { library: '/', games: '/games', game: '/game/3' }
+  /** 目标页对应的骨架页；没有独立骨架时退回目标页自身 */
+  const SKELETON = { game: 'game-sk', games: 'games-sk' }
+  const NOTE = {
+    d: 'D：点击缩一下 → 骨架立即出现（预取命中）或旧页停留 + 80 ms 后进度条（预取未命中）→ 内容到达淡入。',
+    a: 'A：只有进度条。旧页完全静止 80 ms 后才出现 2px 进度条，内容到达时硬切，没有骨架。',
+    b: 'B：骨架直切。点击后立刻显示目标页骨架，无过渡动画，无进度条，内容到达直接替换。',
+    c: 'C：交叉淡入。旧页先淡出 90 ms，骨架再淡入 180 ms；内容到达直接替换。总时长最长。',
+  }
+
+  /* ---------- 进度条：80 ms 延迟 + 渐近推进 ---------- */
+  let showTimer = null
+  let trickleTimer = null
+  let hideTimer = null
+  let shown = false
+
+  function progressBegin() {
+    clearTimeout(showTimer)
+    clearTimeout(hideTimer)
+    clearInterval(trickleTimer)
+    shown = false
+    progressBar.style.width = '8%'
+    showTimer = setTimeout(() => {
+      shown = true
+      progress.classList.add('on')
+    }, 80 * slowFactor)
+    trickleTimer = setInterval(() => {
+      const w = parseFloat(progressBar.style.width) || 8
+      if (w >= 90) return
+      progressBar.style.width = (w + (90 - w) * 0.18) + '%'
+    }, 200 * slowFactor)
+  }
+
+  function progressDone() {
+    clearTimeout(showTimer)
+    clearInterval(trickleTimer)
+    if (!shown) {
+      progress.classList.remove('on')
+      progressBar.style.width = '0'
+      return
+    }
+    progressBar.style.width = '100%'
+    hideTimer = setTimeout(() => {
+      progress.classList.remove('on')
+      setTimeout(() => { progressBar.style.width = '0' }, 200)
+    }, 220 * slowFactor)
+  }
+
+  /* ---------- 页面切换 ---------- */
+  let navToken = 0
+  let timers = []
+
+  function clearTimers() {
+    timers.forEach((t) => clearTimeout(t))
+    timers = []
+  }
+
+  function later(fn, ms) {
+    timers.push(setTimeout(fn, ms))
+  }
+
+  function activePage() {
+    return $('.page.active')
+  }
+
+  /** 各页离开时的滚动位置，对应真实 router 的 savedPosition */
+  const scrollMemo = new Map()
+
+  /**
+   * 切换页面。
+   *
+   * animate：
+   *   'none'  —— 直接替换（硬切）
+   *   'enter' —— 旧页立刻移除，新页淡入上浮
+   *   'leave' —— 旧页先淡出，再让新页淡入（对应 mode="out-in"）
+   */
+  function showPage(key, animate) {
+    const next = $(`.page[data-page="${key}"]`)
+    const cur = activePage()
+    if (cur === next) return
+
+    const reveal = () => {
+      next.classList.add('active')
+      // 骨架页：先量出可见位置按行分组，再重放动画。
+      // 顺序不能反——display:none 时所有元素 top 都是 0，分组会全压成一行。
+      if (next.classList.contains('page-skeleton')) {
+        numberSkeleton(key)
+        replaySkeletonFx(key)
+      }
+      // 对应真实 scrollBehavior：新页回顶，但回到曾经离开的页时还原 savedPosition
+      viewport.scrollTop = scrollMemo.get(key) || 0
+      if (animate !== 'none') {
+        next.classList.remove('enter')
+        void next.offsetWidth          // 强制重排，动画可重放
+        next.classList.add('enter')
+        later(() => next.classList.remove('enter'), 220 * slowFactor)
+      }
+    }
+
+    if (!cur) { reveal(); return }
+
+    scrollMemo.set(cur.dataset.page, viewport.scrollTop)
+
+    if (animate === 'leave') {
+      cur.classList.add('leave')
+      later(() => {
+        cur.classList.remove('active', 'leave')
+        reveal()
+      }, 110 * slowFactor)
+    } else {
+      cur.classList.remove('active')
+      reveal()
+    }
+  }
+
+  function setUrl(key) {
+    urlPath.textContent = PATH[key] || '/'
+  }
+
+  /**
+   * 模拟一次导航。两段延迟与真实链路一一对应：
+   *
+   *   1. chunk  —— router.push 内部解析 () => import(...)，预取命中时为 0。
+   *                进度条只覆盖这一段，因为 beforeEach/afterEach 管的就是它。
+   *   2. data   —— 组件挂载后页面自己的骨架期，不属于路由导航。
+   *
+   * 注意：骨架属于目标组件，chunk 没到之前它根本不存在。
+   * 所以「点击后立刻看到目标页骨架」只在预取命中时成立；
+   * 预取未命中时，点击到骨架之间只能靠 L0 缩放 + L2 进度条填补。
+   */
+  function navigate(target) {
+    const token = ++navToken
+    clearTimers()
+    const alive = () => token === navToken
+
+    const cached = prefetchOn && warmed.has(target)
+    const chunk = cached ? 0 : chunkDelay * slowFactor
+    const dataMs = DATA_DELAY * slowFactor
+
+    const useProgress = mode === 'a' || mode === 'd'
+    setUrl(target)
+    if (useProgress) progressBegin()
+
+    // ---- 阶段一：chunk 加载 ----
+    later(() => {
+      if (!alive()) return
+      if (useProgress) progressDone()          // 导航结束，进度条收尾
+
+      // A 是「只有进度条」的对照组：旧页一直停到数据回来
+      if (mode === 'a') {
+        later(() => {
+          if (!alive()) return
+          showPage(target, 'none')
+        }, dataMs)
+        return
+      }
+
+      // B / C / D：目标组件已挂载，先出骨架
+      const skKey = SKELETON[target] || target
+      showPage(skKey, mode === 'c' ? 'leave' : mode === 'b' ? 'none' : 'enter')
+
+      // ---- 阶段二：数据到达，骨架换内容 ----
+      later(() => {
+        if (!alive()) return
+        showPage(target, 'none')
+      }, dataMs + (mode === 'c' ? 110 * slowFactor : 0))
+    }, chunk)
+  }
+
+  /* ---------- 预取：悬停 120 ms 后标记 ---------- */
+  function warmOn(target) {
+    if (!prefetchOn) return
+    if (warmed.has(target) || warmTimers.has(target)) return
+    warmTimers.set(target, setTimeout(() => {
+      warmed.add(target)
+      warmTimers.delete(target)
+      markWarm(target)
+    }, 120))
+  }
+
+  function markWarm(target) {
+    // 在被预取的卡片上留一个小点，证明 L1 生效
+    $$(`[data-go="${target}"]`).forEach((el) => el.classList.add('warmed'))
+  }
+
+  /* ---------- 生成卡片 ---------- */
+  const GAMES = [
+    ['千恋＊万花', 'ゆずソフト'], ['サノバウィッチ', 'ゆずソフト'],
+    ['喫茶ステラと死神の蝶', 'ゆずソフト'], ['RIDDLE JOKER', 'ゆずソフト'],
+    ['天使☆騒々', 'ゆずソフト'], ['蒼の彼方のフォーリズム', 'sprite'],
+    ['ISLAND', 'Frontwing'], ['eden*', 'minori'], ['ef', 'minori'],
+    ['Summer Pockets', 'Key'], ['CLANNAD', 'Key'], ['Rewrite', 'Key'],
+  ]
+
+  function cardHtml([name, company], i) {
+    return `
+      <article class="card" data-go="game">
+        <div class="cover"><span class="initial">${name[0]}</span></div>
+        <div class="card-body">
+          <div class="card-title">${name}</div>
+          <div class="card-meta">${company} · ${(i % 9) + 1}.${i % 10} 小时</div>
+        </div>
+      </article>`
+  }
+
+  $('#recGrid').innerHTML = GAMES.slice(0, 10).map(cardHtml).join('')
+  $('#listGrid').innerHTML = GAMES.map(cardHtml).join('')
+
+  // 列表页骨架：与真实卡片同尺寸，避免骨架换内容时跳动
+  const skCard = () => `
+    <article class="card" style="pointer-events:none">
+      <div class="cover"><span class="sk sk-cover"></span></div>
+      <div class="card-body">
+        <span class="sk" style="width:80%;height:15px"></span>
+        <span class="sk" style="width:55%;height:12px"></span>
+      </div>
+    </article>`
+  $('#gamesSkGrid').innerHTML = Array.from({ length: 8 }, skCard).join('')
+
+  /* ---------- 事件委托 ---------- */
+  frame.addEventListener('pointerover', (e) => {
+    const el = e.target.closest?.('[data-go]')
+    if (el) warmOn(el.dataset.go)
+  }, { passive: true })
+
+  frame.addEventListener('click', (e) => {
+    const el = e.target.closest?.('[data-go]')
+    if (!el) return
+    navigate(el.dataset.go)
+  })
+
+  /* ---------- 骨架动效：按 DOM 顺序写 --i，做出左上→右下 的错峰 ---------- */
+  let fx = 'combo'
+
+  /** 给骨架页内的 .sk 按「视觉行」编号。
+   *
+   *  按 DOM 顺序编号会让 15 个块串成 390ms 的长队，数据 450ms 回来时还没铺完；
+   *  同一行的块一起出现才像「内容逐行到位」，而不是「元素逐个冒泡」。
+   *  必须先让页面可见再量位置，display:none 下所有 offsetTop 都是 0。 */
+  function numberSkeleton(key) {
+    const page = $(`.page[data-page="${key}"]`)
+    if (!page) return
+    const items = Array.from(page.querySelectorAll('.sk'))
+    // 行内判定：顶边相差 6px 以内算同一行
+    const rows = []
+    for (const el of items) {
+      const top = el.getBoundingClientRect().top
+      const row = rows.find((r) => Math.abs(r.top - top) <= 6)
+      if (row) row.items.push(el)
+      else rows.push({ top, items: [el] })
+    }
+    rows.forEach((r, i) => r.items.forEach((el) => el.style.setProperty('--i', i)))
+    return rows.length
+  }
+
+  /** 重启动画：--i 是在 active 加上之后才写的，不重置的话本轮动画已经按旧延迟开始 */
+  function replaySkeletonFx(key) {
+    const page = $(`.page[data-page="${key}"]`)
+    if (!page) return
+    page.querySelectorAll('.sk').forEach((el) => {
+      el.style.animation = 'none'
+      void el.offsetWidth
+      el.style.animation = ''
+    })
+  }
+
+  function setFx(name) {
+    fx = name
+    frame.classList.remove('fx-fade', 'fx-wave', 'fx-breathe', 'fx-combo')
+    if (name !== 'none') frame.classList.add('fx-' + name)
+    $$('#segFx button').forEach((b) => b.classList.toggle('on', b.dataset.fx === name))
+  }
+
+  $$('#segFx button').forEach((b) => {
+    b.addEventListener('click', () => setFx(b.dataset.fx))
+  })
+
+  /* ---------- 控制台 ---------- */
+  function setMode(m) {
+    mode = m
+    frame.className = 'frame mode-' + m + (slowFactor > 1 ? ' slow' : '')
+    if (fx !== 'none') frame.classList.add('fx-' + fx)
+    note.textContent = NOTE[m]
+    $$('#segMode button').forEach((b) => b.classList.toggle('on', b.dataset.mode === m))
+    // 切方案时若正停在骨架上，退回首页，否则 A 方案下骨架被隐藏会剩空白
+    const cur = activePage()
+    if (cur && cur.classList.contains('page-skeleton')) resetToLibrary()
+  }
+
+  $$('#segMode button').forEach((b) => {
+    b.addEventListener('click', () => setMode(b.dataset.mode))
+  })
+
+  const delayInput = $('#delay')
+  const delayVal = $('#delayVal')
+  delayInput.addEventListener('input', () => {
+    chunkDelay = Number(delayInput.value)
+    delayVal.textContent = chunkDelay + ' ms'
+  })
+
+  $('#theme').addEventListener('change', (e) => {
+    document.documentElement.dataset.theme = e.target.value
+  })
+
+  $('#btnSlow').addEventListener('click', (e) => {
+    slowFactor = slowFactor > 1 ? 1 : 4
+    e.currentTarget.classList.toggle('on', slowFactor > 1)
+    e.currentTarget.textContent = slowFactor > 1 ? '正常速度' : '慢放 ×4'
+    frame.className = 'frame mode-' + mode + (slowFactor > 1 ? ' slow' : '')
+    if (fx !== 'none') frame.classList.add('fx-' + fx)
+    // 动效也跟着慢放，便于看清错峰节奏
+    document.documentElement.style.setProperty('--fx-speed', slowFactor)
+  })
+
+  $('#btnPrefetch').addEventListener('click', (e) => {
+    prefetchOn = !prefetchOn
+    e.currentTarget.classList.toggle('on', prefetchOn)
+    e.currentTarget.textContent = prefetchOn ? '预取 开' : '预取 关'
+    if (!prefetchOn) {
+      warmed.clear()
+      $$('.warmed').forEach((el) => el.classList.remove('warmed'))
+    }
+  })
+
+  $('#btnReset').addEventListener('click', resetToLibrary)
+
+  function resetToLibrary() {
+    clearTimers()
+    navToken++
+    progressDone()
+    $$('.page').forEach((p) => p.classList.remove('active', 'enter', 'leave'))
+    $('.page[data-page="library"]').classList.add('active')
+    warmed.clear()
+    $$('.warmed').forEach((el) => el.classList.remove('warmed'))
+    setUrl('library')
+    viewport.scrollTop = 0
+  }
+
+  setMode('d')
+  setFx('combo')
+})()
+</script>
+</body>
+</html>

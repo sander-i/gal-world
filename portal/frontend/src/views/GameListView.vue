@@ -7,6 +7,8 @@
 import { onLocaleChange, t } from '../i18n.js'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { prefetch } from '../router'
+import { activateSkeleton } from '../skeleton-fx.js'
 import { api } from '../api'
 import { notify } from '../feedback'
 import { gameLink, listQuery, readListQuery } from '../list-origin'
@@ -155,6 +157,22 @@ function setDensity(id) {
  */
 let booted = false
 
+/**
+ * 从详情页返回时，浏览器/路由的 savedPosition 在骨架期就被应用：
+ * 那时只有 12 张骨架卡，页面高度不够，目标位置被钳制到骨架底部；
+ * 首屏数据到达、40 张卡铺开之后不会自动回来（浏览器只会保持相对位置）。
+ *
+ * 所以首屏数据渲染完再按 history.state 里记录的位置对齐一次。
+ * 只在首屏（骨架）这条路径上调用：筛选变化不重铺骨架，那时用户已经在
+ * 当前位置看得好好的，再滚一次反而是干扰。
+ */
+async function restoreSavedScroll() {
+  const top = history.state?.scroll?.top
+  if (!top) return
+  await nextTick()
+  window.scrollTo(0, top)
+}
+
 async function fetchPage(reset) {
   if (loading.value) return
   loading.value = true
@@ -183,6 +201,8 @@ async function fetchPage(reset) {
     loading.value = false
     firstLoading.value = false
     booted = true
+    // 首屏数据已进 DOM：这时再对齐返回位置才滚得到（骨架期高度不够）
+    if (first) restoreSavedScroll()
   }
 }
 
@@ -331,6 +351,30 @@ onBeforeUnmount(() => {
   stopLocaleWatch()
 })
 
+/**
+ * 骨架入场分组：卡片网格与筛选 chip 各自激活。
+ *
+ * chip 骨架是三段 <template v-if>，拿不到元素引用，所以复用常驻的 .filter-rows
+ * 容器（已有 filterRowsEl 引用，一个元素不能挂两个 ref）；它初始展开即可见。
+ */
+const listSkeletonEl = ref(null)
+
+// nextTick 之后 v-if 分支的骨架才进入 DOM，el 才有值；immediate 覆盖首屏直接进骨架的情形
+watch(firstLoading, async (v) => {
+  if (!v) return
+  await nextTick()
+  activateSkeleton(listSkeletonEl.value)
+}, { immediate: true })
+
+watch(metaLoading, async (v) => {
+  if (!v) return
+  await nextTick()
+  // 筛选栏被收起时是 display:none，此时量位置全为 0，会把整屏压成一行（D9）。
+  // 隐藏期间本来也看不到错峰，直接跳过；下次进入该页会重新挂载并重跑。
+  if (filtersCollapsed.value) return
+  activateSkeleton(filterRowsEl.value)
+}, { immediate: true })
+
 function hostOf(url) {
   if (!url) return ''
   try {
@@ -376,7 +420,7 @@ function hostOf(url) {
           <span v-else class="filter-collapsed-hint is-empty">{{ t("未设置") }}</span>
         </button>
 
-        <div v-show="!filtersCollapsed" ref="filterRowsEl" class="filter-rows">
+        <div v-show="!filtersCollapsed" ref="filterRowsEl" class="filter-rows page-skeleton">
           <div v-if="companyEnabled" class="filter-row">
             <span class="filter-label">{{ t("公司") }}</span>
             <template v-if="metaLoading">
@@ -503,7 +547,7 @@ function hostOf(url) {
     </div>
     <template v-else>
       <!-- 首屏骨架：与真实卡片同结构、同密度布局，数据到达时不产生高度跳变 -->
-      <div v-if="firstLoading" class="grid list-grid" :data-density="density">
+      <div v-if="firstLoading" ref="listSkeletonEl" class="grid list-grid page-skeleton" :data-density="density">
         <article v-for="i in 12" :key="i" class="card sk-card">
           <div class="cover"><SkeletonBlock class="sk-cover" height="100%" :radius="0" /></div>
           <div class="card-body">
@@ -518,6 +562,7 @@ function hostOf(url) {
           v-for="g in games"
           :key="g.id"
           class="card"
+          @pointerenter="prefetch(`/game/${g.id}`)"
           @click="openGame(g.id)"
         >
           <GameCard

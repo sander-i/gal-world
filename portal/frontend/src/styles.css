@@ -168,10 +168,12 @@ a:focus-visible,
   color: var(--muted);
   font-size: var(--ctl-fs-sm);
   white-space: nowrap;
-  transition: border-color .15s, color .15s;
+  /* transform 项供 :active 缩放用，缺了它会瞬跳 */
+  transition: border-color .15s, color .15s, transform .06s;
 }
 
 .ghost-btn:hover { border-color: var(--accent-dim); color: var(--text); }
+.ghost-btn:active { transform: scale(.97); }
 .ghost-btn:disabled { opacity: .5; cursor: not-allowed; }
 
 /* 游戏卡片 */
@@ -195,6 +197,15 @@ a:focus-visible,
   transform: translateY(-3px);
   border-color: var(--accent-dim);
   box-shadow: var(--shadow);
+}
+
+/*
+ * 点击确认（L0）：按下的位移比 hover 略收，告诉用户「收到了」。
+ * 覆写 transition-duration 让按下比抬起快（.card 的基础过渡是 .18s）。
+ */
+.card:active {
+  transform: translateY(-1px) scale(.995);
+  transition-duration: .06s;
 }
 
 .cover {
@@ -921,6 +932,43 @@ a:focus-visible,
   z-index: 10;
 }
 
+/*
+ * 全局路由进度条（L2）：只覆盖 chunk 下载那一段。
+ * z-index 40 —— 低于 Element Plus 遮罩（2000 上下），高于 .list-fixed(20) 与 .toast(10)，
+ * 也不能盖住 .maintenance-mask(9999)。颜色全部走 var()，check-theme-vars 会拦字面值。
+ */
+.route-progress {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  z-index: 40;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity .18s ease;
+}
+.route-progress.on { opacity: 1; }
+.route-progress i {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent-dim), var(--accent));
+  box-shadow: 0 0 8px var(--accent-ring);
+  transition: width .2s ease;
+}
+@media (prefers-reduced-motion: reduce) {
+  .route-progress, .route-progress i { transition: none; }
+}
+
+/*
+ * 视图切换动效（L3）：只有进场，没有离场（D3）。
+ * 旧页在 chunk 到达时已无信息价值，等它淡出是纯等待；新页自己上浮淡入。
+ * 不加 mode="out-in" 时旧节点立刻移除，总时长就是这 180ms。
+ */
+.page-enter-active { transition: opacity .18s ease, transform .18s ease; }
+.page-enter-from { opacity: 0; transform: translateY(6px); }
+@media (prefers-reduced-motion: reduce) {
+  .page-enter-active { transition: none; }
+}
+
 .loading { color: var(--muted); font-size: 13px; padding: 40px 0; }
 
 /* 面板（存档备份等） */
@@ -1338,6 +1386,9 @@ select optgroup {
 }
 
 .hero:hover { border-color: var(--accent-dim); transform: translateY(-2px); }
+
+/* 点击确认（L0）：与 .card:active 同理，按下比抬起快 */
+.hero:active { transform: translateY(-1px) scale(.998); transition-duration: .06s; }
 
 @media (max-width: 700px) {
   .hero { grid-template-columns: 1fr; }
@@ -3768,6 +3819,42 @@ tr[draggable="true"]:active { cursor: grabbing; }
 /* 骨架卡片不可点 */
 .sk-card { pointer-events: none; }
 
+/* ---------- 骨架入场动效（L4） ----------
+ * 骨架页整体已由 .page-enter-* 淡入（L3），这里管骨架内部：
+ * 原状所有块全亮静态 + 一条同步流光，读不出「哪里先到」。
+ * --i 由 skeleton-fx.js 按「视觉行」写入（D8），同一行的块一起出现。
+ *
+ * 进场与呼吸必须写在同一 animation 列表（D11）：两者都改 .sk 的 animation，
+ * 分开写两条规则会互相覆盖。它们作用于不同属性（opacity/transform vs background-color），
+ * 可以并列。
+ */
+.page-skeleton.active .sk {
+  animation-name: sk-in, sk-breathe;
+  animation-duration: .36s, 2.6s;
+  animation-timing-function: cubic-bezier(.22,.8,.28,1), ease-in-out;
+  animation-iteration-count: 1, infinite;
+  /* 呼吸的 fill-mode 必须是 none：否则动画结束后会卡在 from 帧底色上 */
+  animation-fill-mode: both, none;
+  animation-delay: calc(var(--i, 0) * 26ms), 0s;
+}
+
+/* 流光错峰：从左上向右下推成波浪。改的是 ::after（流光层），与 .sk 本体的 sk-in 不冲突 */
+.page-skeleton.active .sk::after {
+  animation-delay: calc(var(--i, 0) * 55ms + 140ms);
+}
+
+@keyframes sk-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes sk-breathe {
+  0%, 100% { background-color: var(--surface-2); }
+  50% { background-color: color-mix(in srgb, var(--surface-2) 86%, var(--text)); }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .sk::after { animation: none; }
+  /* 一并关掉进场与呼吸；animation: none 同时清掉 --i 延迟，这正是期望 */
+  .page-skeleton.active .sk { animation: none; }
 }

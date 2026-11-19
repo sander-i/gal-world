@@ -5,8 +5,10 @@
 
 <script setup>
 import { onLocaleChange, t } from '../i18n.js'
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import { prefetch } from '../router'
+import { activateSkeleton } from '../skeleton-fx.js'
 import { api } from '../api'
 import { notify } from '../feedback'
 import { formatPlaytimeShort } from '../format'
@@ -209,6 +211,30 @@ function fmtDay(iso) {
 
 onMounted(load)
 
+/**
+ * 骨架入场分组：Hero 与推荐网格各自独立，因为两个 loading 标志互不相关。
+ * Hero 还要跟 heroSize 走：设置晚于骨架返回时，骨架会从横条换成 medium 大图
+ * （v-else-if 换了元素），新容器没有 active 类，必须重新激活。
+ *
+ * 必须等 nextTick：watch 回调触发时 v-if 分支还没换成骨架 DOM，el.value 为 null；
+ * 也必须等骨架真正可见，activateSkeleton 才能量出每块的 top 做视觉行分组（D9）。
+ * immediate 覆盖「组件挂载时已经处于 loading」的首屏情形。
+ */
+const heroSkeletonEl = ref(null)
+const gridSkeletonEl = ref(null)
+
+watch([heroLoading, heroSize], async ([loading]) => {
+  if (!loading) return
+  await nextTick()
+  activateSkeleton(heroSkeletonEl.value)
+}, { immediate: true })
+
+watch(gridLoading, async (v) => {
+  if (!v) return
+  await nextTick()
+  activateSkeleton(gridSkeletonEl.value)
+}, { immediate: true })
+
 // Hero 的推荐理由与推荐条的理由由后端按请求语言翻译，切语言后要重取
 const stopLocaleWatch = onLocaleChange(() => load())
 onBeforeUnmount(stopLocaleWatch)
@@ -231,7 +257,8 @@ onBeforeUnmount(stopLocaleWatch)
     <!-- 推荐位骨架：medium 档与真实 Hero 同高（190px），避免数据到达时跳变 -->
     <section
       v-if="heroLoading && heroSize !== 'off'"
-      class="hero sk-hero"
+      ref="heroSkeletonEl"
+      class="hero sk-hero page-skeleton"
       data-size="medium"
       aria-busy="true"
     >
@@ -253,7 +280,8 @@ onBeforeUnmount(stopLocaleWatch)
     <!-- off 档只留横条：骨架也按横条高度铺，避免 190px → 横条的高度塌陷 -->
     <section
       v-else-if="heroLoading"
-      class="hero hero-strip-wrap"
+      ref="heroSkeletonEl"
+      class="hero hero-strip-wrap page-skeleton"
       data-size="small"
       aria-busy="true"
     >
@@ -273,6 +301,7 @@ onBeforeUnmount(stopLocaleWatch)
         v-if="hero && heroSize !== 'off'"
         class="hero"
         data-size="medium"
+        @pointerenter="prefetch(`/game/${hero.gameId}`)"
         @click="router.push(`/game/${hero.gameId}`)"
       >
         <div class="hero-bg">
@@ -331,6 +360,7 @@ onBeforeUnmount(stopLocaleWatch)
         v-else-if="hero"
         class="hero hero-strip-wrap"
         data-size="small"
+        @pointerenter="prefetch(`/game/${hero.gameId}`)"
         @click="router.push(`/game/${hero.gameId}`)"
       >
         <div class="hero-strip">
@@ -367,7 +397,7 @@ onBeforeUnmount(stopLocaleWatch)
 
     <!-- 网格骨架：10 张卡，cover 用 16:9 预留高度，数据到达不跳变 -->
     <div v-if="error" class="empty">{{ t("加载失败：{0}", error) }}</div>
-    <div v-else-if="gridLoading" class="grid grid-fixed-5" aria-busy="true">
+    <div v-else-if="gridLoading" ref="gridSkeletonEl" class="grid grid-fixed-5 page-skeleton" aria-busy="true">
       <article v-for="i in 10" :key="i" class="card sk-card">
         <div class="cover">
           <SkeletonBlock class="sk-cover" height="100%" :radius="0" />
@@ -386,6 +416,7 @@ onBeforeUnmount(stopLocaleWatch)
         v-for="g in recommended"
         :key="g.gameId"
         class="card"
+        @pointerenter="prefetch(`/game/${g.gameId}`)"
         @click="router.push(`/game/${g.gameId}`)"
       >
         <GameCard

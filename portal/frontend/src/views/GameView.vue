@@ -5,8 +5,9 @@
 
 <script setup>
 import { t } from '../i18n.js'
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { activateSkeleton } from '../skeleton-fx.js'
 import { api } from '../api'
 import { confirmAction, notify } from '../feedback'
 import { formatPlaytime } from '../format'
@@ -569,6 +570,23 @@ function fmtTime(iso) {
 }
 
 onMounted(load)
+
+/**
+ * 骨架入场分组：标题区与简介面板各自激活。
+ *
+ * 编号只覆盖自己子树，所以两段必须分别调；<template v-if> 挂不了 ref，
+ * 因此 ref 落在里面的真实元素（.detail-hero / .panel）上。
+ * nextTick 之后骨架 DOM 才存在（el 才有值），immediate 覆盖首屏直接进骨架。
+ */
+const heroSkeletonEl = ref(null)
+const introSkeletonEl = ref(null)
+
+watch(gameLoading, async (v) => {
+  if (!v) return
+  await nextTick()
+  activateSkeleton(heroSkeletonEl.value)
+  activateSkeleton(introSkeletonEl.value)
+}, { immediate: true })
 </script>
 
 <template>
@@ -581,7 +599,7 @@ onMounted(load)
 
     <!-- 骨架与真实内容同尺寸（.hero-center 已是 16:9、按钮用 lg 高度），数据到达不跳变 -->
     <template v-if="gameLoading">
-      <div class="detail-hero">
+      <div ref="heroSkeletonEl" class="detail-hero page-skeleton">
         <div class="hero-left">
           <div class="hero-title">
             <SkeletonBlock :width="34" :height="34" :radius="8" />
@@ -606,7 +624,7 @@ onMounted(load)
           </div>
         </div>
       </div>
-      <section class="panel">
+      <section ref="introSkeletonEl" class="panel page-skeleton">
         <div class="panel-head">
           <h2>{{ t("简介") }}</h2>
         </div>
