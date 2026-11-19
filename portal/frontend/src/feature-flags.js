@@ -27,10 +27,66 @@ export function applySettings(settings) {
   }
 }
 
+/**
+ * /api/settings 的模块级缓存。
+ *
+ * 生命周期与进程一致：首次调用发起请求，之后所有页面复用同一个 Promise
+ * （App.vue、库页、列表页、详情页原来各拉一次，现在只发一次）。
+ *
+ * 刷新时机：
+ * - 设置页保存成功后调用 primeSettings(最新设置)，直接覆盖缓存，不必再请求；
+ * - 需要强制重新拉取时调用 invalidateSettings()，下一次 loadSettings() 会重新发请求。
+ *
+ * 失败不缓存：请求失败时返回空对象（开关保持默认启用），并把 Promise 清掉，
+ * 下次调用可以重试——否则一次网络抖动会让整场会话都用默认值。
+ */
+let settingsPromise = null
+let cachedSettings = null
+
+/** 共享的设置请求；失败时返回 {} 且不缓存，开关保持默认启用 */
+export function loadSettings() {
+  // 请求在途或已成功：复用同一个 Promise
+  if (settingsPromise) return settingsPromise
+  // 只有缓存、没有 Promise（例如外部清了 Promise）：直接用缓存，不再请求
+  if (cachedSettings) {
+    settingsPromise = Promise.resolve(cachedSettings)
+    return settingsPromise
+  }
+  settingsPromise = api
+    .settings()
+    .then((s) => {
+      applySettings(s)
+      cachedSettings = s
+      return s
+    })
+    .catch(() => {
+      // 失败不缓存，允许后续重试
+      settingsPromise = null
+      cachedSettings = null
+      return {}
+    })
+  return settingsPromise
+}
+
+/** 设置页保存后用最新结果覆盖缓存，避免保存后其它页面拿到旧值 */
+export function primeSettings(settings) {
+  applySettings(settings)
+  cachedSettings = settings
+  settingsPromise = Promise.resolve(settings)
+  return cachedSettings
+}
+
+/** 清空缓存；下一次 loadSettings() 会重新请求 */
+export function invalidateSettings() {
+  settingsPromise = null
+  cachedSettings = null
+}
+
 /** 首次进入时加载一次；失败时保持默认开启 */
 export async function loadFeatureFlags() {
   try {
-    applySettings(await api.settings())
+    // loadSettings 内部已应用开关；共享 Promise，重复调用不会重复请求
+    await loadSettings()
   } catch {
     // 后端不可用时不影响页面渲染，保持默认启用
   }

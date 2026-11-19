@@ -15,10 +15,11 @@ import { playLink } from '../play-origin'
 import { useGameLaunch } from '../use-game-launch'
 import { useLatency } from '../use-latency'
 import { useSessionRefresh } from '../use-session-refresh'
-import { companyEnabled, localizationEnabled } from '../feature-flags'
+import { companyEnabled, localizationEnabled, loadSettings } from '../feature-flags'
 import { latencyTone } from '../latency'
 import MediaRotator from '../components/MediaRotator.vue'
 import SaveDirPicker from '../components/SaveDirPicker.vue'
+import SkeletonBlock from '../components/SkeletonBlock.vue'
 
 const props = defineProps({ id: { type: String, required: true } })
 const router = useRouter()
@@ -32,10 +33,18 @@ const route = useRoute()
 const back = computed(() => backTarget(route))
 
 const game = ref(null)
-const loading = ref(true)
+/** 只表示 getGame 是否回来：标题区骨架与整页错误都看它 */
+const gameLoading = ref(true)
 const error = ref('')
 
 const saves = ref({ saveDirs: [], saveDirNames: [], current: '', original: '', backups: [] })
+/**
+ * 存档面板是否还在等 listSaves。
+ *
+ * 详情页的其余内容不等存档：游戏数据一到就整页渲染，存档面板单独占位。
+ * 否则会先闪一次「暂无存档备份」再跳成列表。
+ */
+const savesLoading = ref(true)
 
 /**
  * 合并存档面板状态。
@@ -101,6 +110,15 @@ const switchMode = ref('page')
 const rotationEnabled = ref(true)
 /** 详情页大屏展示偏好：cg=优先 CG，cover=只看封面。游戏级选择优先，未选择时跟随全局 */
 const mediaMode = ref('cg')
+/**
+ * mediaMode 的兜底时序标记。
+ *
+ * 并行加载后 getGame 与 settings 的到达顺序不确定：
+ * - mediaModeFromGame：游戏自身配了 cover/cg，谁后到都不该被全局默认覆盖；
+ * - mediaModePinned：用户手动点过切换，设置晚到也不能把选择冲掉。
+ */
+let mediaModeFromGame = false
+let mediaModePinned = false
 /** CG 层是否已就绪（首个图片 onload / 首个视频 canplay） */
 const cgReady = ref(false)
 /** 用户手动点了 CG：即使还没就绪也先切过去，内容区显示加载进度 */
@@ -154,6 +172,8 @@ watch([mediaMode, () => props.id], () => {
 
 /** 切换立即写回游戏配置，刷新或换浏览器都保持 */
 async function selectMedia(mode) {
+  // 用户已经表过态：settings 后到时不得用全局默认覆盖
+  mediaModePinned = true
   if (mode === 'cg') {
     // 未就绪时手动点 CG：立刻切过去，内容区显示加载进度
     if (!cgReady.value) manualCg.value = true
@@ -230,30 +250,71 @@ useSessionRefresh(
   { intervalMs: 3000 },
 )
 
+/**
+ * 应用 /api/settings：启动方式、CG 声音、轮换开关，以及大屏展示的兜底。
+ *
+ * 展示偏好只在游戏自身没配、用户也没手动点过时才跟随全局默认。
+ * settings 与 getGame 并行，谁后到都要尊重这个优先级，所以判断放在这里而不是调用处。
+ */
+function applyDetailSettings(s) {
+  if (!s) return
+  switchMode.value = s.switchMode || 'page'
+  cgSound.value = s.cgSound === 'true'
+  rotationEnabled.value = s.rotationEnabled !== 'false'
+  if (mediaModeFromGame || mediaModePinned) return
+  mediaMode.value = s.defaultMediaMode === 'cover' ? 'cover' : 'cg'
+}
+
+/**
+ * 详情页加载：标题区只等 getGame，其余请求全部并行。
+ *
+ * 原本是 6 个请求串行（getGame → listSaves → playtime → settings →
+ * resumeDownload → loadEstimate），首屏要等 6 个 RTT。现在 getGame 一回来
+ * 就渲染标题 / 元信息 / 媒体区，其余各区域谁先回来谁替换骨架。
+ *
+ * 失败策略：getGame 失败整页报错；存档保持空数组、时长保持 null、
+ * 设置回落到默认值——任何一项失败都不该让详情页打不开。
+ */
 async function load() {
-  loading.value = true
+  gameLoading.value = true
+  savesLoading.value = true
   error.value = ''
+  mediaModeFromGame = false
+  mediaModePinned = false
+
+  const savesPromise = api.listSaves(props.id).then(mergeSaves)
+  const playtimePromise = api.playtime(props.id)
+  const settingsPromise = loadSettings()
+  // 这两个内部已吞异常，失败只会让对应面板少一行提示
+  const downloadPromise = resumeDownload()
+  const estimatePromise = loadEstimate()
+
+  savesPromise
+    .then((s) => { saves.value = s })
+    .catch(() => { /* 存档面板退回空状态 */ })
+    .finally(() => { savesLoading.value = false })
+  playtimePromise
+    .then((p) => { playtime.value = p })
+    .catch(() => { /* 统计区不渲染 */ })
+  settingsPromise
+    .then(applyDetailSettings)
+    .catch(() => { /* loadSettings 内部已回落 {}，这里只是兜底 */ })
+
   try {
-    game.value = await api.getGame(props.id)
-    saves.value = mergeSaves(await api.listSaves(props.id))
-    playtime.value = await api.playtime(props.id)
-    const s = await api.settings()
-    switchMode.value = s.switchMode || 'page'
-    cgSound.value = s.cgSound === 'true'
-    rotationEnabled.value = s.rotationEnabled !== 'false'
-    // 游戏级选择优先；未单独选过则跟随全局默认（全局也没配就按 CG）
-    if (game.value.mediaMode === 'cover' || game.value.mediaMode === 'cg') {
-      mediaMode.value = game.value.mediaMode
-    } else {
-      mediaMode.value = s.defaultMediaMode === 'cover' ? 'cover' : 'cg'
+    const g = await api.getGame(props.id)
+    game.value = g
+    // 游戏级选择优先；没配过则等 settings 决定（全局也没配就按 CG）
+    if (g.mediaMode === 'cover' || g.mediaMode === 'cg') {
+      mediaMode.value = g.mediaMode
+      mediaModeFromGame = true
     }
-    await resumeDownload()
-    await loadEstimate()
   } catch (e) {
     error.value = e.message
   } finally {
-    loading.value = false
+    gameLoading.value = false
   }
+
+  await Promise.allSettled([downloadPromise, estimatePromise])
 }
 
 async function start() {
@@ -518,7 +579,40 @@ onMounted(load)
       <router-link :to="`/game/${id}/edit`" class="ghost-btn gear-btn" :title="t('编辑此游戏')">{{ t("⚙ 编辑") }}</router-link>
     </header>
 
-    <div v-if="loading" class="loading">{{ t("加载中…") }}</div>
+    <!-- 骨架与真实内容同尺寸（.hero-center 已是 16:9、按钮用 lg 高度），数据到达不跳变 -->
+    <template v-if="gameLoading">
+      <div class="detail-hero">
+        <div class="hero-left">
+          <div class="hero-title">
+            <SkeletonBlock :width="34" :height="34" :radius="8" />
+            <SkeletonBlock width="55%" :height="24" />
+          </div>
+          <SkeletonBlock width="40%" :height="13" style="margin-bottom:20px" />
+          <!-- 复用真实 .stats / .actions 的盒模型（含边框与间距），骨架块只是填内容 -->
+          <div class="stats">
+            <div v-for="i in 3" :key="i" class="stat">
+              <SkeletonBlock :width="56" :height="12" />
+              <SkeletonBlock :width="72" :height="16" />
+            </div>
+          </div>
+          <div class="actions">
+            <SkeletonBlock class="sk-btn" style="width:100%" />
+            <SkeletonBlock class="sk-btn" style="width:100%" />
+          </div>
+        </div>
+        <div class="hero-media">
+          <div class="hero-center">
+            <SkeletonBlock class="sk-cover" width="100%" height="100%" :radius="0" />
+          </div>
+        </div>
+      </div>
+      <section class="panel">
+        <div class="panel-head">
+          <h2>{{ t("简介") }}</h2>
+        </div>
+        <SkeletonBlock :lines="3" :height="12" />
+      </section>
+    </template>
     <div v-else-if="error" class="empty">{{ error }}</div>
     <div v-else-if="!game" class="empty">{{ t("没有这个游戏") }}</div>
 
@@ -780,15 +874,23 @@ onMounted(load)
       <section class="panel">
         <div class="panel-head">
           <h2>{{ t("存档管理与切换") }}</h2>
-          <span class="muted-sm">
-            {{ t("存档目录：{0}", saves.saveDirs.length ? saves.saveDirs.join('、') : t('未找到')) }}</span>
-          <button class="link-btn" @click="openDirPicker">{{ t("手动选择") }}</button>
-          <button class="link-btn" @click="savesOpen = !savesOpen">
-            {{ savesOpen ? t('收起 ▴') : t('展开 ▾') }}
-          </button>
+          <template v-if="savesLoading">
+            <SkeletonBlock :width="140" :height="13" />
+          </template>
+          <template v-else>
+            <span class="muted-sm">
+              {{ t("存档目录：{0}", saves.saveDirs.length ? saves.saveDirs.join('、') : t('未找到')) }}</span>
+            <button class="link-btn" @click="openDirPicker">{{ t("手动选择") }}</button>
+            <button class="link-btn" @click="savesOpen = !savesOpen">
+              {{ savesOpen ? t('收起 ▴') : t('展开 ▾') }}
+            </button>
+          </template>
         </div>
 
-        <p v-if="!savesOpen" class="muted-sm">
+        <!-- 存档还没回来：先占位，避免「暂无存档备份」闪一下再跳成列表 -->
+        <SkeletonBlock v-if="savesLoading" :lines="2" :height="12" />
+
+        <p v-else-if="!savesOpen" class="muted-sm">
           {{ saves.backups?.length ? saves.backups.length + t(' 份备份（可切换）') : t('暂无存档备份') }}
           <template v-if="currentBackup"> {{ t("· 当前：{0}", currentBackup.label || currentBackup.name) }}</template>
         </p>
@@ -922,3 +1024,14 @@ onMounted(load)
     </template>
   </div>
 </template>
+
+<style scoped>
+/*
+ * 详情页骨架的少量补丁：尺寸对齐真实内容，颜色一律取主题变量。
+ * 通用 .sk / .sk-cover / .sk-btn 在 styles.css，这里只覆盖本页特有的差异。
+ */
+.sk-btn {
+  /* 真实按钮用 var(--r-ctl)，全局 .sk-btn 的胶囊圆角会在数据到达时跳一下 */
+  border-radius: var(--r-ctl);
+}
+</style>

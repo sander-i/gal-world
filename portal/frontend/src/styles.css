@@ -3681,3 +3681,74 @@ tr[draggable="true"]:active { cursor: grabbing; }
   border-radius: var(--radius);
   background: var(--accent-faint);
 }
+
+/* ---------- 骨架屏（SkeletonBlock.vue 与各页加载态） ---------- */
+/*
+ * 契约：颜色只取 var(--...) / color-mix(var(--...))，check-theme-vars 会拦字面色值；
+ * 尺寸与真实内容对齐（.cover 已是 16:9），数据到达时不产生高度跳变。
+ */
+
+/*
+ * 默认尺寸放在 CSS 而不是组件内联样式：内联样式优先级高于类，
+ * 会把 .sk-btn / .sk-cover 这类「尺寸由类决定」的用法压回默认值。
+ * 后面的 .sk-cover / .sk-btn 同特异性、定义更晚，可以正常覆盖这里。
+ */
+.sk {
+  display: block;
+  width: 100%;
+  height: 14px;
+  background: var(--surface-2);
+  border-radius: 6px;
+  overflow: hidden;
+  position: relative;
+}
+
+/* 流光层：一条高光从左侧扫到右侧 */
+.sk::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--surface-hover) 55%, transparent),
+    transparent
+  );
+  animation: sk-shimmer 1.4s ease-in-out infinite;
+}
+
+@keyframes sk-shimmer {
+  to { transform: translateX(100%); }
+}
+
+.sk.circle { border-radius: 999px; }
+
+.sk-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sk-lines .sk { display: block; width: 100%; }
+
+/* 放进 .cover 时铺满 16:9 区域，不再有圆角 */
+.sk-cover {
+  width: 100%;
+  height: 100%;
+  border-radius: 0;
+}
+
+/* 按钮位：对齐 .hero-actions .hero-cta 的尺寸 */
+.sk-btn {
+  height: var(--ctl-h-lg);
+  width: 120px;
+  border-radius: 999px;
+}
+
+/* 骨架卡片不可点 */
+.sk-card { pointer-events: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .sk::after { animation: none; }
+}

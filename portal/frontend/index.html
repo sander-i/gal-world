@@ -24,9 +24,145 @@
         } catch (e) {}
       })()
     </script>
+    <style>
+      /*
+       * 挂载前的首屏骨架。此时 styles.css 还没下载，所以颜色一律用
+       * var(--x, 兜底字面值)：主题防闪脚本已写好变量时取变量，否则取兜底。
+       * 几何与 styles.css 的真实布局对齐（.shell / .topbar / .hero /
+       * .section-head / .grid-fixed-5 / .card），挂载时不应发生跳动。
+       * 类名统一 boot- 前缀，避免与业务样式冲突。
+       */
+      .boot-shell {
+        max-width: 1416px;
+        margin: 0 auto;
+        padding: 0 24px 64px;
+      }
+      .boot-topbar {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        padding: 24px 0 18px;
+        border-bottom: 1px solid var(--line, #262b33);
+        margin-bottom: 34px;
+      }
+      .boot-brand {
+        width: 110px;
+        height: 20px;
+        border-radius: 4px;
+        background: var(--surface-2, #1c2028);
+      }
+      .boot-spacer { flex: 1; }
+      .boot-nav { display: flex; gap: 10px; }
+      .boot-pill {
+        width: 64px;
+        height: 28px;
+        border-radius: 999px;
+        background: var(--surface-2, #1c2028);
+      }
+      .boot-hero {
+        height: 190px;
+        border-radius: 12px;
+        margin-bottom: 34px;
+        background: var(--surface-2, #1c2028);
+      }
+      .boot-section-head {
+        width: 120px;
+        height: 17px;
+        border-radius: 4px;
+        margin: 26px 0 14px;
+        background: var(--surface-2, #1c2028);
+      }
+      .boot-grid {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 16px;
+      }
+      @media (max-width: 1100px) { .boot-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+      @media (max-width: 860px)  { .boot-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+      @media (max-width: 640px)  { .boot-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+      .boot-card {
+        display: flex;
+        flex-direction: column;
+        background: var(--surface, #16191f);
+        border: 1px solid var(--line, #262b33);
+        border-radius: var(--radius, 10px);
+        overflow: hidden;
+      }
+      .boot-cover {
+        aspect-ratio: 16 / 9;
+        background: var(--surface-2, #1c2028);
+      }
+      .boot-card-body {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        padding: 14px 16px 16px;
+      }
+      .boot-line {
+        height: 12px;
+        border-radius: 6px;
+        background: var(--surface-2, #1c2028);
+      }
+      .boot-line.w80 { width: 80%; }
+      .boot-line.w60 { width: 60%; }
+      .boot-line.w40 { width: 40%; }
+      /* 流光：与 styles.css 的 .sk::after 同节奏 */
+      .boot-shimmer { position: relative; overflow: hidden; }
+      .boot-shimmer::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        transform: translateX(-100%);
+        background: linear-gradient(
+          90deg,
+          transparent,
+          color-mix(in srgb, var(--surface-hover, #2a2f38) 55%, transparent),
+          transparent
+        );
+        animation: boot-shimmer 1.4s ease-in-out infinite;
+      }
+      @keyframes boot-shimmer {
+        to { transform: translateX(100%); }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .boot-shimmer::after { animation: none; }
+      }
+      /* 挂载后 Vue 整体替换 #app，骨架无需手动移除。
+         body 背景先于 styles.css 生效，避免白底闪一下。 */
+      .boot-body { background: var(--bg, #0e1013); }
+    </style>
   </head>
-  <body>
-    <div id="app"></div>
+  <body class="boot-body">
+    <div id="app">
+      <div class="boot-shell" aria-hidden="true">
+        <div class="boot-topbar">
+          <div class="boot-brand boot-shimmer"></div>
+          <div class="boot-spacer"></div>
+          <div class="boot-nav">
+            <div class="boot-pill boot-shimmer"></div>
+            <div class="boot-pill boot-shimmer"></div>
+            <div class="boot-pill boot-shimmer"></div>
+            <div class="boot-pill boot-shimmer"></div>
+            <div class="boot-pill boot-shimmer"></div>
+            <div class="boot-pill boot-shimmer"></div>
+          </div>
+        </div>
+        <div class="boot-hero boot-shimmer"></div>
+        <div class="boot-section-head boot-shimmer"></div>
+        <div class="boot-grid">
+          <div class="boot-card"><div class="boot-cover boot-shimmer"></div><div class="boot-card-body"><div class="boot-line w80 boot-shimmer"></div><div class="boot-line w60 boot-shimmer"></div><div class="boot-line w40 boot-shimmer"></div></div></div>
+          <div class="boot-card"><div class="boot-cover boot-shimmer"></div><div class="boot-card-body"><div class="boot-line w80 boot-shimmer"></div><div class="boot-line w60 boot-shimmer"></div><div class="boot-line w40 boot-shimmer"></div></div></div>
+          <div class="boot-card"><div class="boot-cover boot-shimmer"></div><div class="boot-card-body"><div class="boot-line w80 boot-shimmer"></div><div class="boot-line w60 boot-shimmer"></div><div class="boot-line w40 boot-shimmer"></div></div></div>
+          <div class="boot-card"><div class="boot-cover boot-shimmer"></div><div class="boot-card-body"><div class="boot-line w80 boot-shimmer"></div><div class="boot-line w60 boot-shimmer"></div><div class="boot-line w40 boot-shimmer"></div></div></div>
+          <div class="boot-card"><div class="boot-cover boot-shimmer"></div><div class="boot-card-body"><div class="boot-line w80 boot-shimmer"></div><div class="boot-line w60 boot-shimmer"></div><div class="boot-line w40 boot-shimmer"></div></div></div>
+          <div class="boot-card"><div class="boot-cover boot-shimmer"></div><div class="boot-card-body"><div class="boot-line w80 boot-shimmer"></div><div class="boot-line w60 boot-shimmer"></div><div class="boot-line w40 boot-shimmer"></div></div></div>
+          <div class="boot-card"><div class="boot-cover boot-shimmer"></div><div class="boot-card-body"><div class="boot-line w80 boot-shimmer"></div><div class="boot-line w60 boot-shimmer"></div><div class="boot-line w40 boot-shimmer"></div></div></div>
+          <div class="boot-card"><div class="boot-cover boot-shimmer"></div><div class="boot-card-body"><div class="boot-line w80 boot-shimmer"></div><div class="boot-line w60 boot-shimmer"></div><div class="boot-line w40 boot-shimmer"></div></div></div>
+          <div class="boot-card"><div class="boot-cover boot-shimmer"></div><div class="boot-card-body"><div class="boot-line w80 boot-shimmer"></div><div class="boot-line w60 boot-shimmer"></div><div class="boot-line w40 boot-shimmer"></div></div></div>
+          <div class="boot-card"><div class="boot-cover boot-shimmer"></div><div class="boot-card-body"><div class="boot-line w80 boot-shimmer"></div><div class="boot-line w60 boot-shimmer"></div><div class="boot-line w40 boot-shimmer"></div></div></div>
+        </div>
+      </div>
+    </div>
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>

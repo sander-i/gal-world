@@ -12,17 +12,20 @@ import { notify } from '../feedback'
 import { formatPlaytimeShort } from '../format'
 import MediaRotator from '../components/MediaRotator.vue'
 import GameCard from '../components/GameCard.vue'
+import SkeletonBlock from '../components/SkeletonBlock.vue'
 import { useGameLaunch } from '../use-game-launch'
 import { useLatency } from '../use-latency'
 import { useSessionRefresh } from '../use-session-refresh'
 import { playLink } from '../play-origin'
-import { companyEnabled, localizationEnabled } from '../feature-flags'
+import { companyEnabled, loadSettings, localizationEnabled } from '../feature-flags'
 
 const router = useRouter()
 
 const hero = ref(null)
 const recommended = ref([])
-const loading = ref(true)
+/** 分区 loading：Hero 区与推荐网格各自独立，谁先回来谁先渲染 */
+const heroLoading = ref(true)
+const gridLoading = ref(true)
 const error = ref('')
 const switchMode = ref('page')
 const rotationEnabled = ref(true)
@@ -31,22 +34,73 @@ const heroSize = ref('medium')
 /** 首页固定推荐条数；后端返回不足时按实际渲染，不补位 */
 const RECOMMEND_COUNT = 10
 
-async function load() {
-  loading.value = true
+/**
+ * 推荐结果要等 Hero 确定后才能剔除 Hero 那款：
+ * 多拉 1 条是因为后端 recommend 的 exclude 没有补位机制，剔除后会少一款。
+ * 两个请求是同时发出的，这里的「等」只影响赋值时机，不增加 RTT。
+ */
+let pendingRec = null
+let heroSettled = false
+/** 语言切换会重跑 load()，旧请求晚到时不能覆盖新结果 */
+let loadToken = 0
+
+/** Hero 已确定且推荐已到达 → 剔除 Hero、截断到 10 条并渲染 */
+function flushRecommend() {
+  if (pendingRec === null || !heroSettled) return
+  const heroId = hero.value?.gameId || ''
+  // Hero 为 null（204）或推荐里没有它时，直接取前 10 条
+  const list = heroId ? pendingRec.filter((g) => g.gameId !== heroId) : pendingRec
+  recommended.value = list.slice(0, RECOMMEND_COUNT)
+  gridLoading.value = false
+}
+
+function load() {
+  const token = ++loadToken
+  const fresh = () => token === loadToken
+  heroLoading.value = true
+  gridLoading.value = true
   error.value = ''
-  try {
-    const [h, s] = await Promise.all([api.hero(), api.settings()])
-    hero.value = h
-    switchMode.value = s.switchMode || 'page'
-    rotationEnabled.value = s.rotationEnabled !== 'false'
-    heroSize.value = s.homeHeroSize === 'off' ? 'off' : 'medium'
-    // Hero 占用的游戏从推荐里排除，避免同一款游戏在首页出现两次
-    recommended.value = await api.recommend(RECOMMEND_COUNT, h?.gameId || '')
-  } catch (e) {
+  pendingRec = null
+  heroSettled = false
+
+  // 三个请求同时发出，不再等 hero 回来才拉推荐（原来 2 个 RTT）
+  const settingsPromise = loadSettings()
+  const heroPromise = api.hero()
+  const recPromise = api.recommend(RECOMMEND_COUNT + 1)
+
+  // 设置：loadSettings 内部失败已兜底为 {}，这里用默认值继续
+  settingsPromise.then((s) => {
+    if (!fresh()) return
+    const st = s || {}
+    switchMode.value = st.switchMode || 'page'
+    rotationEnabled.value = st.rotationEnabled !== 'false'
+    heroSize.value = st.homeHeroSize === 'off' ? 'off' : 'medium'
+  }).catch(() => {})
+
+  // Hero：失败只清空推荐位，不阻塞网格，也不弹整页错误
+  heroPromise
+    .then((h) => {
+      if (fresh()) hero.value = h || null
+    }, () => {
+      if (fresh()) hero.value = null
+    })
+    .finally(() => {
+      if (!fresh()) return
+      heroSettled = true
+      heroLoading.value = false
+      flushRecommend()
+    })
+
+  // 推荐：先暂存；Hero 已确定就立即剔除渲染，否则等 Hero 回来再 flush
+  recPromise.then((list) => {
+    if (!fresh()) return
+    pendingRec = Array.isArray(list) ? list : []
+    flushRecommend()
+  }, (e) => {
+    if (!fresh()) return
     error.value = e.message
-  } finally {
-    loading.value = false
-  }
+    gridLoading.value = false
+  })
 }
 
 /** 任意推荐卡片在运行 → 需要显示时延 */
@@ -174,8 +228,44 @@ onBeforeUnmount(stopLocaleWatch)
       <router-link to="/admin" class="ghost-btn" :title="t('后台管理')">{{ t("管理") }}</router-link>
     </header>
 
-    <div v-if="loading" class="loading">{{ t("加载中…") }}</div>
-    <div v-else-if="error" class="empty">{{ t("加载失败：{0}", error) }}</div>
+    <!-- 推荐位骨架：medium 档与真实 Hero 同高（190px），避免数据到达时跳变 -->
+    <section
+      v-if="heroLoading && heroSize !== 'off'"
+      class="hero sk-hero"
+      data-size="medium"
+      aria-busy="true"
+    >
+      <div class="hero-bg">
+        <SkeletonBlock class="sk-cover" height="100%" :radius="0" />
+      </div>
+      <div class="hero-body">
+        <div class="hero-head">
+          <SkeletonBlock :height="25" width="55%" />
+        </div>
+        <SkeletonBlock :height="13" width="40%" />
+        <div class="hero-actions">
+          <!-- 尺寸由 .sk-btn 提供（lg 高度 + 胶囊圆角），与真实 .hero-cta 对齐 -->
+          <SkeletonBlock class="sk-btn" />
+        </div>
+      </div>
+    </section>
+
+    <!-- off 档只留横条：骨架也按横条高度铺，避免 190px → 横条的高度塌陷 -->
+    <section
+      v-else-if="heroLoading"
+      class="hero hero-strip-wrap"
+      data-size="small"
+      aria-busy="true"
+    >
+      <div class="hero-strip">
+        <SkeletonBlock :height="13" width="110" />
+        <SkeletonBlock :height="16" width="160" />
+        <div class="sk-strip-meta">
+          <SkeletonBlock :height="13" width="90" />
+        </div>
+        <SkeletonBlock :height="28" width="96" />
+      </div>
+    </section>
 
     <template v-else>
       <!-- 推荐位：medium 大图 / off 只留横条 -->
@@ -267,38 +357,64 @@ onBeforeUnmount(stopLocaleWatch)
           </div>
         </div>
       </section>
-
-      <div class="section-head">
-        <h2>{{ t("为你推荐") }}</h2>
-        <span class="muted-sm">{{ t("按推荐算法排序的前 {0} 款", RECOMMEND_COUNT) }}</span>
-        <router-link to="/games" class="ghost-btn">{{ t("全部游戏 →") }}</router-link>
-      </div>
-
-      <div v-if="!recommended.length" class="empty">
-        {{ t("还没有游戏。用") }}<code>galworld add</code> {{ t("注册后刷新。") }}</div>
-      <div v-else class="grid grid-fixed-5">
-        <article
-          v-for="g in recommended"
-          :key="g.gameId"
-          class="card"
-          @click="router.push(`/game/${g.gameId}`)"
-        >
-          <GameCard
-            :game="g"
-            :busy="busyId === g.gameId"
-            :launching="!!launches[g.gameId]"
-            :action="launches[g.gameId]?.action || ''"
-            :progress="launches[g.gameId]?.percent ?? null"
-            :progress-label="launches[g.gameId]?.label || ''"
-            :latency="latency"
-            :rotation-enabled="rotationEnabled"
-            sizes="(max-width: 1100px) 25vw, 300px"
-            priority="low"
-            @toggle="quickToggle(g, $event)"
-            @open="enterGame(g)"
-          />
-        </article>
-      </div>
     </template>
+
+    <div class="section-head">
+      <h2>{{ t("为你推荐") }}</h2>
+      <span class="muted-sm">{{ t("按推荐算法排序的前 {0} 款", RECOMMEND_COUNT) }}</span>
+      <router-link to="/games" class="ghost-btn">{{ t("全部游戏 →") }}</router-link>
+    </div>
+
+    <!-- 网格骨架：10 张卡，cover 用 16:9 预留高度，数据到达不跳变 -->
+    <div v-if="error" class="empty">{{ t("加载失败：{0}", error) }}</div>
+    <div v-else-if="gridLoading" class="grid grid-fixed-5" aria-busy="true">
+      <article v-for="i in 10" :key="i" class="card sk-card">
+        <div class="cover">
+          <SkeletonBlock class="sk-cover" height="100%" :radius="0" />
+        </div>
+        <div class="card-body">
+          <SkeletonBlock :height="12" width="80%" />
+          <SkeletonBlock :height="12" width="60%" />
+          <SkeletonBlock :height="12" width="40%" />
+        </div>
+      </article>
+    </div>
+    <div v-else-if="!recommended.length" class="empty">
+      {{ t("还没有游戏。用") }}<code>galworld add</code> {{ t("注册后刷新。") }}</div>
+    <div v-else class="grid grid-fixed-5">
+      <article
+        v-for="g in recommended"
+        :key="g.gameId"
+        class="card"
+        @click="router.push(`/game/${g.gameId}`)"
+      >
+        <GameCard
+          :game="g"
+          :busy="busyId === g.gameId"
+          :launching="!!launches[g.gameId]"
+          :action="launches[g.gameId]?.action || ''"
+          :progress="launches[g.gameId]?.percent ?? null"
+          :progress-label="launches[g.gameId]?.label || ''"
+          :latency="latency"
+          :rotation-enabled="rotationEnabled"
+          sizes="(max-width: 1100px) 25vw, 300px"
+          priority="low"
+          @toggle="quickToggle(g, $event)"
+          @open="enterGame(g)"
+        />
+      </article>
+    </div>
   </div>
 </template>
+
+<style scoped>
+/* 骨架卡片的正文高度对齐真实卡片（标题 22 + 元信息 20 + 操作行 38 + 内边距 30 + 间距 8） */
+.sk-card .card-body { min-height: 118px; }
+
+/* off 档横条骨架：元信息推到右侧，与 .hero-strip-meta 的 margin-left:auto 一致 */
+.sk-strip-meta { margin-left: auto; }
+
+/* Hero 骨架不可点、不响应 hover 位移（真实 Hero 有 cursor:pointer 与 -2px 上浮） */
+.sk-hero { cursor: default; }
+.sk-hero:hover { transform: none; border-color: var(--line); }
+</style>
