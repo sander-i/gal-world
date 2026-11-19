@@ -45,10 +45,15 @@ function saveCustom(theme) {
   setTheme(theme.id)
 }
 
+/**
+ * 删除自定义主题。正在使用的主题拒绝删除（返回 false），
+ * 由调用方提示「先切换到其它主题」——静默回退会让界面在用户没预期时换色。
+ */
 function removeCustom(id) {
+  if (currentId.value === id) return false
   customThemes.value = customThemes.value.filter((t) => t.id !== id)
-  if (currentId.value === id) setTheme('obsidian')
-  else persist()
+  persist()
+  return true
 }
 
 export function useTheme() {
