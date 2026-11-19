@@ -47,6 +47,14 @@ set -a; . "$ENVFILE"; set +a
 # 早期手工注册的 game.env 可能没有 EXTRA_ENV；set -u 下缺键会让整个脚本退出
 : "${EXTRA_ENV:=}"
 : "${VIDEO_CRF:=12}" "${VIDEO_BITRATE:=40000,5000-80000}" "${KEYFRAME_INTERVAL:=60}" "${VIDEO_PAINTOVER_CRF:=12}"
+# 码率控制模式：crf（恒定质量，画面越好越费带宽）或 cbr（恒定码率）。
+#
+# CRF 在快速跳过对话这类全屏高速变化时会把瞬时帧撑到 50 KB 以上，帧越大发送
+# 越慢，越容易错过下一帧的截止时间；CBR 用 QP 上限把峰值压住（实测 1280x720
+# CRF8 峰值 52 KB，CBR 8M 只有 27 KB），代价是复杂画面略糊。
+# 默认仍是 crf，保持既有画质行为；需要的游戏在 game.env 里写 RATE_CONTROL_MODE=cbr
+# 并配合 VIDEO_BITRATE 使用。
+: "${RATE_CONTROL_MODE:=crf}"
 
 # ---- wine 选择（必须在 source game.env 之后）----
 # 顺序：game.env 的 WINE_HOME → 部署包解压的 <root>/.local/wine → 系统 PATH 里的 wine。
@@ -462,7 +470,7 @@ KEY="$GALROOT/data/certs/server.key"
   --subfolder "/stream/$ID" \
   --framerate "$FRAMERATE" \
   --manual-resolution --manual-width "$WIDTH" --manual-height "$HEIGHT" \
-  --rate-control-mode crf --video-crf "${VIDEO_CRF:-12}" \
+  --rate-control-mode "$RATE_CONTROL_MODE" --video-crf "${VIDEO_CRF:-12}" \
   --video-paintover-crf "${VIDEO_PAINTOVER_CRF:-12}" \
   --paint-over-jpeg-quality 95 \
   --video-bitrate "${VIDEO_BITRATE:-40000,5000-80000}" \

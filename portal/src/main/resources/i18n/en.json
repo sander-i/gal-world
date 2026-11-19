@@ -702,7 +702,7 @@
     "已设置 {0} 个存档目录": "{0} save folders configured",
     "已隐藏（health 不含 repoUrl）": "Hidden (health does not include repoUrl)",
     "帧率": "Frame rate",
-    "帧率格式应为 30 或 30-60": "Frame rate must be 30 or 30-60",
+    "帧率格式应为 30、30-60 或 60,30-60": "Frame rate must be 30 or 30-60",
     "并 purge xvfb / PulseAudio / python3-venv / 中文字体与全部 i386 包（含 i386 架构）。\\n": "and purge xvfb / PulseAudio / python3-venv / Chinese fonts and all i386 packages (including the i386 architecture).\\n",
     "应用全局轮换规则（封面：{0} {1} 秒 · CG：{2}": "Using global rotation rules (cover: {0} {1}s · CG: {2}",
     "延迟与音频链路弱于 WebRTC，未做实测": "Latency and audio path are weaker than WebRTC; not benchmarked",

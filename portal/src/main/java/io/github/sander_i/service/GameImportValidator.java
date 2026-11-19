@@ -35,7 +35,16 @@ public class GameImportValidator {
     public static boolean isValidId(String id) {
         return ID.matcher(id == null ? "" : id).matches();
     }
-    private static final Pattern FRAMERATE = Pattern.compile("^\\d{1,3}(-\\d{1,3})?$");
+    /**
+     * Selkies 的 FRAMERATE 语法：`60`（固定）、`30-60`（范围）、`60,30-60`（初始值 + 范围）。
+     *
+     * 第三种是 Ctrl 快速跳过对话这类高速场景需要的：门户默认锁 `30-30`，
+     * 客户端想降帧时会被钳回去（日志里是 "Client value for 'framerate' (10.0)
+     * was clamped to 30 (server range: 30-30)"）。给个范围让客户端自己选，
+     * 同时用初始值保证首帧就是高帧率。
+     */
+    private static final Pattern FRAMERATE =
+            Pattern.compile("^\\d{1,3}(-\\d{1,3})?(,\\d{1,3}(-\\d{1,3})?)?$");
     /** 允许的 GAME_LANG：空 = 默认 C.UTF-8；zh_CN 用于 GBK/CP936 汉化补丁 */
     private static final java.util.Set<String> LANGS =
             java.util.Set.of("", "zh_CN.UTF-8");
@@ -95,7 +104,7 @@ public class GameImportValidator {
         }
         String fr = framerate == null || framerate.isBlank() ? "30" : framerate.trim();
         if (!FRAMERATE.matcher(fr).matches()) {
-            throw new IllegalArgumentException(I18n.t("帧率格式应为 30 或 30-60"));
+            throw new IllegalArgumentException(I18n.t("帧率格式应为 30、30-60 或 60,30-60"));
         }
         String lang = gameLang == null ? "" : gameLang.trim();
         if (!LANGS.contains(lang)) {
