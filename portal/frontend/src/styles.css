@@ -100,6 +100,38 @@ html, body, #app { height: 100%; }
    否则下拉展开是白底配浅色文字，看着像「选不了」 */
 html { color-scheme: dark; }
 
+/*
+ * 全局滚动条：颜色全部取自主题变量，深色/浅色主题都跟着变。
+ * 轨道透明，只画滑块（line-strong → 悬停强调色），不额外铺一条深色槽，
+ * 页面、卡片、弹层里都能融进各自的底色；避免默认灰条在暖色主题（素纸、樱）里显得脏。
+ * 不用标准 scrollbar-color/width：Chromium 一旦识别这两个属性就会停用
+ * ::-webkit-scrollbar 自定义样式，圆角滑块会变回原生方块。
+ * 只有不认 webkit 伪元素的浏览器（Firefox）才走 @supports 分支。
+ */
+@supports not selector(::-webkit-scrollbar) {
+  html {
+    scrollbar-width: thin;
+    scrollbar-color: var(--line-strong) transparent;
+  }
+}
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+
+::-webkit-scrollbar-track { background: transparent; }
+
+::-webkit-scrollbar-thumb {
+  /* 透明边框 + padding-box：滑块比槽窄 4px，两端不顶死 */
+  background: var(--line-strong);
+  background-clip: padding-box;
+  border: 2px solid transparent;
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover { background: var(--accent-dim); background-clip: padding-box; }
+::-webkit-scrollbar-thumb:active { background: var(--accent); background-clip: padding-box; }
+
+::-webkit-scrollbar-corner { background: transparent; }
+
 body {
   margin: 0;
   background: var(--bg);
@@ -128,10 +160,15 @@ a:focus-visible,
   outline-offset: 2px;
 }
 
+/*
+ * 底部不要预留 padding：内容刚好一屏时，预留的留白会把 scrollHeight 撑高，
+ * 出现「整页都看得见却有一条滚动条」的假滚动。内容真超过一屏时浏览器自然可滚，
+ * 底部间距由各区块自身的 margin 提供。
+ */
 .shell {
   max-width: 1416px;   /* 原 1180px，加宽 20% */
   margin: 0 auto;
-  padding: 0 24px 64px;
+  padding: 0 24px;
 }
 
 /* 顶栏 */
