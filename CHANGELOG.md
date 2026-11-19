@@ -6,6 +6,38 @@
 
 ## [Unreleased]
 
+## [0.0.3] - 2026-11-19
+
+### 新增
+
+- **首屏骨架**：`index.html` 在 Vue 挂载前渲染启动骨架；新增通用骨架块，首页、列表、详情、
+  设置与管理表格按真实布局显示加载态；卡片图标延迟加载
+- **请求并行**：设置只请求一次并在页面间共享；首页 Hero 与推荐并行；列表元数据与首页列表并行；
+  详情页存档、时长、设置与下载查询并行
+- **页面跳转反馈**：点击缩放、悬停预取路由 chunk、80 ms 延迟进度条、180 ms 新页淡入、
+  骨架按视觉行错峰入场
+- **滚动恢复**：浏览器前进/后退补 `scrollBehavior`；返回游戏列表时在首屏数据渲染后
+  再对齐离开时的位置
+- **主题**：默认主题改为「素纸」；自定义主题支持在卡片上单独删除；`theme-color` 跟随当前主题
+
+### 改进
+
+- 版本号只保留在 `portal/pom.xml`；`package.json`、README 与发布脚本不再重复维护
+- 设置读取改为模块级缓存，设置页保存后立即覆盖缓存
+
+### 修复
+
+- 预取逻辑拆到独立模块，打断 router ↔ 视图的循环依赖
+- 进度条状态改为普通对象并由组件注入响应式代理，修复进度条不更新的问题
+- 滚动恢复不再读取 vue-router 内部 `history.state`
+- 进度条淡出期间开始新导航时不再出现宽度回跳
+- 正在使用的自定义主题拒绝删除，避免界面在用户没预期时换色
+
+### 升级说明
+
+无需迁移数据库或执行额外步骤。已保存主题的本机不受默认主题变更影响；正在使用的
+自定义主题需先切换到其它主题才能删除。
+
 ## [0.0.2] - 2026-11-18
 
 ### 新增
@@ -85,6 +117,7 @@
 见 `README.md` 的「已知限制」：Wine 下 4:3 渲染、无 GPU 时软渲染 + 软编码、
 Wine 自绘标题栏、必须走 HTTPS、Windows 冒烟检查覆盖面小于 Linux。
 
-[Unreleased]: https://gitee.com/sander-o/gal-world/compare/v0.0.2...master
+[Unreleased]: https://gitee.com/sander-o/gal-world/compare/v0.0.3...master
+[0.0.3]: https://gitee.com/sander-o/gal-world/releases/tag/v0.0.3
 [0.0.2]: https://gitee.com/sander-o/gal-world/releases/tag/v0.0.2
 [0.0.1]: https://gitee.com/sander-o/gal-world/releases/tag/v0.0.1
