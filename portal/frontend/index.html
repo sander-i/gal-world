@@ -5,9 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Gal World</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="theme-color" content="#0e1013" />
+    <meta name="theme-color" content="#efe9dd" />
     <script>
-      // 首屏防闪：在样式/脚本加载前把已存主题写到 <html> 上
+      // 首屏防闪：在样式/脚本加载前把已存主题写到 <html> 上；
+      // 本机没有选择时用站点默认主题「素纸」的骨架变量，
+      // 完整变量由 main.js 在挂载前应用。
       (function () {
         try {
           var t = JSON.parse(localStorage.getItem('galworld.theme') || 'null')
@@ -20,6 +22,22 @@
               root.classList.remove('dark')
               root.style.colorScheme = 'light'
             }
+          } else {
+            // 与 theme.js 的 DEFAULT_THEME_ID / paper 种子色保持一致
+            var d = {
+              '--bg': '#efe9dd',
+              '--surface': '#fffcf5',
+              '--surface-2': 'color-mix(in srgb, #fffcf5 88%, #2a2520)',
+              '--surface-hover': 'color-mix(in srgb, var(--surface-2) 94%, var(--text))',
+              '--line': '#d8cdbb',
+              '--line-strong': 'color-mix(in srgb, #d8cdbb 70%, #2a2520)',
+              '--text': '#2a2520'
+            }
+            for (var k in d) root.style.setProperty(k, d[k])
+            root.dataset.theme = 'paper'
+            root.dataset.themeBase = 'light'
+            root.classList.remove('dark')
+            root.style.colorScheme = 'light'
           }
         } catch (e) {}
       })()

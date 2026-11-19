@@ -12,6 +12,9 @@ const BASE_VARS = {
   '--r-ctl': '8px',
 }
 
+/** 站点默认主题：无本机选择时用它 */
+export const DEFAULT_THEME_ID = 'paper'
+
 /** 内置主题：深色三套 + 浅色一套。vars 为完整覆盖，保证与现有视觉一致 */
 export const BUILTIN_THEMES = [
   {
@@ -113,7 +116,9 @@ export function themeName(theme) {
 export function resolveTheme(id, customThemes = []) {
   const custom = customThemes.find((t) => t.id === id)
   if (custom) return custom
-  return BUILTIN_THEMES.find((t) => t.id === id) || BUILTIN_THEMES[0]
+  return BUILTIN_THEMES.find((t) => t.id === id)
+    || BUILTIN_THEMES.find((t) => t.id === DEFAULT_THEME_ID)
+    || BUILTIN_THEMES[0]
 }
 
 export function parseStoredTheme(raw) {
@@ -146,4 +151,10 @@ export function applyTheme(theme, root = document.documentElement) {
   root.dataset.themeBase = base
   root.classList.toggle('dark', base === 'dark')
   root.style.colorScheme = base
+  // 移动端浏览器工具栏跟随主题底色（index.html 的静态值只覆盖默认主题）
+  const meta = document.querySelector('meta[name="theme-color"]')
+  if (meta) {
+    const bg = getComputedStyle(root).getPropertyValue('--bg').trim()
+    if (bg) meta.content = bg
+  }
 }
