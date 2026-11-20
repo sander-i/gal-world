@@ -1,0 +1,46 @@
+#!/bin/sh
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 sander
+#
+# 阻止直接推送 master。
+#
+# master 只允许通过 PR 合并进入（GitHub 侧已开 enforce_admins，Gitee 侧靠这道
+# 本地检查）。2026-11-20 出过一次：用户说「部署到线上验证」，我把两个分支
+# merge 进 master 并推了 gitee + github，绕过了 PR 审批。
+#
+# 启用方式（每台 clone 后执行一次）：
+#   git config core.hooksPath .githooks
+#
+# 临时绕过（确实需要时）：
+#   git push --no-verify <remote> master
+
+protected_branch="refs/heads/master"
+
+# stdin 每行是「<local ref> <local sha> <remote ref> <remote sha>」
+while read -r local_ref local_sha remote_ref remote_sha; do
+    # 删除分支（local sha 全 0）不拦：那是清理，不是往 master 加东西
+    case "$local_sha" in
+        0000000000000000000000000000000000000000) continue ;;
+    esac
+    if [ "$remote_ref" = "$protected_branch" ]; then
+        echo "" >&2
+        echo "================================================================" >&2
+        echo "  拒绝：不允许直接推送 master" >&2
+        echo "================================================================" >&2
+        echo "" >&2
+        echo "  master 只允许通过 Pull Request 合并进入。" >&2
+        echo "" >&2
+        echo "  正确流程：" >&2
+        echo "    1. git checkout -b <新分支>" >&2
+        echo "    2. git commit ..." >&2
+        echo "    3. git push -u <remote> <新分支>" >&2
+        echo "    4. 在网页上创建 PR，由仓库所有者合并" >&2
+        echo "" >&2
+        echo "  确实需要直接推送时（会被 GitHub 分支保护拒绝）：" >&2
+        echo "    git push --no-verify <remote> master" >&2
+        echo "" >&2
+        exit 1
+    fi
+done
+
+exit 0
