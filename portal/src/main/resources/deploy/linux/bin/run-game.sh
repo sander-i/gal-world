@@ -68,7 +68,9 @@ ENVFILE="$DIR/game.env"
 set -a; . "$ENVFILE"; set +a
 
 : "${DISPLAY_NUM:?}" "${PORT:?}" "${EXE:?}" "${WORKDIR:?}" "${WINEPREFIX:?}"
-: "${WIDTH:=1280}" "${HEIGHT:=720}" "${LOOPBACK_SLOT:=0}" "${LOOPBACK_CARD:=0}" "${FRAMERATE:=30-30}"
+# 帧率语法是「初始值,范围」：初始 60 让首帧就是高帧率，范围让客户端在转场 / OP
+# 自己升到 60、画面静止时自己降下来。以前锁 30-30，客户端想降帧会被钳回去。
+: "${WIDTH:=1280}" "${HEIGHT:=720}" "${LOOPBACK_SLOT:=0}" "${LOOPBACK_CARD:=0}" "${FRAMERATE:=60,30-60}"
 # 早期手工注册的 game.env 可能没有 EXTRA_ENV；set -u 下缺键会让整个脚本退出
 : "${EXTRA_ENV:=}"
 # paintover 决定静止画面的质量：galgame 绝大多数时间画面是静止的，paintover 直接
@@ -83,6 +85,10 @@ set -a; . "$ENVFILE"; set +a
 # 默认仍是 crf，保持既有画质行为；需要的游戏在 game.env 里写 RATE_CONTROL_MODE=cbr
 # 并配合 VIDEO_BITRATE 使用。
 : "${RATE_CONTROL_MODE:=crf}"
+
+# 音频码率：Selkies 默认 128 kbps（Opus）。galgame 的 BGM 与语音细节多，
+# 提到 192 kbps 带宽只多约 0.06 Mbps，局域网无压力。上限 510 kbps。
+: "${AUDIO_BITRATE:=192000}"
 
 # 4:4:4 全色度：细线、彩色文字边缘不再有 4:2:0 的色度溢出。galgame 静态画面多，
 # 这项对文字锐度影响明显。默认开；浏览器解码器不支持 High 4:4:4 profile 时
@@ -551,6 +557,7 @@ FULLCOLOR_ARGS=()
   --paint-over-jpeg-quality 95 \
   --video-bitrate "${VIDEO_BITRATE:-40000,5000-80000}" \
   --keyframe-interval "${KEYFRAME_INTERVAL:-60}" \
+  --audio-bitrate "${AUDIO_BITRATE:-192000}" \
   "${AUDIO_ARGS[@]}" \
   --audio-on-start true \
   --ui-title "$GAME_NAME" \

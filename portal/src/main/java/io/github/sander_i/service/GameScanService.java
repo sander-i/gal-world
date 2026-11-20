@@ -202,7 +202,8 @@ public class GameScanService {
             game.setLoopbackSlot(env.getInt("LOOPBACK_SLOT", 0));
             // 老 game.env 没有这个键：默认卡 0，行为与扩容前完全一致
             game.setLoopbackCard(env.getInt("LOOPBACK_CARD", 0));
-            game.setFramerate(env.get("FRAMERATE", "30-30"));
+            // 老 game.env 没有这个键：用与 run-game.sh / Game 实体一致的默认值
+            game.setFramerate(env.get("FRAMERATE", "60,30-60"));
             game.setOnDisk(true);
             Instant now = Instant.now();
             if (isNew) {

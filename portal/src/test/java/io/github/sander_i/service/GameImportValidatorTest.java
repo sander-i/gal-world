@@ -42,7 +42,7 @@ class GameImportValidatorTest {
         assertEquals("标题", n.name());
         assertTrue(n.exe().endsWith("sub" + java.io.File.separator + "other.exe")
                 || n.exe().endsWith("sub/other.exe"), n.exe());
-        assertEquals("30", n.framerate());
+        assertEquals("60,30-60", n.framerate());
     }
 
     @Test

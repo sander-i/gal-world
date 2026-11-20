@@ -64,7 +64,7 @@ public class Game {
      */
     @Column(nullable = false, columnDefinition = "integer default 0")
     private int loopbackCard;
-    private String framerate = "30-30";
+    private String framerate = "60,30-60";
 
     @Column(length = 2000)
     private String description;
