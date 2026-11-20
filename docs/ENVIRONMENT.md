@@ -56,6 +56,10 @@ WINE_HOME=/home/<user>/galworld/.local/wine11
 
 `run-game.sh` 的 wine 选择顺序是 `game.env` 的 `WINE_HOME` → `~/.local/wine` → 系统 wine。
 
+> **wow64 对 Kirikiri 自绘 UI 的汉化补丁有兼容问题**：`tenshi-reboot` 切到 wow64 后
+> 地址空间问题解决（ELF32 → ELF64，`VmSize` 2.6 → 14.5 GB），但鼠标点击游戏内
+> 自绘按钮完全无响应，无法游玩。已回退。详见 `docs/WINE-RUNTIME-NOTES.md` §2。
+
 **子目录 exe 的资源补齐（`game-assets.sh`）**：汉化补丁常把启动程序放在
 `补丁/<补丁名>/` 下，而 `data.xp3`、`plugin/` 等资源留在游戏根目录。
 Kirikiri 等引擎按 **exe 所在目录**找资源，缺 `plugin/extrans.dll` 时会在
