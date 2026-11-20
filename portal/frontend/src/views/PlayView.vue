@@ -11,7 +11,8 @@ import { api, inMaintenanceWindow, isMaintenanceError } from '../api'
 import { formatPlaytime } from '../format'
 import { PHASES, phaseLabel, bootPercent, nextPercent, bootDecision,
   interruptionFor, isCleanExit } from '../play-boot'
-import { cropPlan } from '../play-crop'
+import { streamFitStyle, WINDOW_SAMPLE_DELAYS, WINDOW_STABLE_AFTER_MS, sameWindowRect }
+  from '../play-crop'
 import { playBackTarget } from '../play-origin'
 import { canvasAutoCalibrate } from '../feature-flags'
 import { buildSample, postTelemetry } from '../play-telemetry'
@@ -804,6 +805,7 @@ function clearAll() {
   streamFitTimer = null
   clearTimeout(autoCalibrateTimer)
   autoCalibrateTimer = null
+  clearWindowSamples()
   stopTelemetry()
   autoCalibrateAllowed = false
   showFrame.value = false
@@ -812,32 +814,71 @@ function clearAll() {
 }
 
 /**
- * 画面按画布比例铺满 stage。
+ * 画面按游戏主窗口裁剪黑边：容器铺满 stage，内部画布放大并位移，
+ * 把窗口外的黑边推出容器外裁掉（见 `play-crop.js`）。
  *
- * 曾经按「游戏主窗口」裁剪（去掉画布黑边），但前端裁剪与 Selkies 的指针
- * 换算冲突，两条路都会让悬停/点击落点偏移：
+ * 历史上按窗口裁剪失败过两次，都是因为动了 iframe 本身：
  *   - 改 iframe 布局尺寸：Selkies 在 attach 时记下几何，之后不刷新，
  *     实测指针整体偏 +140 画布像素；
- *   - 用 transform 缩放：浏览器给 iframe 内部的事件坐标不除以缩放比，
+ *   - 用 transform 缩放 iframe：浏览器给 iframe 内部的事件坐标不除以缩放比，
  *     指针被放大 1.48 倍，越往右下偏得越多（实测注入点被钳到屏幕右下角）。
- * 所以这里保持铺满、不裁剪。要恢复裁剪只能改服务端（GStreamer 侧裁剪，
- * 或让 Xvfb 屏幕等于游戏窗口）。
+ * 这次只改 iframe **内部**的 `.video-container` 与其中的 video/canvas：
+ * iframe 仍在 stage (0,0) 且铺满，Selkies 按 canvas 的 getBoundingClientRect
+ * 与 buffer 尺寸的比例换算指针，画布与容器同步缩放位移后映射不变。
+ *
+ * 窗口矩形为 null（游戏未运行 / xwininfo 失败）时自动退回按画布比例铺满。
  */
 let stageObserver = null
 let streamFitTimer = null
+let windowSampleTimers = []
+let windowSampleToken = 0
 
-/** 读一次窗口矩形；串流刚就绪时窗口可能还在居中，1.5s 后再兜底取一次 */
-async function refreshWindowRect() {
-  winRect.value = await api.gameWindow(props.id)
-  nextTick(fitStage)
-  setTimeout(async () => {
-    if (view.value !== 'playing') return
-    const again = await api.gameWindow(props.id)
-    if (again && JSON.stringify(again) !== JSON.stringify(winRect.value)) {
-      winRect.value = again
-      nextTick(fitStage)
+/**
+ * 按采样表跟随窗口尺寸，直到稳定。
+ *
+ * run-game.sh 在启动后 4–10 秒才把过小的窗口放大，进入播放时读到的矩形
+ * 可能是放大前的。这里先立即取一次（进画面马上就能裁剪），再按
+ * WINDOW_SAMPLE_DELAYS 补采：尺寸变化就重算裁剪；连续两次相同且已跨过
+ * 8s 采样点即认为稳定，清掉剩余采样。最多 5 次请求，不会长期轮询。
+ */
+function refreshWindowRect() {
+  clearWindowSamples()
+  const token = windowSampleToken
+  let last = null
+
+  /** @param {number} at 本次采样相对进入播放的毫秒数 */
+  const sample = async (at) => {
+    if (token !== windowSampleToken || view.value !== 'playing') {
+      clearWindowSamples()
+      return
     }
-  }, 1500)
+    const rect = await api.gameWindow(props.id)
+    // 等待请求期间可能已经离开播放 / 开始新一轮采样：丢弃这次结果
+    if (token !== windowSampleToken || view.value !== 'playing') {
+      clearWindowSamples()
+      return
+    }
+    // 两次都取不到窗口（xwininfo 失败 / 尚未找到）不算稳定，继续按表补采
+    if (rect && sameWindowRect(rect, last)) {
+      // 不能一相同就停：放大前窗口本身是稳定的，1.5s 就停会拿到放大前的
+      // 旧矩形。至少跨过 8s 采样点，覆盖 run-game.sh 的放大窗口期。
+      if (at >= WINDOW_STABLE_AFTER_MS) clearWindowSamples()
+      return
+    }
+    last = rect
+    winRect.value = rect
+    nextTick(fitStage)
+  }
+
+  windowSampleTimers = WINDOW_SAMPLE_DELAYS.map((ms) => setTimeout(() => sample(ms), ms))
+  // 立即取一次，进入画面时就能按当前窗口裁剪，不必等到第一次补采
+  sample(0)
+}
+
+function clearWindowSamples() {
+  windowSampleToken++
+  for (const id of windowSampleTimers) clearTimeout(id)
+  windowSampleTimers = []
 }
 
 function fitStage() {
@@ -856,11 +897,12 @@ function fitStage() {
 }
 
 /**
- * 在 iframe 内部把串流容器按画布比例居中。
+ * 在 iframe 内部按游戏主窗口裁剪黑边并居中。
  *
- * 画面居中不能靠移动 iframe（见上），只能把视频容器缩到画布比例再居中。
- * Selkies 的指针换算是按「元素矩形」算的（`getBoundingClientRect` +
- * 居中留白修正），所以容器居中后映射依旧正确。
+ * 画面居中不能靠移动 iframe（见上），只能改 iframe 内部的容器：容器缩到
+ * 窗口比例并居中，内部 video/canvas 放大后按窗口位置位移，超出容器的黑边
+ * 由容器的 overflow:hidden 裁掉。Selkies 的指针换算是按「元素矩形」算的
+ * （`getBoundingClientRect` + 居中留白修正），所以容器居中后映射依旧正确。
  */
 function centerStream(f) {
   const doc = f.contentDocument
@@ -877,27 +919,13 @@ function centerStream(f) {
     height: Number(game.value?.height) || 720,
   }
   if (!box.width || !box.height) return
-  const plan = cropPlan(box, canvas, null)
   let style = doc.getElementById('galworld-stream-fit')
   if (!style) {
     style = doc.createElement('style')
     style.id = 'galworld-stream-fit'
     doc.head.appendChild(style)
   }
-  style.textContent = `
-.video-container {
-  position: absolute !important;
-  left: ${Math.round((box.width - plan.viewW) / 2)}px !important;
-  top: ${TOP_BAR + Math.round((box.height - plan.viewH) / 2)}px !important;
-  width: ${plan.viewW}px !important;
-  height: ${plan.viewH}px !important;
-}
-.video-container video, .video-container canvas {
-  left: 0 !important;
-  top: 0 !important;
-  width: 100% !important;
-  height: 100% !important;
-}`
+  style.textContent = streamFitStyle(box, canvas, winRect.value, TOP_BAR)
   // Selkies 的窗口几何只在 resize 时重算；容器改尺寸后要让它重新量一次
   clearTimeout(streamFitTimer)
   streamFitTimer = setTimeout(() => {
