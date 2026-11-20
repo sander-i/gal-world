@@ -91,6 +91,8 @@ Commands: `./deploy.sh --skip-deps` (setup only), `./uninstall.sh --dry-run` (pr
   three-layer guard (apt blacklist, drift watchdog, frontend fallback)
 - [`docs/WINE-RUNTIME-NOTES.md`](docs/WINE-RUNTIME-NOTES.md) — measured Wine / Selkies findings and
   approaches that were ruled out (wow64, resolution, page cache, input injection under Xvfb)
+- [`docs/PLAY-QUALITY-PLAN.md`](docs/PLAY-QUALITY-PLAN.md) — play-quality work (letterbox cropping,
+  window resize, 4:4:4, paint-over), with priorities and acceptance checks
 - [`docs/GAME-IMPORT-PLAN.md`](docs/GAME-IMPORT-PLAN.md) — import wizard design
 - [`CONTRIBUTING.md`](CONTRIBUTING.md) · [`SECURITY.md`](SECURITY.md) ·
   [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md) · [`CHANGELOG.md`](CHANGELOG.md)
