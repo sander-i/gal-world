@@ -76,6 +76,13 @@ set -a; . "$ENVFILE"; set +a
 # paintover 决定静止画面的质量：galgame 绝大多数时间画面是静止的，paintover 直接
 # 决定观感，比 video_crf 影响更大，所以比 VIDEO_CRF 更值得压低（12 → 8）。
 # 静止时只发一帧，平均码率几乎不变。
+# KEYFRAME_INTERVAL 的单位是**秒**，不是帧（Selkies settings.py 原文：
+# "Seconds between scheduled video recovery keyframes"）。
+#
+# 60 秒是兜底：正常丢失帧时客户端会发 REQUEST_KEYFRAME、Selkies 按需补 IDR，
+# 走的是按需路径；定时 IDR 只在客户端没能自己恢复时起作用。Selkies 默认是 0
+# （无限 GOP，码率更稳），这里保留 60 秒换取「坏了也能自愈」，一帧 IDR 的成本
+# 摊到 60 秒可以忽略。要完全按 Selkies 默认，在 game.env 写 KEYFRAME_INTERVAL=0。
 : "${VIDEO_CRF:=12}" "${VIDEO_BITRATE:=40000,5000-80000}" "${KEYFRAME_INTERVAL:=60}" "${VIDEO_PAINTOVER_CRF:=8}"
 # 码率控制模式：crf（恒定质量，画面越好越费带宽）或 cbr（恒定码率）。
 #
