@@ -6,6 +6,42 @@
 
 ## [Unreleased]
 
+## [0.0.4] - 2026-11-20
+
+### 新增
+
+- **帧率可配**：`FRAMERATE` 支持 `60,30-60` 三段式（初始值 + 范围），
+  Ctrl 快速跳过对话时不再被锁在 30 fps；接入校验接受该格式
+- **码率控制模式可配**：`game.env` 可写 `RATE_CONTROL_MODE=cbr`，
+  用 QP 上限压住快速跳过时的瞬时峰值（默认仍是 `crf`，保持既有画质行为）
+
+### 改进
+
+- **串流桥接改为有界队列**：门户 → 浏览器方向超预算时丢最旧的视频帧，
+  让客户端的 `LOST_FRAME` / `REQUEST_KEYFRAME` 自愈。此前队列无界，
+  浏览器消化不过来时延迟会无限累积
+- **窗口自动放大**：游戏窗口面积不足画布一半时按画布放大
+  （Kirikiri 等引擎按自身默认值开窗，忽略 Xvfb 屏幕大小）
+- 去掉首页假滚动条，滚动条样式统一走主题变量
+
+### 修复
+
+- **JDK 在线升级导致门户子进程失效**：`unattended-upgrades` 在门户运行中替换
+  `openjdk-21-jre-headless` 后，内存镜像与磁盘上的 `jspawnhelper` 版本不匹配，
+  所有 `fork()` 失败，`systemctl` 调不到、会话状态永远是 `UNKNOWN`、
+  启动进度条卡 55%。三层修复：新增 `JdkDriftWatchdog` 检测并退出让 systemd
+  重启；前端对 `UNKNOWN` 超时判失败并给出可操作提示；部署脚本写 apt 黑名单
+  从源头挡住自动升级 JDK
+- **画布自动校准越缩越差**：`CanvasPlanner` 假设「画布 ≈ 窗口 + 24 最优」，
+  读到小窗口后把画布缩小，窗口并不因此变大，结果画布从 1008×616 掉到
+  520×352、画质持续下降。新增 `keep-large` 分支，窗口不足画布一半时保持大画布
+
+### 升级说明
+
+无需迁移数据库。已部署实例建议重新执行一次 `deploy.sh` 或页面「一键部署」，
+让 apt 黑名单与新的 `run-game.sh` 生效；不重新部署也不会出错，只是缺少
+JDK 自动升级豁免与窗口自动放大。
+
 ## [0.0.3] - 2026-11-19
 
 ### 新增
@@ -117,7 +153,8 @@
 见 `README.md` 的「已知限制」：Wine 下 4:3 渲染、无 GPU 时软渲染 + 软编码、
 Wine 自绘标题栏、必须走 HTTPS、Windows 冒烟检查覆盖面小于 Linux。
 
-[Unreleased]: https://gitee.com/sander-o/gal-world/compare/v0.0.3...master
+[Unreleased]: https://gitee.com/sander-o/gal-world/compare/v0.0.4...master
+[0.0.4]: https://gitee.com/sander-o/gal-world/releases/tag/v0.0.4
 [0.0.3]: https://gitee.com/sander-o/gal-world/releases/tag/v0.0.3
 [0.0.2]: https://gitee.com/sander-o/gal-world/releases/tag/v0.0.2
 [0.0.1]: https://gitee.com/sander-o/gal-world/releases/tag/v0.0.1

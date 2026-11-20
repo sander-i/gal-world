@@ -25,6 +25,9 @@ Web（Windows）承担。
   与单文件存档（`.ksd` / `.sav`）
 - **运维**：一键部署 / 彻底卸载（实时日志）、远程更新（校验 + 回滚）、配置快照、游戏打包下载
 - **游玩体验**：心跳计时、空闲自动停止、画面校准、时延显示、崩溃遥测
+- **流畅串流**：每个游戏可配帧率（`60,30-60`）与码率控制模式（`crf` / `cbr`）；
+  门户到浏览器的桥接队列有界，消化不过来时丢旧帧而不是让延迟累积；
+  窗口开得比画布小时自动放大
 - **国际化**：内置 English / 简体中文 / 繁體中文 / 日本語；界面与后端消息共用一套 JSON 语言包，
   后台管理页上传或往 `data/i18n/` 放文件即可新增语言，不用改代码
 
@@ -84,6 +87,10 @@ cd .. && mvn -DskipTests package
 - [`docs/OPERATIONS.md`](docs/OPERATIONS.md)：部署细节、卸载、更新、恢复与已知限制
 - [`docs/PORTAL.md`](docs/PORTAL.md)：门户路由、时长口径、画面校准、媒体
 - [`docs/ENVIRONMENT.md`](docs/ENVIRONMENT.md)：环境探测、Linux / Windows 部署
+- [`docs/JDK-DRIFT.md`](docs/JDK-DRIFT.md)：JDK 在线升级为何会让门户子进程失效，以及三层防护
+  （apt 黑名单、漂移检测、前端兜底）
+- [`docs/WINE-RUNTIME-NOTES.md`](docs/WINE-RUNTIME-NOTES.md)：Wine / Selkies 实测结论与已排除的
+  方案（wow64、分辨率、页缓存、Xvfb 下的输入注入）
 - [`docs/GAME-IMPORT-PLAN.md`](docs/GAME-IMPORT-PLAN.md)：接入向导设计
 - [`CONTRIBUTING.zh-CN.md`](CONTRIBUTING.zh-CN.md) · [`SECURITY.zh-CN.md`](SECURITY.zh-CN.md) ·
   [`CODE_OF_CONDUCT.zh-CN.md`](CODE_OF_CONDUCT.zh-CN.md) · [`CHANGELOG.md`](CHANGELOG.md)

@@ -26,6 +26,9 @@ commercial product; self-hosting, issues and PRs are welcome, but no out-of-the-
 - **Operations** — one-click deploy / uninstall with live logs, remote update with rollback,
   config snapshots, game package download
 - **Playback extras** — heartbeat playtime, idle stop, canvas calibration, latency display, telemetry
+- **Smooth streaming** — configurable frame rate (`60,30-60`) and rate control (`crf` / `cbr`) per game;
+  a bounded bridge queue drops stale frames instead of letting latency accumulate; windows that open
+  smaller than the canvas are enlarged automatically
 - **Localization** — English / 简体中文 / 繁體中文 / 日本語 built in; UI and server messages share one
   JSON pack format, so new languages are installed from the admin page or a file drop — no code changes
 
@@ -84,6 +87,10 @@ Commands: `./deploy.sh --skip-deps` (setup only), `./uninstall.sh --dry-run` (pr
 - [`docs/OPERATIONS.md`](docs/OPERATIONS.md) — deployment details, uninstall, update, recovery, limits
 - [`docs/PORTAL.md`](docs/PORTAL.md) — routes, playtime, canvas calibration, media
 - [`docs/ENVIRONMENT.md`](docs/ENVIRONMENT.md) — environment probing, Linux / Windows setup
+- [`docs/JDK-DRIFT.md`](docs/JDK-DRIFT.md) — why an online JDK upgrade breaks the portal, and the
+  three-layer guard (apt blacklist, drift watchdog, frontend fallback)
+- [`docs/WINE-RUNTIME-NOTES.md`](docs/WINE-RUNTIME-NOTES.md) — measured Wine / Selkies findings and
+  approaches that were ruled out (wow64, resolution, page cache, input injection under Xvfb)
 - [`docs/GAME-IMPORT-PLAN.md`](docs/GAME-IMPORT-PLAN.md) — import wizard design
 - [`CONTRIBUTING.md`](CONTRIBUTING.md) · [`SECURITY.md`](SECURITY.md) ·
   [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md) · [`CHANGELOG.md`](CHANGELOG.md)

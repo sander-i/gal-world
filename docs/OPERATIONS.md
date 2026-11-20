@@ -141,3 +141,5 @@ bash tools/diagnostics/m4-check.sh   # 门户验收（在仓库目录里跑，�
 | HTTPS | 门户必须 HTTPS，否则游玩页黑屏并报 `This application requires a secure connection` |
 | 远程更新 | Linux 与 Windows 均支持；Windows 无 journal 等价检查，冒烟只覆盖版本与三个 HTTP 接口 |
 | 平台差异 | Linux 每游戏独立端口与音频链；Windows 共用 Moonlight Web 入口 |
+| wow64 Wine | 部分 Kirikiri 汉化补丁在 wow64 下游戏内按钮点击无响应（弹窗等原生控件正常）。地址空间问题确实解决了，但不能玩，详见 `docs/WINE-RUNTIME-NOTES.md` |
+| JDK 自动升级 | `deploy.sh` 会写 apt 黑名单挡住 unattended-upgrades 升级 JDK；漏网时门户的漂移检测会退出让 systemd 重启。详见 `docs/JDK-DRIFT.md` |
