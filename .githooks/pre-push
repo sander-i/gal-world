@@ -1,0 +1,80 @@
+#!/bin/sh
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 sander
+#
+# 阻止直接推送 master 到主仓库。
+#
+# master 只允许通过 PR 合并进入（GitHub 侧已开 enforce_admins）。2026-11-20 出过一次：
+# 用户说「部署到线上验证」，代理把两个分支 merge 进 master 并推了 gitee + github，
+# 绕过了 PR 审批。
+#
+# 启用方式（每台 clone 后执行一次）：
+#   git config core.hooksPath .githooks
+#
+# 临时绕过（GitHub 侧仍会被远端拒绝）：
+#   git push --no-verify <remote> master
+
+protected_branch="refs/heads/master"
+
+# Gitee 是 GitHub 的镜像仓库，代码由平台自动同步，**不接收任何手动 push**。
+# 它只负责发布 Release。用户 2026-11-20 反复强调：「gitee是github的镜像仓库，
+# 会自动同步代码不需要push代码，只需要发布release版本即可」。
+#
+# 所以这里不是只拦 master，而是拦全部 —— 任何分支都不该推到 Gitee。
+if [ "${1:-}" = "gitee" ]; then
+    echo "" >&2
+    echo "================================================================" >&2
+    echo "  拒绝：不要向 Gitee 推送任何分支" >&2
+    echo "================================================================" >&2
+    echo "" >&2
+    echo "  Gitee 是 GitHub 的镜像仓库，代码由平台自动同步。" >&2
+    echo "  它只负责发布 Release，不需要也不应该手动 push 代码。" >&2
+    echo "" >&2
+    echo "  正确流程：" >&2
+    echo "    1. 推 GitHub：git push github <branch>" >&2
+    echo "    2. 在 GitHub 上合并 PR" >&2
+    echo "    3. 等 Gitee 自动同步代码" >&2
+    echo "    4. 在 Gitee 网页上发布 Release" >&2
+    echo "" >&2
+    exit 1
+fi
+
+# 只读镜像远端：允许推 master。只有 gitlab —— 内网备份仓，按镜像方式同步。
+mirror_remotes=" gitlab "
+
+# 远端名不是 stdin 给的，取第一个位置参数（pre-push 的 $1）。
+remote_name="${1:-}"
+
+case "$mirror_remotes" in
+    *" $remote_name "*) exit 0 ;;
+esac
+
+# stdin 每行是「<local ref> <local sha> <remote ref> <remote sha>」
+while read -r local_ref local_sha remote_ref remote_sha; do
+    # 删除分支（local sha 全 0）不拦：那是清理，不是往 master 加东西
+    case "$local_sha" in
+        0000000000000000000000000000000000000000) continue ;;
+    esac
+    if [ "$remote_ref" = "$protected_branch" ]; then
+        echo "" >&2
+        echo "================================================================" >&2
+        echo "  拒绝：不允许直接推送 master 到 $remote_name" >&2
+        echo "================================================================" >&2
+        echo "" >&2
+        echo "  master 只允许通过 Pull Request 合并进入。" >&2
+        echo "" >&2
+        echo "  正确流程：" >&2
+        echo "    1. git checkout -b <新分支>" >&2
+        echo "    2. git commit ..." >&2
+        echo "    3. git push -u github <新分支>" >&2
+        echo "    4. 在网页上创建 PR，由仓库所有者合并" >&2
+        echo "" >&2
+        echo "  同步只读镜像（gitlab / gitee）不受此限制。" >&2
+        echo "  确实需要直接推送时（GitHub 侧仍会被远端拒绝）：" >&2
+        echo "    git push --no-verify $remote_name master" >&2
+        echo "" >&2
+        exit 1
+    fi
+done
+
+exit 0
