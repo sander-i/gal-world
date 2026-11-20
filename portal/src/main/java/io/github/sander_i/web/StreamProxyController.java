@@ -132,6 +132,13 @@ public class StreamProxyController {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             return ResponseEntity.status(503).build();
+        } catch (java.net.ConnectException e) {
+            // 端口没监听 = 会话已停。游玩页 iframe 在会话停止后仍会重连，
+            // 每 2 秒一次；按 WARN 记会在门户日志里刷屏（实测一天 156 条，
+            // 2026-11-20）。这里返回 404（与 resolvePort 的「没启动」同语义），
+            // 只留 debug 便于排查。
+            log.debug("串流端口未监听 {}: {}", gameId, e.toString());
+            return ResponseEntity.notFound().build();
         } catch (IOException e) {
             log.warn("串流代理失败 {}: {}", gameId, e.toString());
             return ResponseEntity.status(502).build();
