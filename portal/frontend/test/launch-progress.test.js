@@ -59,9 +59,16 @@ test('startVerdict：宽限期内 STOPPED 继续等，过了宽限期判失败',
   assert.equal(startVerdict({ state: 'STOPPED' }, 5001, 5000), 'fail')
 })
 
-test('startVerdict：RUNNING 与 UNKNOWN 都继续等', () => {
-  for (const state of ['RUNNING', 'UNKNOWN']) {
-    assert.equal(startVerdict({ state }, 60_000, 5000), 'wait')
-  }
+test('startVerdict：RUNNING 继续等，UNKNOWN 过了宽限期判失败', () => {
+  assert.equal(startVerdict({ state: 'RUNNING' }, 60_000, 5000), 'wait')
   assert.equal(startVerdict(null, 1000, 5000), 'wait')
+})
+
+test('startVerdict：UNKNOWN 宽限期内等，过宽限期判失败', () => {
+  // 后端 statusFrom() 只认 active/inactive/failed，其余一律 UNKNOWN。
+  // 门户拿不到 systemctl 输出时状态恒为 UNKNOWN（典型：JDK 在运行中被
+  // unattended-upgrades 替换，fork 子进程全部失败），继续等只会卡在
+  // start 步上限 55% 直到 90 秒超时，页面还不报错（2026-11-20 实测）。
+  assert.equal(startVerdict({ state: 'UNKNOWN' }, 1000, 5000), 'wait')
+  assert.equal(startVerdict({ state: 'UNKNOWN' }, 5001, 5000), 'fail')
 })

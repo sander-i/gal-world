@@ -1111,6 +1111,7 @@
     "游戏详情页右上角大屏默认展示什么。在游戏页手动切换过的游戏以游戏内选择为准，其余跟随这里的默认值。": "What the large panel at the top right of the details page shows by default. Games where you switched manually keep their choice; the rest follow this default.",
     "游戏运行中": "Game running",
     "游戏进程已退出，请到详情页查看日志。": "The game process exited; check the log on the details page.",
+    "无法读取会话状态：门户可能在后台被更新过，请重启门户服务后重试。": "Cannot read the session state. The portal may have been updated in the background; restart the portal service and try again.",
     "游戏进程自行退出": "The game process exited on its own",
     "游戏页展示": "Game page display",
     "游玩时间最长": "Most played",

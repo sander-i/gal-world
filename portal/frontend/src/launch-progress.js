@@ -64,11 +64,17 @@ export function stopPercent(elapsedMs, expectedMs) {
  *
  * @param {{state?: string, crashed?: boolean}} st 会话状态
  * @param {number} elapsedMs 启动已耗时
- * @param {number} graceMs 启动初期忽略 STOPPED 的宽限期（systemd 瞬时值）
+ * @param {number} graceMs 启动初期忽略 STOPPED/UNKNOWN 的宽限期（systemd 瞬时值）
  */
 export function startVerdict(st, elapsedMs, graceMs) {
   if (!st) return 'wait'
   if (st.state === 'FAILED' || st.crashed) return 'fail'
-  if (st.state === 'STOPPED' && elapsedMs > graceMs) return 'fail'
+  if (elapsedMs <= graceMs) return 'wait'
+  // UNKNOWN 也要收尾：后端 statusFrom() 只认 active/inactive/failed，其余一律
+  // UNKNOWN。门户拿不到 systemctl 输出时（典型：JDK 在运行中被
+  // unattended-upgrades 替换，fork 子进程全部失败）状态恒为 UNKNOWN，
+  // 继续等只会卡在 start 步上限 55% 直到 90 秒超时，页面还不报错
+  // （2026-11-20 实测）。
+  if (st.state === 'STOPPED' || st.state === 'UNKNOWN') return 'fail'
   return 'wait'
 }

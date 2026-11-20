@@ -46,7 +46,19 @@ public class DeployCommands {
                             + " libfontconfig1:i386 libx11-6:i386 libxext6:i386 libxrender1:i386"
                             + " libxi6:i386 libxcursor1:i386 libxrandr2:i386 libxinerama1:i386"
                             + " libxfixes3:i386 libxcomposite1:i386 libgl1:i386"
-                            + " libasound2t64:i386 libgnutls30t64:i386 libpulse0:i386"
+                            + " libasound2t64:i386 libgnutls30t64:i386 libpulse0:i386",
+                    // 禁止 unattended-upgrades 在门户运行中替换 JDK：内存镜像与磁盘上的
+                    // jspawnhelper 版本不匹配会让所有 fork() 子进程失败，systemctl 调不到、
+                    // 会话状态永远 UNKNOWN、启动进度条卡 55%（详见 docs/JDK-DRIFT.md）。
+                    // 独立文件不覆盖发行版 50/52 配置；手工升级不受影响。
+                    "printf '%s\\n'"
+                            + " '// Gal World: 禁止自动升级 JDK（docs/JDK-DRIFT.md）'"
+                            + " 'Unattended-Upgrade::Package-Blacklist {'"
+                            + " '    \"openjdk-21-jre-headless$\";'"
+                            + " '    \"openjdk-21-jre$\";'"
+                            + " '};'"
+                            + " > /etc/apt/apt.conf.d/51galworld-jdk-autoupgrade",
+                    "chmod 644 /etc/apt/apt.conf.d/51galworld-jdk-autoupgrade"
             )),
             Map.entry("enable-snd-aloop", List.of(
                     "echo snd-aloop > /etc/modules-load.d/snd-aloop.conf",
@@ -141,6 +153,7 @@ public class DeployCommands {
             // 彻底卸载：只留门户能跑的部分（JDK、jar、data、linger）。
             // 这里的行只用于页面预览，真正执行的是 galworld-sudo uninstall-packages。
             Map.entry("uninstall-linux-packages", List.of(
+                    "rm -f /etc/apt/apt.conf.d/51galworld-jdk-autoupgrade",
                     "apt-get purge -y x11-utils xvfb xdotool pulseaudio pulseaudio-utils"
                             + " python3-venv fonts-wqy-microhei",
                     "apt-get purge -y --allow-remove-essential $(dpkg -l | awk '/^ii .*:i386/ {print $2}')",
