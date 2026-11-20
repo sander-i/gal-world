@@ -419,6 +419,34 @@ if command -v xdotool >/dev/null 2>&1; then
       done
       if [[ -n "$bestid" && "$best" -gt 100000 ]]; then
         read -r ww wh <<<"$(xwininfo -id "$bestid" 2>/dev/null | awk '/Width:/{w=$2} /Height:/{h=$2} END{print w, h}')"
+
+        # 窗口远小于画布时主动放大。
+        #
+        # 有的引擎（实测 Kirikiri / tenshi-reboot）启动时按自身默认值开窗，
+        # 忽略 Xvfb 屏幕大小：画布 1008x616、窗口却只有 496x328（占 26%）。
+        # 不处理的话游玩页会裁掉四周黑边，实际显示区域只有窗口那么大，
+        # 画布设多大都没用，画质永远上不去（2026-11-20 用户报告）。
+        # 窗口本身接受外部调整且放大后画面正常铺满（实测），所以这里直接改。
+        #
+        # 只在一半以下时动手：真正常见的「窗口略小于画布」是 85% 以上，
+        # 那种情况调大反而可能触发布局变化，保持原样更安全。
+        if [[ $(( ww * wh * 2 )) -lt $(( WIDTH * HEIGHT )) ]]; then
+          # 留 24px 边距（与 CanvasPlanner 的 PAD 一致），并夹到屏幕内
+          tw=$(( WIDTH - 24 )); th=$(( HEIGHT - 24 ))
+          if [[ "$tw" -gt "$ww" || "$th" -gt "$wh" ]]; then
+            resize_key="${ww}x${wh}"
+            if [[ "$resize_key" != "${RESIZED_FROM:-}" ]]; then
+              # 不能加 --sync：Xvfb 没有窗口管理器，xdotool 等不到
+              # ConfigureNotify 确认会直接失败（实测 496x328 -> 496x328 没变）。
+              xdotool windowsize "$bestid" "$tw" "$th" 2>/dev/null || true
+              sleep 2
+              read -r ww wh <<<"$(xwininfo -id "$bestid" 2>/dev/null | awk '/Width:/{w=$2} /Height:/{h=$2} END{print w, h}')"
+              RESIZED_FROM="$resize_key"
+              echo "[$(date '+%T')] window $bestid resized $resize_key -> ${ww}x${wh}（原窗口不足画布一半，按画布放大）"
+            fi
+          fi
+        fi
+
         # 屏幕高度不够时 Wine 会把超屏窗口钳到 SCREEN_H-20，超出的部分直接裁掉（不缩放），
         # 表现为游戏底部画面缺失（2026-11-05 demo-game 实测：720 屏 → 窗口 700、底部丢 72px）。
         # 这里只告警不自动改：改 HEIGHT 需要重启会话，交给门户接入流程或人工处理。

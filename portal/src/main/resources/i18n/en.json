@@ -1130,6 +1130,7 @@
     "申请更新失败：{0}": "Failed to request the update: {0}",
     "画布 {0}×{1} → {2}×{3}（窗口 {4}×{5}），{6}": "Canvas {0}×{1} → {2}×{3} (window {4}×{5}), {6}",
     "画布 {0}×{1} 已匹配游戏窗口 {2}×{3}": "Canvas {0}×{1} matches the game window {2}×{3}",
+    "游戏按固定分辨率渲染（窗口 {2}×{3}），保留画布 {0}×{1}": "The game renders at a fixed resolution (window {2}×{3}); keeping the canvas at {0}×{1}",
     "画布宽度需在 640–3840 之间": "Canvas width must be between 640 and 3840",
     "画布高度需在 480–2160 之间": "Canvas height must be between 480 and 2160",
     "画面校准": "Canvas calibration",
