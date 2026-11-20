@@ -1,6 +1,6 @@
 # 游玩画质优化方案
 
-> 状态：**P0 全部已实施并实测通过**；P1 的 1/3/4 已处理（P1-3 实测否决），P1-2 未做（2026-11-20）
+> 状态：**P0 与 P1 全部处理完毕**（P1-3 实测否决），P2-1 已改为文档级修正；P2-2 / P2-3 维持不实施（2026-11-21）
 > 编写日期：2026-11-20
 > 分支：`feat/play-quality`（从 `master` 切出）
 > 关联：`docs/WINE-RUNTIME-NOTES.md`（实测结论与否定结果）、`docs/PERF-PLAN.md`（页面速度，与本文无关）、
@@ -258,29 +258,49 @@ galgame 90% 时间画面静止，paintover 直接决定观感，比 `video_crf` 
 
 ---
 
-### P1-2 画质参数进页面
+### P1-2 画质参数进页面（已实施）
 
 **问题**：`VIDEO_CRF` / `RATE_CONTROL_MODE` / `VIDEO_BITRATE` / `KEYFRAME_INTERVAL` /
-`VIDEO_PAINTOVER_CRF` 目前只能手改 `game.env`。`GameScanService.java:38-45` 明确把它们排除在
-`MANAGED_KEYS` 之外（写回时原样保留），所以门户改分辨率不会冲掉它们——这是对的，
-但也意味着没有任何 UI 入口。
+`VIDEO_PAINTOVER_CRF` 原本只能手改 `game.env`，没有任何 UI 入口。
 
-**改法**（最小方案，不碰数据模型）：
+**改法（已实施）**：原计划是「把这五个键加进 `MANAGED_KEYS`、以 DB 为准」，
+实测后否掉了——那会把老游戏 `game.env` 里人工调好的值一次冲成空。改成**三态语义**：
 
-1. `Game` 实体加一个 `quality` 字段（`@Column` 存 JSON 或若干独立列）。
-2. `GameScanService.MANAGED_KEYS` 加入这五个键，`writeEnv()` 从实体写回。
-3. `GameEditView.vue` 分辨率区块下面加「画质」分组：CRF 滑杆（5-30）、
-   paintover CRF 滑杆（5-30）、帧率（复用现有输入）、码率模式单选（crf / cbr）。
-4. 只对 `cbr` 模式显示码率输入（CRF 下它不生效，见 §3 第 3 条）。
+| 状态 | 实体字段 | 页面 | 写 `game.env` |
+|---|---|---|---|
+| 门户不管理 | `null` | 留空 | 跳过，保留文件里的原值 |
+| 门户管理 | 有值 | 填了值 | 覆盖文件里的值 |
 
-**风险**：中等。`GameEnvPreserveTest.java` 专门测「门户不管理的键写回时保留」，
-把画质键纳入管理后要改写这个测试的语义——保留范围从「画质键」缩小到「用户自定义的其它键」。
+- `Game` 的五个字段全用可空类型（`Integer` / `String`），`null` 就是「不管理」；
+  用 `Integer` 而不是 `int` 才能区分「没填」和「填了 0」（关键帧 0 = 无限 GOP 是合法值）。
+- `GameScanService.syncOne` 从 `game.env` 读进实体（页面上能看到当前值），
+  `writeEnv` 只写非 `null` 的项，其余走原有的保留循环。这比加进 `MANAGED_KEYS`
+  更保守：没有改动老行为，`GameEnvPreserveTest` 的语义也不变。
+- 页面上「画质」分组在分辨率下面；码率输入只在 `cbr` 模式下显示（CRF 下它不生效）。
+- 校验在后端做，范围与 Selkies `settings.py` 对齐：CRF 5–50、paintover 5–50、
+  keyframe 0–300 秒、模式只能是 crf / cbr。
+- 画质参数**不进 `restartRequired`**：下次开流时 `run-game.sh` 才读 `game.env`，
+  不用重启会话（分辨率/启动程序才需要）。
 
-**优先级建议**：P0 全部落地并验证收益后再做。如果 P0 的默认值已经够用，
-这一项可以长期不做。
+**实测（p-hub-01，`sugarstyle`）**：
 
-**文件**：`Game.java`、`GameScanService.java`、`GameEditView.vue`、`GameEnvPreserveTest.java`、
-四个语言包
+| 验证 | 结果 |
+|---|---|
+| 保存 10 / 7 / crf / 30 | `game.env` 出现对应四行，响应 `restartRequired=false` |
+| 再只改分辨率 | 四个画质键原样保留 |
+| 手写 `VIDEO_FULLCOLOR=0` 后再保存 | 手写键保留（不管理的键仍不被冲掉） |
+| 重新开流 | Selkies cmdline `--video-crf 10 --video-paintover-crf 7 --keyframe-interval 30`，日志 `h264enc crf 10` |
+| 编辑页 | 日文界面显示「映像品質 CRF 10 / 静止画 CRF 7 / crf / 30」，切到 cbr 时码率框出现 |
+
+**已知限制**：没有「清空回不管理」的接口。页面上把某项清空保存，后端收到 `null`
+会当成「不改」，值仍是上一次的。要彻底回到「门户不管理」，只能直接编辑 `game.env`
+再重扫。真正的清空语义需要区分「没传这个字段」和「传了 null」，得换请求体结构，
+本次没做——留空即不改是更常见也更安全的默认。
+
+**文件**：`Game.java`、`GameScanService.java`、`GameMetaController.java`、
+`GameEditView.vue`、`game-quality.js`（新）、`styles.css`、
+`GameMetaQualityTest.java`（新）、`game-quality.test.js`（新）、
+`GameEnvPreserveTest.java`、四个语言包
 
 ---
 
@@ -333,17 +353,18 @@ Wine 把窗口钳到 `SCREEN_H - 20`（`:496-499` 的告警），游戏原生 72
 
 ---
 
-### P2-1 修正 keyframe interval 单位
+### P2-1 修正 keyframe interval 单位（已实施：只改注释，保留 60 秒）
 
-**问题**：`run-game.sh:74` 默认 `KEYFRAME_INTERVAL:=60`，注释与变量名暗示「帧」，
+**问题**：`run-game.sh:79` 默认 `KEYFRAME_INTERVAL:=60`，注释与变量名暗示「帧」，
 但 Selkies 2.2.0 的 `keyframe_interval` 单位是**秒**（`settings.py`：`"Seconds between
 scheduled video recovery keyframes"`，默认 `0.0` = 无限 GOP）。当前实际是每 60 秒一个 IDR。
 
-**改法**：确认意图后二选一——要「每 60 秒」就把变量注释改清楚；
-要「无限 GOP」（Selkies 默认，码率与画质更稳）就改成 `0`。
+**决定**：保留 60 秒，改成 `0` 不采纳。丢失帧的正常恢复路径是按需的——客户端发
+`REQUEST_KEYFRAME`、Selkies 补 IDR（`StreamWsBridge` 的丢帧策略就依赖这条，约 1 秒自愈）；
+定时 IDR 只是客户端没能自己恢复时的兜底。一帧 IDR 摊到 60 秒可以忽略，换来「坏了也能自愈」。
 
-**风险**：改成 0 后，客户端重连/丢帧恢复依赖 `REQUEST_KEYFRAME` 往返，
-弱网下恢复会慢一点。**当前 60 秒不算错，只是注释与语义不符**，属于文档级修正。
+**改法（已实施）**：把单位、语义和 `KEYFRAME_INTERVAL=0` 的回退写法写进注释，
+行为不变。
 
 **文件**：两份 `run-game.sh`（注释 + 默认值）
 
@@ -430,9 +451,9 @@ P0-3 去标题栏后窗口高度变化又影响裁剪坐标。
 | 项 | 状态 |
 |---|---|
 | P1-1 帧率 | 已实施并实测（`60,30-60`） |
+| P1-2 画质参数进页面 | 已实施并实测（三态语义：留空 = 门户不管理） |
 | P1-3 画布尺寸 | 实测后**否决**，Selkies manual 模式会把桌面缩回画布，零收益 |
 | P1-4 音频码率 | 已实施并实测（192 kbps） |
-| P1-2 画质参数进页面 | 未做（见该条，优先级最低） |
 
 ### 每阶段的通用验收
 
@@ -473,12 +494,17 @@ llvmpipe 软渲染）。测试游戏至少覆盖一款 Kirikiri（`tenshi-reboot
 
 自动化：`mvn test` 547 通过 / 3 跳过；`npm test` 187 通过；`npm run check:theme` 通过。
 
-**未做**：P0-4 / P0-5 的视觉截图对比（只看参数是否生效，没有再取改前基线截图）；
-P1-2 画质参数进页面（优先级最低，P0 默认值已够用）。
+**未做**：P0-4 / P0-5 的视觉截图对比（只看参数是否生效，没有再取改前基线截图）。
 
-**P1 结论（同日）**：P1-1 帧率放开到 `60,30-60` 已实施并实测；P1-4 音频码率
-提到 192 kbps 已实施并实测；P1-3 加高 Xvfb 屏幕实测**零收益**，Selkies 的 manual
-模式会把桌面缩回 `manual_width/height`，详见该条。
+**P1 结论（2026-11-21）**：P1-1 帧率放开到 `60,30-60` 已实施并实测；P1-4 音频码率
+提到 192 kbps 已实施并实测；P1-2 画质参数进页面已实施并实测；P1-3 加高 Xvfb 屏幕
+实测**零收益**，Selkies 的 manual 模式会把桌面缩回 `manual_width/height`，详见该条。
+
+**P2 结论**：P2-1 保留 60 秒定时 IDR，只把单位与语义写进注释；P2-2（H.265）与
+P2-3（DXVK）维持不实施，理由见各条。
+
+自动化（2026-11-21 终态）：`mvn test` 556 通过 / 3 跳过；`npm test` 194 通过；
+`npm run check:theme` 通过。
 
 ---
 
