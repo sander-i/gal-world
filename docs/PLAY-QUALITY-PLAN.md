@@ -1,6 +1,6 @@
 # 游玩画质优化方案
 
-> 状态：**P0 已实施并在目标机实测通过**（2026-11-20）；P1 未开始
+> 状态：**P0 全部已实施并实测通过**；P1 的 1/3/4 已处理（P1-3 实测否决），P1-2 未做（2026-11-20）
 > 编写日期：2026-11-20
 > 分支：`feat/play-quality`（从 `master` 切出）
 > 关联：`docs/WINE-RUNTIME-NOTES.md`（实测结论与否定结果）、`docs/PERF-PLAN.md`（页面速度，与本文无关）、
@@ -223,18 +223,20 @@ galgame 90% 时间画面静止，paintover 直接决定观感，比 `video_crf` 
 
 ---
 
-### P1-1 帧率默认放开到 30-60
+### P1-1 帧率默认放开到 60,30-60（已实施）
 
 **问题**：`run-game.sh:71` 默认 `FRAMERATE:=30-30`，锁死 30fps。转场、OP、滚动只有 30fps。
 
-**改法**：
+**改法**（已实施）：
 
 ```bash
-: "${FRAMERATE:=30-60}"
+: "${FRAMERATE:=60,30-60}"
 ```
 
-**预期**：动态场景流畅度提升。Selkies 的 `framerate` 是 `初始值,允许范围` 语法，
-客户端可在范围内自行调整。
+用三段式而不是 `30-60`：初始值 60 保证首帧就是高帧率，范围让客户端在快速跳过
+对话时自己升、画面静止时自己降。只写 `30-60` 的话 Selkies 取范围下界起步。
+
+**预期**：动态场景流畅度提升。
 
 **风险**：CRF 模式下帧率翻倍约等于码率翻倍（局域网可承受）；
 软编码 CPU 占用上升，`docs/OPERATIONS.md:140` 记录「每路约 1–2 核编码，32 线程实测 2 路稳定」，
@@ -243,11 +245,16 @@ galgame 90% 时间画面静止，paintover 直接决定观感，比 `video_crf` 
 **并发决策（2026-11-20）**：目标机定位是**个人游玩项目，无并发需求**，
 并发上限下降不构成阻塞，这一项可以按需放开。
 
-**同时要改**：`GameImportValidator.java:100-108` 的默认值 `"30"`、
-`GameImportView.vue:31,81` 的 `framerate: '30'`、`Game.java:67` 的 `"30-30"`。
-这些默认值三处不一致（`"30"` vs `"30-30"`），改动时统一成 `"30-60"`。
+**同时改了**：`GameImportValidator.java:105` 的默认值 `"30"`、
+`GameImportView.vue:31,81` 的 `framerate: '30'`、`Game.java:67` 的 `"30-30"`、
+`GameScanService.java:205` 读老 env 的兜底 `"30-30"`。五处原本三种写法，统一成 `"60,30-60"`。
 
-**文件**：两份 `run-game.sh`、`GameImportValidator.java`、`GameImportView.vue`、`Game.java`
+**实测（p-hub-01）**：Selkies cmdline `--framerate 60,30-60`；日志
+`settings applied for 'primary': 1008x616, h264enc crf 8, 60 fps`；
+客户端侧 `window.framerate=60`、`window.fps=60`。
+
+**文件**：两份 `run-game.sh`、`GameImportValidator.java`、`GameImportView.vue`、
+`Game.java`、`GameScanService.java`、`GameImportValidatorTest.java`
 
 ---
 
@@ -277,37 +284,50 @@ galgame 90% 时间画面静止，paintover 直接决定观感，比 `video_crf` 
 
 ---
 
-### P1-3 画布比 Xvfb 屏幕小 40px（需先验证）
+### P1-3 画布比 Xvfb 屏幕小 40px（已验证：**不采纳**）
 
-**问题**：`run-game.sh:240-241` 里 `SCREEN_W/H` 默认等于 `WIDTH/HEIGHT`，
-Wine 把窗口钳到 `SCREEN_H - 20`（`:476-483` 的告警），游戏原生 720 高会被裁 20px。
+**问题**：`run-game.sh:249-250` 里 `SCREEN_W/H` 默认等于 `WIDTH/HEIGHT`，
+Wine 把窗口钳到 `SCREEN_H - 20`（`:496-499` 的告警），游戏原生 720 高会被裁 20px。
 `docs/WINE-RUNTIME-NOTES.md` §7.1 已记录这个现象。
 
-**改法（待验证）**：`SCREEN_H="${SCREEN_H:-$(( HEIGHT + 40 ))}"`，`SCREEN_W` 同理。
+**实测（2026-11-20，`sugarstyle`，画布 1280×720）**：临时在 `game.env` 写
+`SCREEN_W=1280` `SCREEN_H=760` 后启动。
 
-**必须先验证**：Selkies 用 `--manual-resolution --manual-width/height` 锁定分辨率
-（`run-game.sh:526`）。源码 `websockets_mode.py:4648-4656` 显示服务端 manual 模式
-**强制覆盖**客户端尺寸，走 xrandr 改桌面尺寸。若 Xvfb 屏幕比 manual 尺寸大，
-Selkies 会把桌面改成 manual 尺寸（等于画布），屏幕多出的部分不可见——**没收益**；
-若 Selkies 不缩小桌面，则屏幕多出的部分会变成黑边被编码，**更差**。
+| 观测 | 结果 |
+|---|---|
+| Xvfb 启动 | `Xvfb :6 -screen 0 1280x760x24` |
+| 连接前 xrandr | `current 1280 x 760, maximum 1280 x 760` |
+| Selkies 连接后 xrandr | `current 1280 x 720`，1280×720 成为 `30.00*` 模式 |
+| 游戏窗口 | `1286x752`，与不改时**完全一致** |
 
-**验证方法**：单款游戏把 `SCREEN_H` 设为 `HEIGHT + 40` 跑一次，
-在游玩页读 `/api/games/{id}/window` 的 `height`，对比改前改后。
-只有窗口高度实际变大才采纳。
+**结论**：Selkies 的 manual 模式会把桌面 resize 到 `manual_width/height`
+（`websockets_mode.py:4652-4660` 走 `Sanitize → resize_display`，最终 RandR
+`--fb` 到 1280×720），Xvfb 多给的 40px 被立刻缩掉，截屏区域仍是 1280×720，
+**零收益**。`SCREEN_H=HEIGHT+40` 不采纳，`run-game.sh` 保持不变。
 
-**风险**：改错会引入缩放或黑边。**未验证前不要改。**
+顺带否掉了原先的假设：SugarStyle 根本没被 Wine 钳制——窗口 1286×752 反而
+**比屏幕大**，`wh >= SCREEN_H - 20` 那条告警在本例是误报（判据只比高度、
+没考虑窗口自由超出屏幕的情况）。这条告警的文案可以误导读者的「加高屏幕」方向，
+但改动它不在本次范围。
+
+**已还原**：测试用的 `SCREEN_W/SCREEN_H` 已从 `game.env` 移除，md5 与改前一致。
 
 ---
 
-### P1-4 音频码率
+### P1-4 音频码率（已实施）
 
 **问题**：Selkies `audio_bitrate` 默认 128000（128 kbps，Opus）。
 
-**改法**：`run-game.sh` Selkies 参数加 `--audio-bitrate 192000`。
+**改法**（已实施）：`run-game.sh` 加可覆盖默认值 `: "${AUDIO_BITRATE:=192000}"`
+与 Selkies 参数 `--audio-bitrate "${AUDIO_BITRATE:-192000}"`。
 
 **预期**：BGM 与语音的细节。Opus 128k 已相当好，收益小于前面几项。
 
-**风险**：极低。带宽增加可忽略（约 0.06 Mbps）。
+**风险**：极低。带宽增加可忽略（约 0.06 Mbps）。`settings.py:317` 的
+`allowed` 列表含 192000，`value_range` 上限 510000。
+
+**实测（p-hub-01）**：cmdline 含 `--audio-bitrate 192000`；客户端
+`window.audio_bitrate = 192000`。
 
 **文件**：两份 `run-game.sh`
 
@@ -405,10 +425,14 @@ P0-3 去标题栏后窗口高度变化又影响裁剪坐标。
 **回退方式**：两者都可以单游戏回退——在 `game.env` 写 `VIDEO_PAINTOVER_CRF=12`；
 4:4:4 需要临时删掉 `--video-fullcolor` 参数（脚本改动，回退要改代码）。
 
-### 阶段三：P1（按需）
+### 阶段三：P1
 
-P1-1 帧率、P1-2 画质 UI、P1-3 画布尺寸、P1-4 音频码率。
-**P1-3 未验证前不要动**。P1-1 要先确认并发需求。
+| 项 | 状态 |
+|---|---|
+| P1-1 帧率 | 已实施并实测（`60,30-60`） |
+| P1-3 画布尺寸 | 实测后**否决**，Selkies manual 模式会把桌面缩回画布，零收益 |
+| P1-4 音频码率 | 已实施并实测（192 kbps） |
+| P1-2 画质参数进页面 | 未做（见该条，优先级最低） |
 
 ### 每阶段的通用验收
 
@@ -450,7 +474,11 @@ llvmpipe 软渲染）。测试游戏至少覆盖一款 Kirikiri（`tenshi-reboot
 自动化：`mvn test` 547 通过 / 3 跳过；`npm test` 187 通过；`npm run check:theme` 通过。
 
 **未做**：P0-4 / P0-5 的视觉截图对比（只看参数是否生效，没有再取改前基线截图）；
-P1 全部（P1-3 用户要求「纳入实测」，尚未开始）。
+P1-2 画质参数进页面（优先级最低，P0 默认值已够用）。
+
+**P1 结论（同日）**：P1-1 帧率放开到 `60,30-60` 已实施并实测；P1-4 音频码率
+提到 192 kbps 已实施并实测；P1-3 加高 Xvfb 屏幕实测**零收益**，Selkies 的 manual
+模式会把桌面缩回 `manual_width/height`，详见该条。
 
 ---
 
