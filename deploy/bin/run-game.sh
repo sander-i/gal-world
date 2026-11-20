@@ -460,9 +460,17 @@ if command -v xdotool >/dev/null 2>&1; then
           # ConfigureNotify 确认会直接失败（实测 496x328 -> 496x328 没变）。
           xdotool windowsize "$bestid" $target 2>/dev/null || true
           sleep 2
-          read -r ww wh <<<"$(xwininfo -id "$bestid" 2>/dev/null | awk '/Width:/{w=$2} /Height:/{h=$2} END{print w, h}')"
-          RESIZED_FROM="$resize_key"
-          echo "[$(date '+%T')] window $bestid resized $resize_key -> ${ww}x${wh}（原窗口不足画布一半，按画布放大）"
+          read -r neww newh <<<"$(xwininfo -id "$bestid" 2>/dev/null | awk '/Width:/{w=$2} /Height:/{h=$2} END{print w, h}')"
+          if [[ "${neww:-0}" != "$ww" || "${newh:-0}" != "$wh" ]]; then
+            ww="$neww"; wh="$newh"
+            RESIZED_FROM="$resize_key"
+            echo "[$(date '+%T')] window $bestid resized $resize_key -> ${ww}x${wh}（原窗口不足画布一半，按画布放大）"
+          else
+            # 窗口刚创建时 windowsize 常被忽略（实测：同一会话第一次无效、
+            # 等窗口尺寸稳定后再试才成功）。这里不记 RESIZED_FROM，
+            # 让下一轮循环重试，而不是永久放弃。
+            echo "[$(date '+%T')] window $bestid 放大未生效（$resize_key -> ${neww:-?}x${newh:-?}），下轮重试"
+          fi
         fi
 
         # 屏幕高度不够时 Wine 会把超屏窗口钳到 SCREEN_H-20，超出的部分直接裁掉（不缩放），
