@@ -1885,6 +1885,21 @@ select optgroup {
   flex-wrap: wrap;
 }
 
+/* 画质参数：窄屏两列、宽屏自适应，避免一行挤成一团 */
+.quality-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 10px;
+}
+
+.quality-grid > label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
 .media-list {
   display: flex;
   flex-direction: column;

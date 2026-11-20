@@ -56,7 +56,8 @@ class GameMetaResolutionTest {
     private static GameMetaController.MetaRequest req(Integer width, Integer height) {
         return new GameMetaController.MetaRequest(
                 null, width, height, null, null, null, null,
-                null, null, null, null, null, null, null, null, null, null);
+                null, null, null, null, null, null, null, null, null, null,
+                null, null, null, null, null);
     }
 
     @Test

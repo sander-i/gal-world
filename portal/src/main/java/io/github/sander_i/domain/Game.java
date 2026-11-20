@@ -66,6 +66,26 @@ public class Game {
     private int loopbackCard;
     private String framerate = "60,30-60";
 
+    /**
+     * 画质参数，写进 game.env 的 {@code VIDEO_CRF} / {@code VIDEO_PAINTOVER_CRF}
+     * / {@code RATE_CONTROL_MODE} / {@code VIDEO_BITRATE} / {@code KEYFRAME_INTERVAL}。
+     *
+     * 全部可空，{@code null} 表示「门户不管理这个键」——{@code GameScanService.writeEnv}
+     * 会保留 game.env 里人工写的值。这样老游戏的手工调参不会被一次门户保存冲掉，
+     * 而页面上填了就由门户接管。用 Integer 而不是 int 就是为了区分「没填」与「填了 0」。
+     *
+     * 取值范围与 Selkies settings.py 对齐：CRF 5–50、paintover CRF 5–50、
+     * keyframe interval 0–300 秒。
+     */
+    private Integer videoCrf;
+    private Integer videoPaintoverCrf;
+    /** crf（恒定质量）或 cbr（恒定码率）；null = 保留 game.env 的值 */
+    private String rateControlMode;
+    /** CBR 模式下的码率串，格式见 Selkies：{@code 40000,5000-80000} */
+    private String videoBitrate;
+    /** 定时 IDR 间隔，单位**秒**；0 = 无限 GOP（Selkies 默认） */
+    private Integer keyframeInterval;
+
     @Column(length = 2000)
     private String description;
     private String coverPath;
@@ -162,6 +182,21 @@ public class Game {
 
     public String getFramerate() { return framerate; }
     public void setFramerate(String framerate) { this.framerate = framerate; }
+
+    public Integer getVideoCrf() { return videoCrf; }
+    public void setVideoCrf(Integer videoCrf) { this.videoCrf = videoCrf; }
+
+    public Integer getVideoPaintoverCrf() { return videoPaintoverCrf; }
+    public void setVideoPaintoverCrf(Integer videoPaintoverCrf) { this.videoPaintoverCrf = videoPaintoverCrf; }
+
+    public String getRateControlMode() { return rateControlMode; }
+    public void setRateControlMode(String rateControlMode) { this.rateControlMode = rateControlMode; }
+
+    public String getVideoBitrate() { return videoBitrate; }
+    public void setVideoBitrate(String videoBitrate) { this.videoBitrate = videoBitrate; }
+
+    public Integer getKeyframeInterval() { return keyframeInterval; }
+    public void setKeyframeInterval(Integer keyframeInterval) { this.keyframeInterval = keyframeInterval; }
 
     public String getDescription() { return description; }
     public void setDescription(String description) { this.description = description; }

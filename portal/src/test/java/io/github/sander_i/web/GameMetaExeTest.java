@@ -34,11 +34,12 @@ class GameMetaExeTest {
     GameScanService scan;
     GameMetaController controller;
 
-    /** MetaRequest 的前 15 个参数与本次改动无关，统一留 null */
+    /** 与本次改动无关的参数统一留 null；画质参数在后 5 位 */
     private static GameMetaController.MetaRequest metaReq(String exe, String exeAlt) {
         return new GameMetaController.MetaRequest(
                 null, null, null, null, null, null, null, null, null, null,
-                null, null, null, null, null, exe, exeAlt);
+                null, null, null, null, null, exe, exeAlt,
+                null, null, null, null, null);
     }
 
     @BeforeEach
