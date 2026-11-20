@@ -124,8 +124,15 @@ export function useGameLaunch({ idOf = (g) => g.id ?? g.gameId, onError, onStart
         // 后端只会报 STOPPED，若不在这里收尾，进度条会停在 stream 步上限 95%
         // 直到 90 秒超时，用户看到的就是「卡住不动」。
         // 启动头几秒的 STOPPED 可能是 systemd 的瞬时值，过了宽限期才判定。
-        if (startVerdict(st, performance.now() - startedAt, STOPPED_GRACE_MS) === 'fail') {
-          fail(t('游戏进程已退出，请到详情页查看日志。'))
+        //
+        // UNKNOWN 走单独文案：它不是「游戏退出」，而是门户拿不到 systemctl
+        // 状态（典型：JDK 在运行中被在线升级，fork 子进程全部失败）。
+        // 这时提示用户去重启门户比「查看日志」更有用。
+        const verdict = startVerdict(st, performance.now() - startedAt, STOPPED_GRACE_MS)
+        if (verdict === 'fail') {
+          fail(st.state === 'UNKNOWN'
+            ? t('无法读取会话状态：门户可能在后台被更新过，请重启门户服务后重试。')
+            : t('游戏进程已退出，请到详情页查看日志。'))
           return
         }
         if (step === 'start' && st.state === 'RUNNING') {

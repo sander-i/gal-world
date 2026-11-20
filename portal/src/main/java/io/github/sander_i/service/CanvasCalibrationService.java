@@ -126,10 +126,15 @@ public class CanvasCalibrationService {
                 win.width(), win.height(), st.round, st.bestW, st.bestH, st.done);
         if (!plan.resize()) {
             st.done = true;
+            // keep-large 时画布与窗口并不相等（窗口按游戏自身分辨率渲染），
+            // 说成「已匹配」会让人以为画布被缩过，实际是刻意保留大画布。
+            String msg = "keep-large".equals(plan.reason())
+                    ? I18n.t("游戏按固定分辨率渲染（窗口 {2}×{3}），保留画布 {0}×{1}",
+                            game.getWidth(), game.getHeight(), win.width(), win.height())
+                    : I18n.t("画布 {0}×{1} 已匹配游戏窗口 {2}×{3}",
+                            game.getWidth(), game.getHeight(), win.width(), win.height());
             return new Result("ok", game.getWidth(), game.getHeight(),
-                    win.width(), win.height(), st.round,
-                    I18n.t("画布 {0}×{1} 已匹配游戏窗口 {2}×{3}",
-                            game.getWidth(), game.getHeight(), win.width(), win.height()));
+                    win.width(), win.height(), st.round, msg);
         }
 
         int oldW = game.getWidth();

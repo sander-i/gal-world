@@ -76,4 +76,52 @@ class CanvasPlannerTest {
         assertFalse(p.resize());
         assertEquals("done", p.reason());
     }
+
+    /**
+     * 游戏按自身固定分辨率渲染时，窗口大小与画布无关。
+     *
+     * <p>实测 tenshi-reboot：画布 1008×616 时窗口是 496×328（占 26%），
+     * 画布改成 520×352 后窗口还是 496×328。旧逻辑走 fit-window 把画布缩到
+     * 窗口+24，于是 1008×616 → 520×352，画布越小画质越差，越标定越糊
+     * （2026-11-20 用户报告「分辨率被缩小、画质变差」）。
+     */
+    @Test
+    void 窗口远小于画布时保持大画布不缩() {
+        var p = CanvasPlanner.plan(1008, 616, 496, 328, 0, 0, 0, false);
+        assertFalse(p.resize(), "窗口只占画布 26%，缩小画布只会降低画质");
+        assertEquals("keep-large", p.reason());
+    }
+
+    @Test
+    void 窗口占画布不到一半时都保持大画布() {
+        // 1280x720 画布、600x400 窗口 = 26%
+        var p = CanvasPlanner.plan(1280, 720, 600, 400, 0, 0, 0, false);
+        assertFalse(p.resize());
+        assertEquals("keep-large", p.reason());
+    }
+
+    @Test
+    void 窗口占画布一半以上时仍按窗口微调() {
+        // 800x500 / 1280x720 = 43%：低于一半，保持大画布
+        assertFalse(CanvasPlanner.plan(1280, 720, 800, 500, 0, 0, 0, false).resize());
+        // 900x600 / 1280x720 = 58%：高于一半，仍走 fit-window
+        var p = CanvasPlanner.plan(1280, 720, 900, 600, 0, 0, 0, false);
+        assertTrue(p.resize());
+        assertEquals("fit-window", p.reason());
+    }
+
+    /**
+     * 固定分辨率判定要排在 done/round 之前：否则第一次校准把 done 置位后，
+     * 后续调用落到 done 分支，界面文案又变回「已匹配窗口」，与事实不符。
+     */
+    @Test
+    void 已收敛后仍报告固定分辨率而不是done() {
+        var p = CanvasPlanner.plan(1008, 616, 496, 279, 0, 0, 0, true);
+        assertFalse(p.resize());
+        assertEquals("keep-large", p.reason());
+        // 轮次用尽同理
+        var p2 = CanvasPlanner.plan(1008, 616, 496, 279, 4, 1008, 616, false);
+        assertFalse(p2.resize());
+        assertEquals("keep-large", p2.reason());
+    }
 }

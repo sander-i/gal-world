@@ -115,8 +115,141 @@ public class StreamWsBridge {
      * 浏览器 @OnMessage 回调线程与补发线程同时写会抛
      * 「The remote endpoint was in state [...]」，对端看到的就是 1006 断开。
      */
-    private static final Map<String, java.util.concurrent.BlockingQueue<Object[]>> UP_QUEUE =
+    private static final Map<String, FrameQueue> UP_QUEUE =
             new ConcurrentHashMap<>();
+
+    /**
+     * 上游 → 浏览器方向的队列预算。
+     *
+     * 之前这里是**无界** LinkedBlockingQueue：浏览器一旦消化不过来（快速跳过对话
+     * 时码率涨到 10–17 Mbps，而浏览器解码 + 渲染跟不上），队列每秒涨 1 MB 左右，
+     * 延迟无限累积。更糟的是 Selkies 只看到「本地 socket 一直被读空」，它自己的
+     * 字节预算丢帧（VIDEO_RELAY_BUDGET_SECONDS = 2.0）**永远不会触发**，门户成了
+     * 一个静默的黑洞缓冲：跳过 10 秒就积压 10 秒，松手后画面要追赶很久才回到实时。
+     *
+     * 现在按 Selkies 同样的思路设预算：超过就把最旧的视频帧丢掉。丢帧会让客户端的
+     * 解码器出现引用缺口，它自己会发 `LOST_FRAME <id>` / `REQUEST_KEYFRAME`
+     * （见 selkies-core.js 与 websockets_mode.py 的对应分支），Selkies 随即
+     * invalidation 或补一个 IDR，约 1 秒内自愈。代价是一次短暂跳帧，
+     * 换来的是延迟恒定 —— 这是串流里正确的取舍方向。
+     */
+    private static final int DOWN_MAX_FRAMES = 180;            // 60fps 下约 3 秒
+    private static final long DOWN_MAX_VIDEO_BYTES = 4L << 20;  // 与 Selkies 的最小预算一致
+
+    /** 浏览器 → 上游方向：只有控制帧，给个上限防止上游卡死时无限涨 */
+    private static final int UP_MAX_FRAMES = 512;
+
+    /**
+     * 一条桥接连接的单向帧队列。
+     *
+     * 两个方向都用它，但策略不同：
+     *  - 下游（Selkies → 浏览器）超预算时丢**最旧的视频帧**。视频帧有引用关系，
+     *    丢一帧会让客户端解码器出现缺口，它会自己报 LOST_FRAME / REQUEST_KEYFRAME
+     *    （selkies-core.js 的 decode gate，服务端见 websockets_mode.py 的
+     *    `LOST_FRAME ` / `REQUEST_KEYFRAME` 分支），约 1 秒自愈。
+     *  - 上游（浏览器 → Selkies）超预算时只丢最旧的二进制帧（麦克风 PCM），
+     *    文本控制帧（SETTINGS / ACK / 键鼠）一律不丢：丢了就是状态不同步。
+     */
+    /** 包内可见，供 StreamWsBridgeQueueTest 直接验证丢帧策略 */
+    static final class FrameQueue {
+        private final java.util.concurrent.BlockingQueue<Object[]> q =
+                new java.util.concurrent.LinkedBlockingQueue<>();
+        private final boolean downstream;
+        private final int maxFrames;
+        private final long maxVideoBytes;
+        /** 已入队但未被写线程取走的字节数（下游预算用） */
+        private long bytes;
+        /** 因超预算被丢掉的帧数，用于日志与遥测 */
+        private long dropped;
+
+        FrameQueue(boolean downstream) {
+            this.downstream = downstream;
+            this.maxFrames = downstream ? DOWN_MAX_FRAMES : UP_MAX_FRAMES;
+            this.maxVideoBytes = downstream ? DOWN_MAX_VIDEO_BYTES : 0;
+        }
+
+        /** 入队；超预算时按上面的策略丢帧。永不阻塞。 */
+        synchronized void put(Object[] f) {
+            if (downstream) {
+                int size = f[1] == null ? 0 : ((ByteBuffer) f[1]).remaining();
+                // 超预算时只挤视频帧：控制帧（SETTINGS / AUDIO 开关 / 剪贴板）
+                // 丢一条就是状态不同步，比丢帧本身更糟。
+                while (!q.isEmpty()
+                        && (q.size() >= maxFrames
+                            || (isVideo(f) && bytes + size > maxVideoBytes))) {
+                    Object[] victim = oldestVideo();
+                    if (victim == null) {
+                        // 队列里全是控制帧：说明上游在灌控制消息而不是画面，
+                        // 这种情况不该丢，直接入队（超上限也不会有几个）。
+                        break;
+                    }
+                    if (!q.remove(victim)) {
+                        break;
+                    }
+                    bytes -= victim[1] == null ? 0 : ((ByteBuffer) victim[1]).remaining();
+                    dropped++;
+                }
+                q.offer(f);
+                bytes += size;
+            } else {
+                // 上游方向：只丢最旧的二进制帧（麦克风 PCM），文本控制帧绝不丢 ——
+                // 丢了 SETTINGS / ACK / 键鼠就是状态不同步。全是控制帧还满，说明
+                // 上游已经卡死，此时超一点上限也无所谓，比丢状态安全。
+                if (q.size() >= maxFrames) {
+                    Object[] victim = null;
+                    for (Object[] cand : q) {
+                        if (cand[0] == null) {
+                            victim = cand;
+                            break;
+                        }
+                    }
+                    if (victim != null && q.remove(victim)) {
+                        dropped++;
+                    }
+                }
+                q.offer(f);
+            }
+        }
+
+        /** 取一帧，超时返回 null。取出时同步扣减字节计数。 */
+        Object[] poll(long timeoutMs) throws InterruptedException {
+            Object[] f = q.poll(timeoutMs, java.util.concurrent.TimeUnit.MILLISECONDS);
+            if (f != null && downstream) {
+                synchronized (this) {
+                    bytes -= f[1] == null ? 0 : ((ByteBuffer) f[1]).remaining();
+                }
+            }
+            return f;
+        }
+
+        synchronized long dropped() {
+            return dropped;
+        }
+
+        synchronized int size() {
+            return q.size();
+        }
+
+        /** 队列里最旧的一条视频帧；没有则 null。调用方持有锁。 */
+        private Object[] oldestVideo() {
+            for (Object[] cand : q) {
+                if (isVideo(cand)) {
+                    return cand;
+                }
+            }
+            return null;
+        }
+
+        /** Selkies 的视频分片：首字节 0x04，长度至少 12（帧号/参考帧在头里） */
+        static boolean isVideo(Object[] f) {
+            if (f[1] == null) {
+                return false;
+            }
+            ByteBuffer b = (ByteBuffer) f[1];
+            return b.remaining() >= 12 && b.get(b.position()) == 0x04;
+        }
+    }
+
 
     public StreamWsBridge() {
     }
@@ -262,12 +395,12 @@ public class StreamWsBridge {
             closeQuietly(browser);
             return;
         }
-        q.add(new Object[]{text, data == null ? null : data.duplicate()});
+        q.put(new Object[]{text, data == null ? null : data.duplicate()});
     }
 
     /** 上游单写线程：从队列取帧按序写，是唯一碰 up.remote 的线程 */
     private static void startUpWriter(String browserId, Session up) {
-        var q = new java.util.concurrent.LinkedBlockingQueue<Object[]>();
+        var q = new FrameQueue(false);
         UP_QUEUE.put(browserId, q);
         Thread w = new Thread(() -> {
             try {
@@ -275,7 +408,7 @@ public class StreamWsBridge {
                 // q.take() 会阻塞，上游在阻塞期间关闭时循环不会退出，
                 // 下一次 send 抛异常就会以未捕获异常结束线程。
                 while (true) {
-                    Object[] f = q.poll(200, java.util.concurrent.TimeUnit.MILLISECONDS);
+                    Object[] f = q.poll(200);
                     if (f == null) {
                         if (!up.isOpen()) {
                             return;
@@ -318,7 +451,7 @@ public class StreamWsBridge {
             return;
         }
         while (!q.isEmpty()) {
-            writer.add(q.poll());
+            writer.put(q.poll());
         }
     }
 
@@ -354,9 +487,13 @@ public class StreamWsBridge {
     /** 上游收到的每一帧原样回灌给浏览器 */
     private static final class UpstreamEndpoint extends Endpoint {
         private final Session browser;
-        /** 待写队列：Selkies 推帧很快，多线程直接写会撞上 TEXT_FULL_WRITING */
-        private final java.util.concurrent.BlockingQueue<Object[]> queue =
-                new java.util.concurrent.LinkedBlockingQueue<>();
+        /**
+         * 待写队列：Selkies 推帧很快，多线程直接写会撞上 TEXT_FULL_WRITING。
+         *
+         * 这是**有界**的（见 {@link FrameQueue}）：浏览器消化不过来时丢最旧的
+         * 视频帧，而不是无限积压把延迟越拖越长。
+         */
+        private final FrameQueue queue = new FrameQueue(true);
         private final Thread writer;
 
         UpstreamEndpoint(Session browser) {
@@ -370,16 +507,17 @@ public class StreamWsBridge {
         @Override
         public void onOpen(Session up, EndpointConfig config) {
             log.debug("上游 WS onOpen: id={} subprotocol={}", up.getId(), up.getNegotiatedSubprotocol());
-            up.addMessageHandler(String.class, text -> queue.add(new Object[]{text, null}));
-            up.addMessageHandler(ByteBuffer.class, data -> queue.add(new Object[]{null, data.duplicate()}));
+            up.addMessageHandler(String.class, text -> queue.put(new Object[]{text, null}));
+            up.addMessageHandler(ByteBuffer.class, data -> queue.put(new Object[]{null, data.duplicate()}));
         }
 
         /** 只有这个线程碰 browser 的 remote，避免并发写 */
         private void drainLoop() {
+            long lastReport = System.currentTimeMillis();
             try {
                 while (true) {
                     // 同上游写线程：poll 加超时，阻塞期间浏览器关闭时能退出
-                    Object[] f = queue.poll(200, java.util.concurrent.TimeUnit.MILLISECONDS);
+                    Object[] f = queue.poll(200);
                     if (f == null) {
                         if (!browser.isOpen()) {
                             return;
@@ -399,6 +537,16 @@ public class StreamWsBridge {
                         // 浏览器已断开：正常结束，不当作错误
                         log.debug("回灌浏览器失败: {}", e.toString());
                         return;
+                    }
+                    // 积压丢帧是正常行为，但要能看见：每 10 秒最多一条，避免刷日志
+                    long now = System.currentTimeMillis();
+                    if (now - lastReport >= 10_000) {
+                        lastReport = now;
+                        long dropped = queue.dropped();
+                        if (dropped > 0) {
+                            log.debug("串流桥接积压丢帧 {} 帧（队列 {}，浏览器 {}）",
+                                    dropped, queue.size(), browser.getId());
+                        }
                     }
                 }
             } catch (InterruptedException e) {

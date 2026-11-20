@@ -87,7 +87,7 @@ mkdir -p "$ROOT/bin"
 write_sudo_wrapper() {
   cat > "$ROOT/bin/galworld-sudo" <<'WRAPPER'
 #!/usr/bin/env bash
-# galworld-sudo-version: 3
+# galworld-sudo-version: 4
 # Gal World 固定提权入口 —— 由 deploy.sh 生成，只实现后台部署需要的几个动作。
 # 必须经 sudo 调用（sudoers 放行的也是这里的子命令），参数只接受下表里的值。
 set -euo pipefail
@@ -99,6 +99,46 @@ target_user() {
     exit 2
   fi
   printf '%s' "$u"
+}
+
+# 禁止 unattended-upgrades 自动升级 JDK 运行时。
+#
+# 门户是长期运行的 Java 进程。openjdk-21-jre-headless 在它运行中被替换后，
+# 内存里的 JDK 与磁盘上的 lib/jspawnhelper 版本不再匹配，此后每一次
+# fork() 子进程都会失败：
+#   Incorrect Java version: 21.0.13.0.3+1-1~24.04.1
+#   jspawnhelper version 21.0.13.1+2-1~24.04.1-24.04.1
+# 所有 ProcessBuilder / Runtime.exec 调用静默失效 —— 最典型的表现是
+# SystemdSessionManager 调不到 systemctl，会话状态永远是 UNKNOWN，
+# 页面启动进度条卡在 55%（2026-11-20 实测，潜伏 4 小时才被发现）。
+#
+# 用 Unattended-Upgrade::Package-Blacklist 而不是 apt preferences pin：
+# 前者只影响自动升级，手工 `apt-get install --only-upgrade` 不受限制，
+# 运维要打安全补丁时不会被挡住。包名带 `$` 锚定结尾，避免误伤
+# openjdk-21-jre-headless-dbgsym 之类的兄弟包。
+#
+# 独立文件（51galworld-*）不覆盖发行版的 50/52 配置：本机可能还承载
+# 其它服务，改全局 unattended 策略风险太大。
+jdk_autoupgrade_off() {
+  local conf=/etc/apt/apt.conf.d/51galworld-jdk-autoupgrade
+  cat > "$conf" <<'PIN'
+// Gal World：禁止 unattended-upgrades 自动升级 JDK 运行时。
+// 门户是长期运行的 Java 进程，运行中被替换 JDK 会让内存镜像与磁盘上的
+// jspawnhelper 版本不匹配，此后所有 fork() 子进程失败（systemctl 调不到、
+// 会话状态永远 UNKNOWN、页面启动进度条卡 55%）。详见 docs/JDK-DRIFT.md。
+// 手工升级不受影响：apt-get install --only-upgrade openjdk-21-jre-headless 仍可用。
+Unattended-Upgrade::Package-Blacklist {
+    "openjdk-21-jre-headless$";
+    "openjdk-21-jre$";
+};
+PIN
+  chmod 644 "$conf"
+  # apt-config 能解析到这两条才算生效；解析不到说明文件写坏了或 apt 版本不认。
+  if apt-config dump 2>/dev/null | grep -q 'openjdk-21-jre-headless\$'; then
+    echo "已禁止 unattended-upgrades 自动升级 JDK（$conf）"
+  else
+    echo "警告：$conf 已写入但 apt-config 未识别，请手工检查" >&2
+  fi
 }
 
 case "${1:-}" in
@@ -117,6 +157,10 @@ case "${1:-}" in
       libxcursor1:i386 libxrandr2:i386 libxinerama1:i386 libxfixes3:i386 \
       libxcomposite1:i386 libgl1:i386 libasound2t64:i386 \
       libgnutls30t64:i386 libpulse0:i386
+    jdk_autoupgrade_off
+    ;;
+  jdk-autoupgrade-off)
+    jdk_autoupgrade_off
     ;;
   wine-deps)
     # wow64 Wine 的编译依赖（源码 --enable-archs=i386,x86_64）。只加构建期包，
@@ -154,6 +198,8 @@ case "${1:-}" in
     rm -f /etc/modules-load.d/snd-aloop.conf /etc/modprobe.d/snd-aloop.conf
     modprobe -r snd-aloop 2>/dev/null || true
     gpasswd -d "$(target_user)" audio 2>/dev/null || true
+    # JDK 自动升级的豁免只服务于门户，卸载时一并撤掉，恢复发行版默认行为。
+    rm -f /etc/apt/apt.conf.d/51galworld-jdk-autoupgrade
     ;;
   uninstall-packages)
     # 彻底卸载：切环境前要把运行时依赖清干净，否则残留的旧包会影响下一套方案。
@@ -172,7 +218,7 @@ case "${1:-}" in
     apt-get autoremove -y -q || true
     ;;
   *)
-    echo "用法: galworld-sudo {packages|wine-deps|snd-aloop|audio-group|linger|uninstall-sys|uninstall-packages}" >&2
+    echo "用法: galworld-sudo {packages|jdk-autoupgrade-off|wine-deps|snd-aloop|audio-group|linger|uninstall-sys|uninstall-packages}" >&2
     exit 64
     ;;
 esac
@@ -396,7 +442,7 @@ install_sudo_entry() {
   tmp_sudoers="$(mktemp)"
   {
     echo "# 由 gal-world deploy.sh 生成：只放行固定提权入口，勿手工改"
-    for sub in packages wine-deps snd-aloop audio-group linger uninstall-sys uninstall-packages; do
+    for sub in packages jdk-autoupgrade-off wine-deps snd-aloop audio-group linger uninstall-sys uninstall-packages; do
       echo "$(id -un) ALL=(root) NOPASSWD: $SUDO_WRAPPER $sub"
     done
   } > "$tmp_sudoers"
@@ -422,7 +468,7 @@ else
   echo "!! 自动安装失败（需要一次性 sudo 凭据）"
   echo "!! 手工执行:"
   echo "!!   sudo install -o root -g root -m 0755 $ROOT/bin/galworld-sudo $SUDO_WRAPPER"
-  echo "!!   sudo sh -c 'for s in packages wine-deps snd-aloop audio-group linger uninstall-sys; do echo \"$(id -un) ALL=(root) NOPASSWD: $SUDO_WRAPPER \$s\"; done > $SUDOERS_FILE && chmod 440 $SUDOERS_FILE'"
+  echo "!!   sudo sh -c 'for s in packages jdk-autoupgrade-off wine-deps snd-aloop audio-group linger uninstall-sys; do echo \"$(id -un) ALL=(root) NOPASSWD: $SUDO_WRAPPER \$s\"; done > $SUDOERS_FILE && chmod 440 $SUDOERS_FILE'"
   echo "!!   sudo visudo -cf $SUDOERS_FILE"
 fi
 
@@ -464,6 +510,10 @@ Environment=GALWORLD_DEPLOY_TOKEN=$DEPLOY_TOKEN
 $EXTRA_ENV
 ExecStart=$JAVA_BIN -Xms128m -Xmx512m -Dfile.encoding=UTF-8 \\
   -jar $ROOT/lib/gal-world-portal.jar
+# Restart=on-failure 不只是「崩了重拉」：JdkDriftWatchdog 在检测到
+# unattended-upgrades 于运行中替换 JDK 时会 System.exit(1)，
+# 靠这条让门户用新 JDK 重新起来。删掉它，JDK 在线升级后门户会带着
+# 已失效的 fork 能力继续跑（systemctl 调不到、会话状态永远 UNKNOWN）。
 Restart=on-failure
 RestartSec=5
 TimeoutStopSec=20

@@ -40,6 +40,28 @@ public final class CanvasPlanner {
         if (winW == canvasW && winH == canvasH) {
             return keep(canvasW, canvasH, "converged");
         }
+
+        // 窗口远小于画布：游戏按自身固定分辨率渲染，窗口大小与画布无关。
+        //
+        // 实测 tenshi-reboot（Kirikiri）：画布 1008×616 时窗口恒为 496×328
+        // （占 26%），画布改成 520×352 后窗口还是 496×328 —— 缩小画布不会让
+        // 窗口变小，只会让串流画布变糊。旧逻辑走 fit-window 把画布缩到窗口+24，
+        // 于是 1008×616 → 520×352，越标定越差（2026-11-20 用户报告画质变差）。
+        //
+        // 阈值取一半：真正常见的「窗口略小于画布」是 85%~99%（下面的 converged
+        // 分支已覆盖），低于一半只可能是固定分辨率渲染或异常小窗，此时保持大画布
+        // 一定不比缩小差 —— 大画布最多是黑边，小画布则必然损失清晰度。
+        //
+        // 判定放在 done/round 之前：固定分辨率是客观事实，与已校准几轮无关，
+        // 否则第二次调用就会落到 done 分支、文案又变回「已匹配窗口」。
+        boolean clampW = winW == canvasW - CLAMP_MARGIN;
+        boolean clampH = winH == canvasH - CLAMP_MARGIN;
+        long winArea = (long) winW * winH;
+        long canvasArea = (long) canvasW * canvasH;
+        if (!clampW && !clampH && winArea * 2 < canvasArea) {
+            return keep(canvasW, canvasH, "keep-large");
+        }
+
         if (done) {
             return keep(canvasW, canvasH, "done");
         }
@@ -50,14 +72,8 @@ public final class CanvasPlanner {
             return keep(canvasW, canvasH, "rounds-exhausted");
         }
 
-        // Wine 钳制表现为窗口正好等于画布 - 20；用等号避免把普通“窗口比画布小”
-        // 误判成钳制（PAD=24 保证正常拟合后不会再落到这个差值上）。
-        boolean clampW = winW == canvasW - CLAMP_MARGIN;
-        boolean clampH = winH == canvasH - CLAMP_MARGIN;
         // 窗口已占画布 85% 以上时，为几十像素再重启一次游戏不值得，也避免
         // 游戏启动过程中窗口尺寸变化触发连续重启（实测 localove2 会重启两次）。
-        long winArea = (long) winW * winH;
-        long canvasArea = (long) canvasW * canvasH;
         if (!clampW && !clampH && winArea * 100 >= canvasArea * 85) {
             return keep(canvasW, canvasH, "converged");
         }

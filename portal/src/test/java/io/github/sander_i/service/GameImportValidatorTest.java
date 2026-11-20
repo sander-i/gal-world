@@ -56,6 +56,23 @@ class GameImportValidatorTest {
     }
 
     @Test
+    void acceptsInitialValueWithRangeFramerate() {
+        // Selkies 的三段式：初始值 + 范围。Ctrl 快速跳过对话要靠它放开 30fps 天花板。
+        for (String ok : new String[]{"60", "30-60", "60,30-60", "30,30-60", "60,8-240"}) {
+            var n = validator.validate("sample-game", "n", "game.exe", 1280, 720, ok);
+            assertEquals(ok, n.framerate(), ok);
+        }
+    }
+
+    @Test
+    void rejectsMalformedFramerate() {
+        for (String bad : new String[]{"abc", "60,", ",60", "60,30-", "60-30,abc", "60,30-60-90"}) {
+            assertThrows(IllegalArgumentException.class,
+                    () -> validator.validate("sample-game", "n", "game.exe", 1280, 720, bad), bad);
+        }
+    }
+
+    @Test
     void rejectsUnknownLang() {
         assertThrows(IllegalArgumentException.class,
                 () -> validator.validate("sample-game", "n", "game.exe", null,
