@@ -99,6 +99,37 @@
         <artifactId>spring-boot-maven-plugin</artifactId>
       </plugin>
 
+      <!--
+        构建前清空 target/classes/static，避免前端产物按内容哈希命名后无限累积。
+
+        maven-resources-plugin 只做增量复制，从不删除源目录里已不存在的文件。
+        每次 npm run build 生成新的 index-<hash>.js，旧的留在 target/classes/static/
+        里一起被打进 jar —— 实测累积到 51 个文件、31 MB，jar 从 53 MB 涨到 62 MB
+        （2026-11-20 发现）。
+
+        必须在 generate-resources（早于 process-resources 的 resources:resources）
+        执行：clean 插件绑定到 process-resources 时与资源复制同阶段，执行顺序不保证，
+        实测会排在复制之后，把刚复制的产物一起删掉、jar 里前端全丢。
+      -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-antrun-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>clean-frontend-assets</id>
+            <phase>generate-resources</phase>
+            <goals>
+              <goal>run</goal>
+            </goals>
+            <configuration>
+              <target>
+                <delete dir="${project.build.outputDirectory}/static" quiet="true"/>
+              </target>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+
       <!-- 合规：把项目 LICENSE、第三方组件声明与各许可证全文打进 META-INF/ -->
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
