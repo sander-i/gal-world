@@ -16,13 +16,30 @@
 
 protected_branch="refs/heads/master"
 
-# 只读镜像远端：允许推 master。它们只是备份，不是代码源。
+# Gitee 是 GitHub 的镜像仓库，代码由平台自动同步，**不接收任何手动 push**。
+# 它只负责发布 Release。用户 2026-11-20 反复强调：「gitee是github的镜像仓库，
+# 会自动同步代码不需要push代码，只需要发布release版本即可」。
 #
-# 只有 gitlab：内网备份仓，按镜像方式同步（见 project_galworld_release_channels）。
-#
-# **不要往这里加 gitee。** Gitee 虽然由平台从 GitHub 自动同步代码，但它同样
-# 只允许通过 PR 合并 master —— 用户 2026-11-20 明确要求「github 和 gitee 只允许
-# 创建 pr 不允许直接推送 master，这个规则不能改」。
+# 所以这里不是只拦 master，而是拦全部 —— 任何分支都不该推到 Gitee。
+if [ "${1:-}" = "gitee" ]; then
+    echo "" >&2
+    echo "================================================================" >&2
+    echo "  拒绝：不要向 Gitee 推送任何分支" >&2
+    echo "================================================================" >&2
+    echo "" >&2
+    echo "  Gitee 是 GitHub 的镜像仓库，代码由平台自动同步。" >&2
+    echo "  它只负责发布 Release，不需要也不应该手动 push 代码。" >&2
+    echo "" >&2
+    echo "  正确流程：" >&2
+    echo "    1. 推 GitHub：git push github <branch>" >&2
+    echo "    2. 在 GitHub 上合并 PR" >&2
+    echo "    3. 等 Gitee 自动同步代码" >&2
+    echo "    4. 在 Gitee 网页上发布 Release" >&2
+    echo "" >&2
+    exit 1
+fi
+
+# 只读镜像远端：允许推 master。只有 gitlab —— 内网备份仓，按镜像方式同步。
 mirror_remotes=" gitlab "
 
 # 远端名不是 stdin 给的，取第一个位置参数（pre-push 的 $1）。
