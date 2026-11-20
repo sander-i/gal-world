@@ -327,6 +327,11 @@ public class StreamWsBridge {
             startUpWriter(browser.getId(), up);
             flushPending(browser.getId());
             log.debug("串流 WS 已桥接 {} -> {}", browser.getId(), target);
+        } catch (java.net.ConnectException e) {
+            // 端口没监听 = 会话已停。游玩页在会话停止后仍会重连 WS，
+            // 按 WARN 记会刷屏（与 StreamProxyController 同一问题）。
+            log.debug("串流 WS 端口未监听 {}: {}", gameId, e.toString());
+            closeQuietly(browser);
         } catch (Exception e) {
             log.warn("串流 WS 连接失败 {}: {}", gameId, e.toString());
             closeQuietly(browser);

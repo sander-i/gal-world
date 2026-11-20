@@ -19,6 +19,31 @@
 
 set -euo pipefail
 
+# 窗口要不要放大、放大到多少。命中时打印「宽 高」并返回 0，否则返回 1。
+#
+# 抽成独立函数是为了能单测（GameScriptsTest 用 --source-only 直接调）：
+# 判定逻辑里那个「一半」阈值和 24px 边距都是经验值，改错了没有别的地方能发现。
+#
+# 规则：
+#   - 窗口面积不足画布一半才动。真正常见的「窗口略小于画布」是 85% 以上，
+#     那种情况调大反而可能触发布局变化。
+#   - 目标 = 画布 - 24（与 CanvasPlanner 的 PAD 一致）。
+#   - 目标不比当前窗口大就返回 1：避免对本来就够大的窗口做无意义重启。
+resize_target() {
+  local ww="$1" wh="$2" cw="$3" ch="$4"
+  [[ "$ww" =~ ^[0-9]+$ && "$wh" =~ ^[0-9]+$ ]] || return 1
+  [[ "$cw" =~ ^[0-9]+$ && "$ch" =~ ^[0-9]+$ ]] || return 1
+  (( ww * wh * 2 < cw * ch )) || return 1
+  local tw=$(( cw - 24 )) th=$(( ch - 24 ))
+  (( tw > ww || th > wh )) || return 1
+  printf '%s %s' "$tw" "$th"
+}
+
+# 测试入口：只加载函数不启动会话（GameScriptsTest 用）
+if [[ "${1:-}" == "--source-only" ]]; then
+  return 0 2>/dev/null || exit 0
+fi
+
 ID="${1:?usage: run-game.sh <game-id>}"
 
 # ---- 0. 确保拥有 audio 组（否则 wine 打不开 /dev/snd，报 -13 Permission denied）----
@@ -100,6 +125,7 @@ rotate_log() {
   tail -c $(( LOG_KEEP_MB * 1024 * 1024 )) "$LOGFILE" >"$LOGFILE.1" 2>/dev/null || true
   : >"$LOGFILE"
 }
+
 
 rotate_log
 
@@ -420,31 +446,23 @@ if command -v xdotool >/dev/null 2>&1; then
       if [[ -n "$bestid" && "$best" -gt 100000 ]]; then
         read -r ww wh <<<"$(xwininfo -id "$bestid" 2>/dev/null | awk '/Width:/{w=$2} /Height:/{h=$2} END{print w, h}')"
 
-        # 窗口远小于画布时主动放大。
+        # 窗口远小于画布时主动放大。判定与目标尺寸由 resize_target 决定（可单测）。
         #
         # 有的引擎（实测 Kirikiri / tenshi-reboot）启动时按自身默认值开窗，
         # 忽略 Xvfb 屏幕大小：画布 1008x616、窗口却只有 496x328（占 26%）。
         # 不处理的话游玩页会裁掉四周黑边，实际显示区域只有窗口那么大，
         # 画布设多大都没用，画质永远上不去（2026-11-20 用户报告）。
         # 窗口本身接受外部调整且放大后画面正常铺满（实测），所以这里直接改。
-        #
-        # 只在一半以下时动手：真正常见的「窗口略小于画布」是 85% 以上，
-        # 那种情况调大反而可能触发布局变化，保持原样更安全。
-        if [[ $(( ww * wh * 2 )) -lt $(( WIDTH * HEIGHT )) ]]; then
-          # 留 24px 边距（与 CanvasPlanner 的 PAD 一致），并夹到屏幕内
-          tw=$(( WIDTH - 24 )); th=$(( HEIGHT - 24 ))
-          if [[ "$tw" -gt "$ww" || "$th" -gt "$wh" ]]; then
-            resize_key="${ww}x${wh}"
-            if [[ "$resize_key" != "${RESIZED_FROM:-}" ]]; then
-              # 不能加 --sync：Xvfb 没有窗口管理器，xdotool 等不到
-              # ConfigureNotify 确认会直接失败（实测 496x328 -> 496x328 没变）。
-              xdotool windowsize "$bestid" "$tw" "$th" 2>/dev/null || true
-              sleep 2
-              read -r ww wh <<<"$(xwininfo -id "$bestid" 2>/dev/null | awk '/Width:/{w=$2} /Height:/{h=$2} END{print w, h}')"
-              RESIZED_FROM="$resize_key"
-              echo "[$(date '+%T')] window $bestid resized $resize_key -> ${ww}x${wh}（原窗口不足画布一半，按画布放大）"
-            fi
-          fi
+        resize_key="${ww}x${wh}"
+        if target="$(resize_target "$ww" "$wh" "$WIDTH" "$HEIGHT")" \
+            && [[ "$resize_key" != "${RESIZED_FROM:-}" ]]; then
+          # 不能加 --sync：Xvfb 没有窗口管理器，xdotool 等不到
+          # ConfigureNotify 确认会直接失败（实测 496x328 -> 496x328 没变）。
+          xdotool windowsize "$bestid" $target 2>/dev/null || true
+          sleep 2
+          read -r ww wh <<<"$(xwininfo -id "$bestid" 2>/dev/null | awk '/Width:/{w=$2} /Height:/{h=$2} END{print w, h}')"
+          RESIZED_FROM="$resize_key"
+          echo "[$(date '+%T')] window $bestid resized $resize_key -> ${ww}x${wh}（原窗口不足画布一半，按画布放大）"
         fi
 
         # 屏幕高度不够时 Wine 会把超屏窗口钳到 SCREEN_H-20，超出的部分直接裁掉（不缩放），
