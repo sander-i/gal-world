@@ -18,10 +18,12 @@ protected_branch="refs/heads/master"
 
 # 只读镜像远端：允许推 master。它们只是备份，不是代码源。
 #
-# - gitlab：内网备份仓，按镜像方式同步（见 project_galworld_release_channels）
-# - gitee：由平台侧从 GitHub 自动同步，正常情况下不该手动推；列在这里是因为
-#   万一需要手工补齐时，拦它没有意义（它不是审批入口）
-mirror_remotes=" gitlab gitee "
+# 只有 gitlab：内网备份仓，按镜像方式同步（见 project_galworld_release_channels）。
+#
+# **不要往这里加 gitee。** Gitee 虽然由平台从 GitHub 自动同步代码，但它同样
+# 只允许通过 PR 合并 master —— 用户 2026-11-20 明确要求「github 和 gitee 只允许
+# 创建 pr 不允许直接推送 master，这个规则不能改」。
+mirror_remotes=" gitlab "
 
 # 远端名不是 stdin 给的，取第一个位置参数（pre-push 的 $1）。
 remote_name="${1:-}"
