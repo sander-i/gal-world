@@ -88,6 +88,23 @@ class PlaytimeSummaryBatchTest {
     }
 
     @Test
+    void todaySkipsRecordsClosedConcurrently() {
+        Instant now = Instant.now();
+        Instant dayStart = now.atZone(ZoneId.systemDefault()).toLocalDate()
+                .atStartOfDay(ZoneId.systemDefault()).toInstant();
+        // findEndedSince 查出来时还有 endedAt，遍历前被另一个线程置空
+        PlaySession raced = session("a", dayStart.minusSeconds(60), null);
+        PlaySession normal = session("a", dayStart.plusSeconds(10), dayStart.plusSeconds(40));
+
+        when(repo.closedStatsByGame(anyCollection())).thenReturn(List.of());
+        when(repo.findByGameIdInAndEndedAtIsNull(anyCollection())).thenReturn(List.of());
+        when(repo.findEndedSince(anyCollection(), any())).thenReturn(List.of(raced, normal));
+
+        var a = assertDoesNotThrow(() -> service.summaryByGame(List.of("a")).get("a"));
+        assertEquals(30, a.todaySeconds(), "跳过被并发关闭的那条，正常记录照算");
+    }
+
+    @Test
     void singleGameSummaryDelegatesToBatch() {
         Instant last = Instant.now().minusSeconds(60);
         when(repo.closedStatsByGame(anyCollection())).thenReturn(List.<Object[]>of(
