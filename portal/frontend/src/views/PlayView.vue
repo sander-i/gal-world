@@ -817,14 +817,18 @@ function clearAll() {
  * 画面按游戏主窗口裁剪黑边：容器铺满 stage，内部画布放大并位移，
  * 把窗口外的黑边推出容器外裁掉（见 `play-crop.js`）。
  *
- * 历史上按窗口裁剪失败过两次，都是因为动了 iframe 本身：
+ * 历史上按窗口裁剪失败过两次：
  *   - 改 iframe 布局尺寸：Selkies 在 attach 时记下几何，之后不刷新，
  *     实测指针整体偏 +140 画布像素；
  *   - 用 transform 缩放 iframe：浏览器给 iframe 内部的事件坐标不除以缩放比，
  *     指针被放大 1.48 倍，越往右下偏得越多（实测注入点被钳到屏幕右下角）。
- * 这次只改 iframe **内部**的 `.video-container` 与其中的 video/canvas：
- * iframe 仍在 stage (0,0) 且铺满，Selkies 按 canvas 的 getBoundingClientRect
- * 与 buffer 尺寸的比例换算指针，画布与容器同步缩放位移后映射不变。
+ * 所以这次只改 iframe **内部**的 `.video-container` 与其中的 video/canvas。
+ *
+ * 关于 iframe 的位置：`manual_resolution` 为 true 时 Selkies 走 sink 路径
+ * （`_applySinkCoordinates` = `(clientY - boxTop) * sinkH / boxH`，boxTop 是
+ * 元素在页面上的绝对坐标），iframe 与容器一起移动时映射自动成立——已实测
+ * 容器下移 44px 后落点仍然准确。只有 `_windowMath` 兜底路径才会因 iframe
+ * 离开 (0,0) 而整体偏移，manual 模式下走不到那条路。
  *
  * 窗口矩形为 null（游戏未运行 / xwininfo 失败）时自动退回按画布比例铺满。
  */
@@ -832,6 +836,15 @@ let stageObserver = null
 let streamFitTimer = null
 let windowSampleTimers = []
 let windowSampleToken = 0
+
+/**
+ * 画面顶部与 stage 上沿的间距（iframe 内部的额外留白）。
+ *
+ * stage 之上就是顶栏；画面若紧贴上沿，指针停在那一条会落在游戏窗口的上沿
+ * （实测画布 y=12，正是 Wine 窗口的边框/菜单区），Kirikiri 会因此弹出窗口
+ * 菜单，画面闪一下。留一条空隙，指针在离开画面前就离开游戏窗口。
+ */
+const INNER_TOP_GAP = 8
 
 /**
  * 按采样表跟随窗口尺寸，直到稳定。
@@ -907,12 +920,13 @@ function fitStage() {
 function centerStream(f) {
   const doc = f.contentDocument
   if (!doc) return
-  // 顶栏是浮层（absolute，不占布局），会盖住画面顶部 44px；居中时必须把它
-  // 让出来，否则画面顶部被遮、底部留黑，看上去整体偏上。
-  const TOP_BAR = 44
+  // stage 已经从顶栏下方开始（顶栏不再是浮层），整块都能用；
+  // 只留一点上边距，避免画面最顶端贴着顶栏下沿——那一条正好对应游戏窗口
+  // 的上沿（实测画布 y=12，正是 Wine 窗口边框），指针停在那里会触发
+  // Kirikiri 的窗口菜单，画面闪一下。
   const box = {
     width: f.clientWidth,
-    height: Math.max(1, f.clientHeight - TOP_BAR),
+    height: Math.max(1, f.clientHeight - INNER_TOP_GAP),
   }
   const canvas = {
     width: Number(game.value?.width) || 1280,
@@ -925,7 +939,7 @@ function centerStream(f) {
     style.id = 'galworld-stream-fit'
     doc.head.appendChild(style)
   }
-  style.textContent = streamFitStyle(box, canvas, winRect.value, TOP_BAR)
+  style.textContent = streamFitStyle(box, canvas, winRect.value, INNER_TOP_GAP)
   // Selkies 的窗口几何只在 resize 时重算；容器改尺寸后要让它重新量一次
   clearTimeout(streamFitTimer)
   streamFitTimer = setTimeout(() => {
