@@ -52,7 +52,7 @@ export function cropPlan(box, canvas, win) {
 
   if (!known) {
     // 没有窗口信息：按画布比例铺满，保持旧行为
-    return { viewW: vw, viewH: vh, frameW: vw, frameH: vh, left: 0, top: 0 }
+    return { viewW: vw, viewH: vh, frameW: vw, frameH: vh, left: 0, top: 0, scale: 1 }
   }
 
   const scale = vw / ww
@@ -64,6 +64,7 @@ export function cropPlan(box, canvas, win) {
     // 加 0 把 -0 归一成 0（Math.round(-0) === -0）
     left: Math.round(-wx * scale) + 0,
     top: Math.round(-wy * scale) + 0,
+    scale,
   }
 }
 
@@ -92,6 +93,29 @@ export function sameWindowRect(a, b) {
   if (!a || !b) return !a && !b
   return a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height
 }
+
+/**
+ * 容器顶部「悬停不产生输入」的带宽（容器内的 CSS 像素）。
+ *
+ * 裁剪之后，容器最上面那一行就是游戏窗口的上沿（Wine `Decorated=N` 时画布
+ * y=12）。指针停在那里会被 Kirikiri 当成「鼠标移到窗口顶部」，弹出窗口菜单，
+ * 画面跟着重绘一次——用户看到的就是「鼠标到顶部画面抖」。只留一条空白
+ * （`INNER_TOP_GAP`）不够：空隙在容器之外、不接收事件，指针再往下 1px 就进了
+ * 容器顶行。
+ *
+ * 处理放在输入侧，只丢**悬停移动**：按下/抬起照常转发，拖拽划进顶部时鼠标键
+ * 不会卡住；画面本身一个像素都不裁。
+ */
+export const TOP_GUARD_PX = 10
+
+/**
+ * 屏蔽带对应的画布像素数。
+ *
+ * 上面那个 10px 是「至少这么多 CSS 像素」。窗口比画布小的时候画面会被放大
+ * （`scale` = 容器宽 / 窗口宽），10 CSS 像素换算回画布就只剩几个像素，盖不住
+ * 菜单触发区。这里按画布像素给一个下限，两种单位取大的那个。
+ */
+export const TOP_GUARD_CANVAS_PX = 14
 
 /**
  * 生成注入 iframe 的样式：容器按 viewW×viewH 居中，内部画布按 frameW×frameH
@@ -130,4 +154,24 @@ export function streamFitStyle(box, canvas, win, topBar) {
   width: ${plan.frameW}px !important;
   height: ${plan.frameH}px !important;
 }`
+}
+
+/**
+ * 容器顶部悬停屏蔽带的矩形（iframe 内部坐标）。
+ *
+ * 与 `streamFitStyle` 用同一套算法，返回 `{ top, bottom }`：`top` 是容器上沿，
+ * `bottom` 是屏蔽带下沿。`bottom` 已经夹在容器内，容器比带子还矮时整块都算。
+ *
+ * @returns {{top:number,bottom:number}}
+ */
+export function topGuardRect(box, canvas, win, topBar) {
+  const plan = cropPlan(box, canvas, win)
+  const top = topBar + Math.round((box.height - plan.viewH) / 2)
+  // 画布像素与 CSS 像素取大的那个：放大倍数小于 1 时（窗口比画布大）10 CSS
+  // 像素已经覆盖不止 14 个画布像素，按 CSS 算；放大时按画布下限算。
+  const band = Math.round(Math.max(TOP_GUARD_PX, TOP_GUARD_CANVAS_PX * plan.scale))
+  return {
+    top,
+    bottom: top + Math.min(band, plan.viewH),
+  }
 }

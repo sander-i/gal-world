@@ -5,7 +5,8 @@
 
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { cropPlan, streamFitStyle, sameWindowRect, WINDOW_SAMPLE_DELAYS, WINDOW_STABLE_AFTER_MS }
+import { cropPlan, streamFitStyle, sameWindowRect, topGuardRect,
+  TOP_GUARD_PX, TOP_GUARD_CANVAS_PX, WINDOW_SAMPLE_DELAYS, WINDOW_STABLE_AFTER_MS }
   from '../src/play-crop.js'
 
 /** 从生成的 CSS 里取某条规则的声明块 */
@@ -165,6 +166,41 @@ test('topBar 被加到容器 top 上', () => {
   const b = rule(streamFitStyle(box, { width: 1280, height: 720 }, win, 44), '.video-container')
   assert.equal(px(b, 'top') - px(a, 'top'), 44)
   assert.equal(px(a, 'left'), px(b, 'left'))
+})
+
+test('顶部屏蔽带从容器上沿开始，至少 TOP_GUARD_PX 高', () => {
+  const win = { x: 320, y: 180, width: 640, height: 360 }
+  const r = topGuardRect(box, { width: 1280, height: 720 }, win, 8)
+  assert.equal(r.top, px(rule(streamFitStyle(box, { width: 1280, height: 720 }, win, 8),
+    '.video-container'), 'top'))
+  // 窗口 640 宽放大到 1422：scale≈2.22，画布下限 14 × 2.22 ≈ 31 已超过 10
+  assert.ok(r.bottom - r.top >= TOP_GUARD_PX)
+  assert.ok(r.bottom - r.top >= TOP_GUARD_CANVAS_PX)
+})
+
+test('顶部屏蔽带按画布像素下限算：放大时比 CSS 下限更宽', () => {
+  // 窗口 1600x800 被裁到画布 1280x720 后铺满容器，scale ≈ 1.11：
+  // 要盖住 14 个画布像素需要 14 × 1.11 ≈ 16 CSS 像素
+  const win = { x: 0, y: 0, width: 1600, height: 800 }
+  const r = topGuardRect(box, { width: 1280, height: 720 }, win, 0)
+  const scale = 1422 / 1280
+  assert.equal(r.bottom - r.top, Math.round(TOP_GUARD_CANVAS_PX * scale))
+  assert.ok(r.bottom - r.top >= TOP_GUARD_PX)
+})
+
+test('没有窗口信息时屏蔽带按画布下限（scale=1）', () => {
+  const r = topGuardRect(box, { width: 1280, height: 720 }, null, 0)
+  assert.equal(r.top, 0)
+  assert.equal(r.bottom, TOP_GUARD_CANVAS_PX)
+})
+
+test('全屏视口变大时容器等比铺满（不封顶）', () => {
+  const canvas = { width: 1920, height: 1080 }
+  const win = { x: 12, y: 12, width: 1896, height: 1056 }
+  const windowed = cropPlan({ width: 1280, height: 712 }, canvas, win)
+  const full = cropPlan({ width: 1920, height: 1072 }, canvas, win)
+  assert.ok(full.scale > windowed.scale, '全屏后画面应更大')
+  assert.ok(Math.abs(full.scale - 1.015) < 0.02, `全屏倍数 ${full.scale}`)
 })
 
 test('窗口采样表递增且首项为正，覆盖 run-game.sh 的放大窗口期', () => {

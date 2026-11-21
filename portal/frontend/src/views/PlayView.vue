@@ -11,8 +11,8 @@ import { api, inMaintenanceWindow, isMaintenanceError } from '../api'
 import { formatPlaytime } from '../format'
 import { PHASES, phaseLabel, bootPercent, nextPercent, bootDecision,
   interruptionFor, isCleanExit } from '../play-boot'
-import { streamFitStyle, WINDOW_SAMPLE_DELAYS, WINDOW_STABLE_AFTER_MS, sameWindowRect }
-  from '../play-crop'
+import { streamFitStyle, topGuardRect, WINDOW_SAMPLE_DELAYS,
+  WINDOW_STABLE_AFTER_MS, sameWindowRect } from '../play-crop'
 import { playBackTarget } from '../play-origin'
 import { canvasAutoCalibrate } from '../feature-flags'
 import { buildSample, postTelemetry } from '../play-telemetry'
@@ -385,6 +385,8 @@ async function startBoot(startedByUser = false) {
 function onFrameLoad() {
   fitStage()
   fixCursor()                       // 每次 iframe 载入都必须兜底
+  watchInnerFullscreen()
+  watchTopGuard()
   // iframe 内部脚本错误（Selkies 客户端崩溃/解码异常）也上报
   try {
     const w = frame.value?.contentWindow
@@ -396,6 +398,47 @@ function onFrameLoad() {
   if (view.value !== 'booting') return
   setPhase('frame', 10_000)
   waitForFirstFrame()
+}
+
+/**
+ * 跟随 iframe 内部视口的变化重算裁剪。
+ *
+ * Selkies 自己界面里的「全屏」走的是 iframe 内部的 Fullscreen API，被全屏的
+ * 是内部的 `documentElement`：按全屏规范，顶层文档里的全屏元素会变成 iframe
+ * 元素本身，尺寸由浏览器的 `:fullscreen` 样式接管，内部视口随之变大。外层
+ * 收不到内部尺寸变化的事件，只有内部的 `fullscreenchange` 能感知，收到后按
+ * 新尺寸重算。
+ *
+ * 不监听内部 `resize`：`centerStream` 会主动往 iframe 里 dispatch 一次 resize
+ * 让 Selkies 重新量几何，监听它就成了自激循环。
+ */
+let innerFsHandler = null
+
+function watchInnerFullscreen() {
+  const doc = frame.value?.contentDocument
+  if (!doc) return
+  unwatchInnerFullscreen()
+  innerFsHandler = () => {
+    fitStage()
+  }
+  try {
+    doc.addEventListener('fullscreenchange', innerFsHandler)
+    doc.addEventListener('webkitfullscreenchange', innerFsHandler)
+  } catch {
+    // 跨域：忽略
+  }
+}
+
+function unwatchInnerFullscreen() {
+  if (!innerFsHandler) return
+  const doc = frame.value?.contentDocument
+  try {
+    doc?.removeEventListener('fullscreenchange', innerFsHandler)
+    doc?.removeEventListener('webkitfullscreenchange', innerFsHandler)
+  } catch {
+    // 已卸载：忽略
+  }
+  innerFsHandler = null
 }
 
 function waitForFirstFrame() {
@@ -811,6 +854,8 @@ function clearAll() {
   showFrame.value = false
   cursorObserver?.disconnect()
   cursorObserver = null
+  unwatchInnerFullscreen()
+  unwatchTopGuard()
 }
 
 /**
@@ -843,6 +888,9 @@ let windowSampleToken = 0
  * stage 之上就是顶栏；画面若紧贴上沿，指针停在那一条会落在游戏窗口的上沿
  * （实测画布 y=12，正是 Wine 窗口的边框/菜单区），Kirikiri 会因此弹出窗口
  * 菜单，画面闪一下。留一条空隙，指针在离开画面前就离开游戏窗口。
+ *
+ * 空隙只是缓冲，真正挡住窗口上沿的是容器顶部的输入屏蔽带（`TOP_GUARD_PX`，
+ * 见 `play-crop.js`）：空隙本身不接收事件，指针再往下一点就进了容器顶行。
  */
 const INNER_TOP_GAP = 8
 
@@ -899,14 +947,37 @@ function fitStage() {
   const f = frame.value
   if (!el || !f) return
   const rect = el.getBoundingClientRect()
-  if (!rect.width || !rect.height) return
 
-  // iframe 必须铺满 stage，且 stage 在页面 (0,0)：Selkies 的指针换算会把
-  // iframe 在页面上的位置再叠加一次，iframe 一旦离开 (0,0)，悬停和点击就会
-  // 整体偏移这段距离（实测偏 236,44 css px）。
-  f.style.width = `${Math.floor(rect.width)}px`
-  f.style.height = `${Math.floor(rect.height)}px`
+  // iframe 必须铺满 stage：Selkies 的指针换算按元素绝对矩形算，iframe 与
+  // stage 一起移动没问题，但尺寸对不上会让映射比例失真。
+  //
+  // 例外一：Selkies 自己界面里的全屏会把 iframe 元素本身变成全屏元素，尺寸由
+  // 浏览器的 `:fullscreen` 样式接管。这时再用 stage 的矩形写死 px 会跟浏览器
+  // 抢尺寸，画面在两种尺寸之间反复跳动。
+  // 例外二：iframe 全屏时 stage 整个不在渲染树里，矩形是 0——这时候不能提前
+  // 返回，裁剪要按 iframe 自己的内部视口重算（见 `centerStream`）。
+  const fsEl = document.fullscreenElement || document.webkitFullscreenElement
+  if (rect.width && rect.height && (!fsEl || fsEl === el)) {
+    f.style.width = `${Math.floor(rect.width)}px`
+    f.style.height = `${Math.floor(rect.height)}px`
+  }
   centerStream(f)
+}
+
+/**
+ * iframe 内部的视口尺寸。
+ *
+ * 不能用 `f.clientWidth`：Selkies 自己界面里的「全屏」走的是 iframe 内部
+ * 的 Fullscreen API，被全屏的是 iframe 里的 `documentElement`，外层 iframe
+ * 元素的 CSS 尺寸由 UA 样式 `:fullscreen { width/height: 100% }` 接管，我们
+ * 写死的 px 值会被压掉。读内部视口才拿得到真实可用区域。
+ */
+function innerBox(f) {
+  const doc = f.contentDocument
+  const de = doc?.documentElement
+  const w = de?.clientWidth || f.clientWidth
+  const h = de?.clientHeight || f.clientHeight
+  return { width: w, height: h }
 }
 
 /**
@@ -924,9 +995,10 @@ function centerStream(f) {
   // 只留一点上边距，避免画面最顶端贴着顶栏下沿——那一条正好对应游戏窗口
   // 的上沿（实测画布 y=12，正是 Wine 窗口边框），指针停在那里会触发
   // Kirikiri 的窗口菜单，画面闪一下。
+  const full = innerBox(f)
   const box = {
-    width: f.clientWidth,
-    height: Math.max(1, f.clientHeight - INNER_TOP_GAP),
+    width: full.width,
+    height: Math.max(1, full.height - INNER_TOP_GAP),
   }
   const canvas = {
     width: Number(game.value?.width) || 1280,
@@ -940,6 +1012,7 @@ function centerStream(f) {
     doc.head.appendChild(style)
   }
   style.textContent = streamFitStyle(box, canvas, winRect.value, INNER_TOP_GAP)
+  topGuard.value = topGuardRect(box, canvas, winRect.value, INNER_TOP_GAP)
   // Selkies 的窗口几何只在 resize 时重算；容器改尺寸后要让它重新量一次
   clearTimeout(streamFitTimer)
   streamFitTimer = setTimeout(() => {
@@ -949,6 +1022,64 @@ function centerStream(f) {
       // 跨域或 iframe 已卸载：忽略
     }
   }, 80)
+}
+
+/**
+ * 顶部悬停屏蔽。
+ *
+ * 裁剪后容器最上面那一行就是游戏窗口的上沿（画布 y=12）。指针停在上面会被
+ * Kirikiri 当成「移到窗口顶部」，弹出窗口菜单并重绘一次画面——用户看到的是
+ * 「鼠标到顶部画面就抖」。只靠容器上方那 8px 空隙不够：空隙在容器之外、
+ * 不接收事件，指针再往下 1px 就进了容器顶行。
+ *
+ * 这里在 iframe 内部按捕获阶段把屏蔽带里的**悬停移动**拦掉（含
+ * `pointerrawupdate`，Selkies 用高精度指针事件发坐标）：游戏收不到那里的
+ * 坐标，菜单就不会自己弹出来。按下与抬起照常转发——用户真想点游戏自己的
+ * 菜单栏时仍然点得到，拖拽划进顶部也不会把鼠标键卡住。画面一个像素都不裁。
+ *
+ * 只拦画面本身：Selkies 的侧边栏、工具栏也覆盖在 y=0 附近，它们的按钮
+ * （侧边栏头部在 y=18..63）必须照常可点，所以事件目标不在 `.video-container`
+ * 里时一律放行。
+ */
+const topGuard = ref({ top: 0, bottom: 0 })
+let guardHandler = null
+let guardWindow = null
+
+const GUARD_EVENTS = ['pointerrawupdate', 'pointermove', 'mousemove']
+
+function watchTopGuard() {
+  const w = frame.value?.contentWindow
+  if (!w) return
+  unwatchTopGuard()
+  guardHandler = (e) => {
+    const { top, bottom } = topGuard.value
+    if (!bottom) return
+    // 侧边栏 / 工具栏的按钮：不在画面容器里，不归屏蔽带管
+    const target = e.target
+    if (!target?.closest?.('.video-container')) return
+    if (e.clientY >= top && e.clientY < bottom) e.stopImmediatePropagation()
+  }
+  try {
+    for (const name of GUARD_EVENTS) {
+      w.addEventListener(name, guardHandler, { capture: true, passive: true })
+    }
+    guardWindow = w
+  } catch {
+    // 跨域：忽略
+  }
+}
+
+function unwatchTopGuard() {
+  if (!guardHandler || !guardWindow) return
+  try {
+    for (const name of GUARD_EVENTS) {
+      guardWindow.removeEventListener(name, guardHandler, { capture: true })
+    }
+  } catch {
+    // 已卸载：忽略
+  }
+  guardHandler = null
+  guardWindow = null
 }
 
 function onVisibility() {
