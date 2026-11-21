@@ -1129,6 +1129,7 @@
     "用途: 32 位 PE 跑进 64 位进程，避开旧式 WoW64 的 4 GiB 地址空间上限": "Purpose: run 32-bit PEs in a 64-bit process, avoiding the legacy WoW64 4 GiB address space limit",
     "申请更新失败：{0}": "Failed to request the update: {0}",
     "画布 {0}×{1} → {2}×{3}（窗口 {4}×{5}），{6}": "Canvas {0}×{1} → {2}×{3} (window {4}×{5}), {6}",
+    "画布 {0}×{1} 低于下限，提升到 {2}×{3}，{4}": "Canvas {0}×{1} is below the minimum; raised to {2}×{3}, {4}",
     "画布 {0}×{1} 已匹配游戏窗口 {2}×{3}": "Canvas {0}×{1} matches the game window {2}×{3}",
     "游戏按固定分辨率渲染（窗口 {2}×{3}），保留画布 {0}×{1}": "The game renders at a fixed resolution (window {2}×{3}); keeping the canvas at {0}×{1}",
     "画布宽度需在 640–3840 之间": "Canvas width must be between 640 and 3840",

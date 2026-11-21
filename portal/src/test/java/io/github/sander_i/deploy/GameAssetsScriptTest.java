@@ -207,18 +207,4 @@ class GameAssetsScriptTest {
         assertTrue(assetsAt > 0, "run-game.sh 未调用 game-assets.sh");
         assertTrue(wineAt > assetsAt, "资源补齐必须在 wine 启动之前");
     }
-
-    @Test
-    void run_game开启msgbox通道并检测阻塞对话框() throws Exception {
-        Path repoRun = Path.of("../deploy/bin/run-game.sh");
-        assumeTrue(Files.isRegularFile(repoRun), "需要在 portal/ 目录下运行");
-        String text = Files.readString(repoRun);
-
-        // 默认 -all 会把 msgbox 一起关掉，必须显式打开这条通道
-        assertTrue(text.contains("+msgbox"), "run-game.sh 未开启 +msgbox 通道");
-        // 抓到 MSGBOX_OnInit 要落一条可读的 WARN，而不是只留在 trace 里
-        assertTrue(text.contains("MSGBOX_OnInit"), "未检测 MSGBOX_OnInit");
-        assertTrue(text.contains("阻塞对话框"), "缺少阻塞对话框告警文案");
-        assertTrue(text.contains("KrkrUniversalPatch.dll"), "告警应给出常见原因示例");
-    }
 }

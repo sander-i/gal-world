@@ -400,66 +400,10 @@ if [[ -x "$ASSETS_FIX" ]]; then
 fi
 
 cd "$WORKDIR"
-# 启动后盯 msgbox：补丁自带的启动器常依赖私有 DLL（如 KrkrUniversalPatch.dll），
-# 缺了会弹一个空标题的 MessageBox 并卡住等人点按钮——进程活着、端口在听，
-# 但画面永远停在白框上，从门户看就是「RUNNING 却没画面」。
-# 单独开 +msgbox 通道（其余仍关掉），抓到就写一条明确的 WARN，
-# 否则这类问题只能靠逐层加 WINEDEBUG 手工排查。
-MSGBOX_LOG="$GALROOT/data/logs/.msgbox-$ID.log"
-rm -f "$MSGBOX_LOG"
 # shellcheck disable=SC2086
-WINEDEBUG="${WINEDEBUG_OVERRIDE:--all},+msgbox" wine "$EXE" $EXTRA_ENV 2> >(tee -a "$MSGBOX_LOG" >&2) &
+WINEDEBUG="${WINEDEBUG_OVERRIDE:--all}" wine "$EXE" $EXTRA_ENV 2>&1 &
 WINE_PID=$!
 PIDS+=("$WINE_PID")
-
-# 后台检查：出现 MSGBOX_OnInit 说明游戏被对话框拦住了
-(
-  for _ in $(seq 1 60); do
-    sleep 1
-    [[ -s "$MSGBOX_LOG" ]] || continue
-    line=$(grep -m1 -a "msgbox:MSGBOX_OnInit" "$MSGBOX_LOG" 2>/dev/null || true)
-    [[ -n "$line" ]] || continue
-    echo "[$(date '+%F %T')] WARN: 游戏弹出阻塞对话框，画面会一直停在这里：" >&2
-    echo "  ${line#*MSGBOX_OnInit }" >&2
-    echo "  常见原因：补丁 exe 依赖的私有 DLL 缺失（如 KrkrUniversalPatch.dll）、" >&2
-    echo "  游戏版本与补丁不匹配。可尝试在门户编辑页改用游戏根目录的原版 exe。" >&2
-    break
-  done
-) &
-PIDS+=($!)
-
-# ---- 5a2. 补丁 / 汉化组的更新弹窗：自动选「否」 ----
-#
-# 部分汉化补丁的启动器开场会弹「检测到新版本，是否更新？」。这类弹窗挡在
-# 游戏前面，串流画面一直停在弹窗上，玩家在浏览器里也点不到它 —— 会话看起来
-# 像是卡死了。这里在启动阶段盯着窗口，标题命中更新类关键词就发 Esc
-# （Windows 对话框里 Esc 等价于「取消 / 否」）。
-#
-# 只在启动阶段盯，进画面后不再扫，避免误关游戏自己的窗口。
-#
-# 默认**关闭**（GALWORLD_DISMISS_UPDATE_DIALOG=1 才启用）：
-# Esc 是否真的落在「否」上取决于弹窗的按钮定义，实际用下来有误触风险，
-# 先停用。要试的话把环境变量设成 1。
-if [[ "${GALWORLD_DISMISS_UPDATE_DIALOG:-0}" == "1" ]] && command -v xdotool >/dev/null 2>&1; then
-  (
-    for _ in $(seq 1 60); do
-      sleep 2
-      for w in $(xdotool search --onlyvisible --name '.+' 2>/dev/null || true); do
-        name=$(xdotool getwindowname "$w" 2>/dev/null || true)
-        case "$name" in
-          *更新*|*升级*|*新版本*|*アップデート*|*バージョン*|*Update*|*update*)
-            echo "[$(date '+%F %T')] 自动取消更新弹窗: $name" >&2
-            # 没有窗口管理器，先显式聚焦再发键，保证 Esc 落在对话框上
-            xdotool windowfocus "$w" 2>/dev/null || true
-            xdotool key Escape 2>/dev/null || true
-            sleep 1
-            ;;
-        esac
-      done
-    done
-  ) &
-  PIDS+=($!)
-fi
 
 # ---- 5b. 窗口定位 ----
 # 把游戏主窗口居中到屏幕（屏幕 WIDTHxHEIGHT，窗口通常略小）。

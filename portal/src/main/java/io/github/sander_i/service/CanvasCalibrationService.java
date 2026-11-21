@@ -154,12 +154,19 @@ public class CanvasCalibrationService {
         }
         boolean restarted = restart(game);
 
-        String message = I18n.t("画布 {0}×{1} → {2}×{3}（窗口 {4}×{5}），{6}",
-                oldW, oldH, plan.width(), plan.height(), win.width(), win.height(),
-                restarted ? I18n.t("会话已重启") : I18n.t("会话重启失败，请手动重启"));
+        String message;
+        if ("raise-floor".equals(plan.reason())) {
+            // 画布被压到下限以下时抬回来，与窗口尺寸无关，说成「已匹配窗口」会误导
+            message = I18n.t("画布 {0}×{1} 低于下限，提升到 {2}×{3}，{4}",
+                    oldW, oldH, plan.width(), plan.height(),
+                    restarted ? I18n.t("会话已重启") : I18n.t("会话重启失败，请手动重启"));
+        } else {
+            message = I18n.t("画布 {0}×{1} → {2}×{3}（窗口 {4}×{5}），{6}",
+                    oldW, oldH, plan.width(), plan.height(), win.width(), win.height(),
+                    restarted ? I18n.t("会话已重启") : I18n.t("会话重启失败，请手动重启"));
+        }
         return new Result(restarted ? "restarted" : "failed",
-                plan.width(), plan.height(), win.width(), win.height(), st.round, message);
-    }
+                plan.width(), plan.height(), win.width(), win.height(), st.round, message);    }
 
     /** 用户手动改分辨率：记录 pin，自动校准不再覆盖；手动按钮会清除 pin */
     public synchronized void reset(String gameId) {
