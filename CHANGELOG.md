@@ -6,6 +6,53 @@
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-11-21
+
+本版重做游玩画质链路：播放页不再按整块画布等比缩放，而是按游戏主窗口矩形裁剪；
+全屏后按 iframe 内部视口重算，不再被窗口态的倍数封顶。串流侧把门户的单帧上限
+对齐到 Selkies 的 8 MB，1080p 不再被 `code 1009` 断开。
+
+画质参数（CRF、paintover CRF、码率、码率模式、关键帧间隔）进入游戏编辑页，
+每个游戏可以单独调。参数留空表示门户不管理该键，`game.env` 里人工写的值会被保留。
+
+### 新增
+
+- **画质参数可在编辑页设置**：CRF、paintover CRF、码率串、码率控制模式
+  （`crf` / `cbr`）、关键帧间隔（秒）写入 `game.env`。全部可空，
+  `null` 表示保留 `game.env` 里人工写的值，老游戏的手工调参不会被一次保存冲掉
+- **顶部悬停屏蔽带**：指针停在画面最上沿会触发 Kirikiri 的窗口菜单并重绘一次，
+  表现为「鼠标到顶部画面抖」。在输入侧拦掉这一段悬停移动，按下/抬起照常转发，
+  画面本身一个像素都不裁
+
+### 改进
+
+- **播放页按游戏窗口裁剪**：画布通常比游戏窗口大，多出来的是黑边；改为按窗口
+  尺寸缩放再位移 iframe，外层 `overflow: hidden` 裁掉黑边。窗口越出画布时先裁到
+  可见区，避免右下留黑缝
+- **窗口采样跨过自动放大窗口期**：`run-game.sh` 的放大是后台循环，尺寸变化可能
+  落在启动后 4–10 秒。采样点取 1.5 / 4 / 8 / 12 秒，跨过 8 秒才允许提前结束
+- **全屏按内部视口重算**：全屏后 iframe 视口变大，容器等比铺满，不封顶
+- 顶栏不再遮挡画面，画面顶部留空隙避免误触游戏窗口
+
+### 修复
+
+- **1080p 被 `code 1009` 断开**：门户 `StreamWsBridge` 的单帧上限是 1 MB，
+  而 1080p + CRF 8 + 4:4:4 的一帧远超 1 MB，Selkies 推过来就被断开，表现为
+  串流卡住。上限提到 8 MB，与 Selkies 的 `WS_MAX_MESSAGE_BYTES` 对齐
+- **列表页与首页偶发 500**：`findEndedSince` 查出实体后，心跳线程可能已把同一条
+  记录的 `endedAt` 置空（开新记录前先结算旧的），遍历时读到 `null` 抛
+  `NullPointerException: temporal`。批量统计改为跳过被并发关闭的记录
+
+### 升级说明
+
+无需迁移数据库。新增的 5 个画质参数列由 `ddl-auto: update` 自动添加，全部可空，
+旧版本升级后按默认值工作；从 0.1.0 降级到 0.0.x 也只是多出几列，旧代码忽略它们。
+
+`minFromVersion` 保持 `0.0.1`：本次没有破坏性变更，老安装可以自动升级。
+
+建议重新执行一次页面「一键部署」，让新的 `run-game.sh`（去标题栏、放大阈值对齐
+画布校准）与串流参数生效。只换 jar 也能跑，但拿不到窗口放大与裁剪的最优效果。
+
 ## [0.0.4] - 2026-11-20
 
 ### 新增
@@ -153,7 +200,8 @@ JDK 自动升级豁免与窗口自动放大。
 见 `README.md` 的「已知限制」：Wine 下 4:3 渲染、无 GPU 时软渲染 + 软编码、
 Wine 自绘标题栏、必须走 HTTPS、Windows 冒烟检查覆盖面小于 Linux。
 
-[Unreleased]: https://gitee.com/sander-o/gal-world/compare/v0.0.4...master
+[Unreleased]: https://gitee.com/sander-o/gal-world/compare/v0.1.0...master
+[0.1.0]: https://gitee.com/sander-o/gal-world/releases/tag/v0.1.0
 [0.0.4]: https://gitee.com/sander-o/gal-world/releases/tag/v0.0.4
 [0.0.3]: https://gitee.com/sander-o/gal-world/releases/tag/v0.0.3
 [0.0.2]: https://gitee.com/sander-o/gal-world/releases/tag/v0.0.2

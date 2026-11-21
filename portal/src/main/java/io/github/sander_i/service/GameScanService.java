@@ -35,9 +35,12 @@ public class GameScanService {
     private static final Logger log = LoggerFactory.getLogger(GameScanService.class);
 
     /**
-     * 由门户管理的 game.env 键。其余键（画质参数如 {@code VIDEO_CRF}、
-     * {@code KEYFRAME_INTERVAL}、{@code VIDEO_BITRATE} 等）写回时原样保留，
-     * 否则在门户里改一次分辨率/启动程序就会被冲掉。
+     * 由门户管理的 game.env 键。其余键写回时原样保留，否则在门户里改一次
+     * 分辨率/启动程序就会被冲掉。
+     *
+     * 画质参数（{@code VIDEO_CRF} 等）不在这个集合里，而是走「实体非空才覆盖」的
+     * 路径——见 {@link #writeEnv}。理由是老游戏的 game.env 里有人工调好的值，
+     * 一律以 DB 为准会把它们清零。
      */
     private static final Set<String> MANAGED_KEYS = Set.of(
             "GAME_ID", "GAME_NAME", "EXE", "EXE_ALT", "WORKDIR", "WINEPREFIX", "GAME_LANG",
@@ -202,7 +205,15 @@ public class GameScanService {
             game.setLoopbackSlot(env.getInt("LOOPBACK_SLOT", 0));
             // 老 game.env 没有这个键：默认卡 0，行为与扩容前完全一致
             game.setLoopbackCard(env.getInt("LOOPBACK_CARD", 0));
-            game.setFramerate(env.get("FRAMERATE", "30-30"));
+            // 老 game.env 没有这个键：用与 run-game.sh / Game 实体一致的默认值
+            game.setFramerate(env.get("FRAMERATE", "60,30-60"));
+            // 画质参数：game.env 里有就记进实体（页面上能看到），没有就留 null，
+            // 表示「门户不管理这个键」。writeEnv 只写非 null 的项。
+            game.setVideoCrf(parseOptionalInt(env.get("VIDEO_CRF")));
+            game.setVideoPaintoverCrf(parseOptionalInt(env.get("VIDEO_PAINTOVER_CRF")));
+            game.setRateControlMode(blankToNull(env.get("RATE_CONTROL_MODE")));
+            game.setVideoBitrate(blankToNull(env.get("VIDEO_BITRATE")));
+            game.setKeyframeInterval(parseOptionalInt(env.get("KEYFRAME_INTERVAL")));
             game.setOnDisk(true);
             Instant now = Instant.now();
             if (isNew) {
@@ -238,8 +249,14 @@ public class GameScanService {
                 .set("FRAMERATE", g.getFramerate())
                 // run-game.sh 用 set -u，缺这个键会直接退出（status=127）
                 .set("EXTRA_ENV", "");
-        // 保留门户不管理的键：画质参数（VIDEO_CRF / KEYFRAME_INTERVAL / VIDEO_BITRATE …）
-        // 由人工写在 game.env 里，重写时丢了就得重新调参
+        // 画质参数：实体里有值才写回（页面填过的），没有就保留 game.env 原值。
+        // 放到保留循环之前，这样 entities 的值优先于文件里的旧值。
+        writeOptional(env, "VIDEO_CRF", g.getVideoCrf());
+        writeOptional(env, "VIDEO_PAINTOVER_CRF", g.getVideoPaintoverCrf());
+        writeOptional(env, "RATE_CONTROL_MODE", g.getRateControlMode());
+        writeOptional(env, "VIDEO_BITRATE", g.getVideoBitrate());
+        writeOptional(env, "KEYFRAME_INTERVAL", g.getKeyframeInterval());
+        // 保留门户不管理的键：人工写在 game.env 里的其它变量，重写时丢了就得重新调
         if (Files.isRegularFile(envFile)) {
             GameEnv existing = GameEnv.parse(Files.readAllLines(envFile));
             for (String key : existing.keys()) {
@@ -249,5 +266,27 @@ public class GameScanService {
             }
         }
         Files.write(envFile, env.render());
+    }
+
+    /** 实体非空才写进 env；null 交给保留循环用文件里的原值。 */
+    private static void writeOptional(GameEnv env, String key, Object value) {
+        if (value != null) {
+            env.set(key, String.valueOf(value));
+        }
+    }
+
+    private static Integer parseOptionalInt(String v) {
+        if (v == null || v.isBlank()) {
+            return null;
+        }
+        try {
+            return Integer.parseInt(v.trim());
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    private static String blankToNull(String v) {
+        return v == null || v.isBlank() ? null : v.trim();
     }
 }

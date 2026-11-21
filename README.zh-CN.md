@@ -91,6 +91,8 @@ cd .. && mvn -DskipTests package
   （apt 黑名单、漂移检测、前端兜底）
 - [`docs/WINE-RUNTIME-NOTES.md`](docs/WINE-RUNTIME-NOTES.md)：Wine / Selkies 实测结论与已排除的
   方案（wow64、分辨率、页缓存、Xvfb 下的输入注入）
+- [`docs/PLAY-QUALITY-PLAN.md`](docs/PLAY-QUALITY-PLAN.md)：游玩画质优化（裁剪黑边、窗口放大、
+  4:4:4、paintover），含优先级与验收方法
 - [`docs/GAME-IMPORT-PLAN.md`](docs/GAME-IMPORT-PLAN.md)：接入向导设计
 - [`CONTRIBUTING.zh-CN.md`](CONTRIBUTING.zh-CN.md) · [`SECURITY.zh-CN.md`](SECURITY.zh-CN.md) ·
   [`CODE_OF_CONDUCT.zh-CN.md`](CODE_OF_CONDUCT.zh-CN.md) · [`CHANGELOG.md`](CHANGELOG.md)

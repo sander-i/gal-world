@@ -21,7 +21,8 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
  *
  * <p>用 {@code --source-only} 只加载函数、不启动会话，避免真的拉 wine / Xvfb。
  * 目前只覆盖 {@code resize_target}：窗口放大是 2026-11-20 加的，
- * 阈值（画布一半）和边距（24px）都是经验值，改错了没有别的地方能发现。
+ * 阈值（画布 85%，与 {@code CanvasPlanner} 的收敛阈值一致）和边距（24px）
+ * 都是经验值，改错了没有别的地方能发现。
  */
 class GameScriptsTest {
 
@@ -52,38 +53,39 @@ class GameScriptsTest {
     }
 
     @Test
-    void 窗口不足画布一半时放大到画布减边距() throws Exception {
+    void 窗口占画布百分之二十六时放大到画布减边距() throws Exception {
         // 实测 tenshi-reboot：画布 1008x616、窗口 496x328（占 26%）
         assertEquals("984 592", resizeTarget(496, 328, 1008, 616));
     }
 
     @Test
-    void 窗口略小于画布时不放大() throws Exception {
+    void 窗口占画布百分之八十七时不放大() throws Exception {
         // 窗口占 85% 以上：调大反而可能触发布局变化，保持原样
         assertTrue(resizeTarget(984, 554, 1008, 616).isEmpty(),
                 "窗口已占画布 87.8%，不该再放大");
     }
 
     @Test
-    void 窗口正好占画布一半面积时不放大() throws Exception {
-        // 判据是「面积不足画布一半」。画布 1008x616 = 620928，一半 = 310464。
-        // 713x435 = 310155 略低于一半 -> 命中；这里取 714x435 = 310590 略高于一半 -> 不命中。
-        assertTrue(resizeTarget(714, 435, 1008, 616).isEmpty(),
-                "窗口面积略高于画布一半，不应触发放大");
+    void 窗口占画布百分之六十时也放大() throws Exception {
+        // 780x480 = 374400，占画布 620928 的 60.3%。
+        // 旧阈值（不足一半）不会动，新阈值（不足 85%）会放大。
+        assertEquals("984 592", resizeTarget(780, 480, 1008, 616));
     }
 
     @Test
-    void 窗口面积略低于一半时放大() throws Exception {
-        // 713x435 = 310155，*2 = 620310 < 620928，命中
+    void 窗口占画布约一半时放大() throws Exception {
+        // 713x435 = 310155，占画布约 50%，远低于 85% 阈值，命中
         assertEquals("984 592", resizeTarget(713, 435, 1008, 616));
     }
 
     @Test
-    void 窗口刚好过一半时不放大() throws Exception {
-        // 510x310 = 158100，画布 1008x616 = 620928；*2 = 316200 < 620928 仍命中
-        // 这里取 60% 的窗口确认不触发
-        assertTrue(resizeTarget(780, 480, 1008, 616).isEmpty(),
-                "窗口占画布 60%，高于一半阈值，不应放大");
+    void 窗口刚好百分之八十五边界() throws Exception {
+        // 画布 1008x616 = 620928，85% = 527788.8，判据是 ww*wh*100 < 620928*85 = 52778880。
+        // 984x536 = 527424（84.94%）略低于 85% -> 放大；
+        // 984x537 = 528408（85.10%）略高于 85% -> 不放大。
+        assertEquals("984 592", resizeTarget(984, 536, 1008, 616));
+        assertTrue(resizeTarget(984, 537, 1008, 616).isEmpty(),
+                "窗口面积已到画布 85% 以上，不应触发放大");
     }
 
     @Test

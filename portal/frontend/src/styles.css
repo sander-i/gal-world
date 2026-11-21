@@ -435,11 +435,16 @@ a:focus-visible,
   flex-direction: column;
 }
 
+/* 顶栏占布局（不再是浮层）：Selkies 的侧边栏从 y=0 展开，头部在 y=18..63，
+   浮层顶栏会把它压住，标题与主题/关闭按钮都点不到。改为占位后画面从 y=44
+   起，侧边栏头部完整可见。
+   注意 iframe 不再位于页面 (0,0)。这没问题：manual_resolution 模式下 Selkies
+   的指针换算走 _applySinkCoordinates，公式是 (clientY - boxTop) × 比例，
+   boxTop 取元素的绝对矩形，所以容器与 iframe 一起下移后映射仍然成立（已实测）。
+   只有 _windowMath 兜底路径才要求 (0,0)，manual 模式下走不到。 */
 .play-bar {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
+  position: relative;
+  flex: none;
   height: 44px;
   display: flex;
   align-items: center;
@@ -522,12 +527,12 @@ a:focus-visible,
   background: color-mix(in srgb, var(--media-err) 16%, transparent);
 }
 
-/* 串流视口必须紧贴页面左上角 (0,0)：Selkies 的指针换算会把 iframe 在页面
-   上的位置再叠加一次，只要 iframe 不在 (0,0)，鼠标悬停和点击就会整体偏移
-   这段距离（实测偏 236,44 css px）。顶栏因此改为浮动覆盖，不再占布局。 */
+/* stage 占满顶栏以外的区域。iframe 跟着 stage 一起下移没问题——见
+   .play-bar 的注释：manual 模式下 Selkies 用元素绝对矩形算比例。 */
 .play-stage {
-  position: absolute;
-  inset: 0;
+  position: relative;
+  flex: 1;
+  min-height: 0;
   background: var(--media-canvas);
 }
 
@@ -1883,6 +1888,21 @@ select optgroup {
   gap: 10px;
   align-items: center;
   flex-wrap: wrap;
+}
+
+/* 画质参数：窄屏两列、宽屏自适应，避免一行挤成一团 */
+.quality-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 10px;
+}
+
+.quality-grid > label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--muted);
 }
 
 .media-list {

@@ -28,7 +28,7 @@ const uploadLimits = ref({})
 const uploadOrigin = ref(null)
 const cameFromConfigure = ref(false)
 // gameId 仅用于展示预期目录名，提交仍用原始目录名
-const form = ref({ name: '', exe: '', exeAlt: '', width: 1280, height: 720, framerate: '30', gameLang: '', gameId: '' })
+const form = ref({ name: '', exe: '', exeAlt: '', width: 1280, height: 720, framerate: '60,30-60', gameLang: '', gameId: '' })
 // 中文汉化补丁走 ANSI/CP936，需要 zh_CN.UTF-8；日文原版 / UTF-8 游戏不勾
 const chinesePatch = computed({
   get: () => form.value.gameLang === 'zh_CN.UTF-8',
@@ -78,7 +78,7 @@ function pick(c, displayName) {
     exeAlt: '',
     width: 1280,
     height: 720,
-    framerate: '30',
+    framerate: '60,30-60',
     gameLang: '',
     gameId: c.gameId,
   }

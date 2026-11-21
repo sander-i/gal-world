@@ -139,6 +139,11 @@ public class PlaytimeService {
         // 3) 今日时长：只取今天结束的记录，不再把全部历史拉进内存遍历
         java.util.Map<String, Long> today = new java.util.HashMap<>();
         for (PlaySession s : repo.findEndedSince(ids, dayStart)) {
+            // 查询与遍历之间可能有别的线程把 endedAt 置空（心跳开新记录时结算旧记录），
+            // 实体是同一持久化上下文里的同一个对象，这里读到的可能是 null。
+            if (s.getEndedAt() == null) {
+                continue;
+            }
             Instant from = s.getStartedAt().isBefore(dayStart) ? dayStart : s.getStartedAt();
             long secs = Math.max(0, Duration.between(from, s.getEndedAt()).toSeconds());
             today.merge(s.getGameId(), secs, Long::sum);

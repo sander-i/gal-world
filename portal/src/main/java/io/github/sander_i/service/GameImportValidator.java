@@ -38,10 +38,10 @@ public class GameImportValidator {
     /**
      * Selkies 的 FRAMERATE 语法：`60`（固定）、`30-60`（范围）、`60,30-60`（初始值 + 范围）。
      *
-     * 第三种是 Ctrl 快速跳过对话这类高速场景需要的：门户默认锁 `30-30`，
-     * 客户端想降帧时会被钳回去（日志里是 "Client value for 'framerate' (10.0)
-     * was clamped to 30 (server range: 30-30)"）。给个范围让客户端自己选，
-     * 同时用初始值保证首帧就是高帧率。
+     * 用第三种：初始值保证首帧就是高帧率，范围让客户端在高速场景（Ctrl 快速跳过
+     * 对话）自己升帧、静止时自己降帧。门户以前默认锁 `30-30`，客户端想降帧时会被
+     * 钳回去（日志里是 "Client value for 'framerate' (10.0) was clamped to 30
+     * (server range: 30-30)"），转场和 OP 同样被压在 30fps。
      */
     private static final Pattern FRAMERATE =
             Pattern.compile("^\\d{1,3}(-\\d{1,3})?(,\\d{1,3}(-\\d{1,3})?)?$");
@@ -102,7 +102,7 @@ public class GameImportValidator {
         if (w < 640 || w > 3840 || h < 480 || h > 2160) {
             throw new IllegalArgumentException(I18n.t("分辨率超出范围"));
         }
-        String fr = framerate == null || framerate.isBlank() ? "30" : framerate.trim();
+        String fr = framerate == null || framerate.isBlank() ? "60,30-60" : framerate.trim();
         if (!FRAMERATE.matcher(fr).matches()) {
             throw new IllegalArgumentException(I18n.t("帧率格式应为 30、30-60 或 60,30-60"));
         }

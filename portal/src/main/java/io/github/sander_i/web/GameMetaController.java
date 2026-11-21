@@ -82,7 +82,11 @@ public class GameMetaController {
                               String coverRotationMode, Integer coverRotationInterval,
                               String cgRotationMode, String cgRotationOrder,
                               Integer cgRotationInterval,
-                              String exe, String exeAlt) {
+                              String exe, String exeAlt,
+                              // 画质参数：null = 不改（沿用 game.env 里人工写的值）
+                              Integer videoCrf, Integer videoPaintoverCrf,
+                              String rateControlMode, String videoBitrate,
+                              Integer keyframeInterval) {
     }
 
     /** 编辑页用的完整视图：含服务器绝对路径 */
@@ -120,6 +124,12 @@ public class GameMetaController {
         body.put("cgs", gameMedia.ofGame(id, "cg"));
         body.put("iconPath", g.getIconPath() == null ? "" : g.getIconPath());
         body.put("port", g.getPort());
+        // 画质参数：null 表示门户不管理，编辑页对应输入框留空
+        body.put("videoCrf", g.getVideoCrf());
+        body.put("videoPaintoverCrf", g.getVideoPaintoverCrf());
+        body.put("rateControlMode", g.getRateControlMode());
+        body.put("videoBitrate", g.getVideoBitrate());
+        body.put("keyframeInterval", g.getKeyframeInterval());
         body.put("rotationMode", g.getRotationMode() == null ? "" : g.getRotationMode());
         body.put("rotationInterval", g.getRotationInterval() == null ? 0 : g.getRotationInterval());
         body.put("coverRotationMode",
@@ -172,6 +182,26 @@ public class GameMetaController {
         if (req.height() != null && (req.height() < 480 || req.height() > 2160)) {
             return ResponseEntity.badRequest()
                     .body(Map.of("message", I18n.t("画布高度需在 480–2160 之间")));
+        }
+        // 画质参数范围与 Selkies settings.py 对齐，防止页面之外写入越界值
+        if (req.videoCrf() != null && (req.videoCrf() < 5 || req.videoCrf() > 50)) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("message", I18n.t("CRF 需在 5–50 之间")));
+        }
+        if (req.videoPaintoverCrf() != null
+                && (req.videoPaintoverCrf() < 5 || req.videoPaintoverCrf() > 50)) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("message", I18n.t("静止画面 CRF 需在 5–50 之间")));
+        }
+        if (req.keyframeInterval() != null
+                && (req.keyframeInterval() < 0 || req.keyframeInterval() > 300)) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("message", I18n.t("关键帧间隔需在 0–300 秒之间")));
+        }
+        if (req.rateControlMode() != null && !req.rateControlMode().isBlank()
+                && !"crf".equals(req.rateControlMode()) && !"cbr".equals(req.rateControlMode())) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("message", I18n.t("码率控制模式只能是 crf 或 cbr")));
         }
         // 名称改存 DB：扫描只对新游戏读 GAME_NAME，不会覆盖这里的修改
         if (req.name() != null && !req.name().isBlank()) {
@@ -243,6 +273,28 @@ public class GameMetaController {
             g.setExe(active);
             g.setExeAlt(alt.isEmpty() ? null : alt);
         }
+        // 画质参数：只覆盖请求里带了值的项，其余保持「门户不管理」
+        boolean qualityChanged = false;
+        if (req.videoCrf() != null) {
+            qualityChanged |= !req.videoCrf().equals(g.getVideoCrf());
+            g.setVideoCrf(req.videoCrf());
+        }
+        if (req.videoPaintoverCrf() != null) {
+            qualityChanged |= !req.videoPaintoverCrf().equals(g.getVideoPaintoverCrf());
+            g.setVideoPaintoverCrf(req.videoPaintoverCrf());
+        }
+        if (req.rateControlMode() != null && !req.rateControlMode().isBlank()) {
+            qualityChanged |= !req.rateControlMode().equals(g.getRateControlMode());
+            g.setRateControlMode(req.rateControlMode());
+        }
+        if (req.videoBitrate() != null && !req.videoBitrate().isBlank()) {
+            qualityChanged |= !req.videoBitrate().equals(g.getVideoBitrate());
+            g.setVideoBitrate(req.videoBitrate().strip());
+        }
+        if (req.keyframeInterval() != null) {
+            qualityChanged |= !req.keyframeInterval().equals(g.getKeyframeInterval());
+            g.setKeyframeInterval(req.keyframeInterval());
+        }
         repo.save(g);
         if (req.tags() != null) {
             meta.setTags(id, req.tags());
@@ -254,7 +306,7 @@ public class GameMetaController {
             localizationService.setForGame(id, req.localizations());
         }
         maybeFetchIcon(g, req);
-        if (resolutionChanged || exeChanged) {
+        if (resolutionChanged || exeChanged || qualityChanged) {
             try {
                 scanWriter.writeEnv(g);
             } catch (IOException e) {
@@ -262,27 +314,35 @@ public class GameMetaController {
                         .body(Map.of("message", I18n.t("写入 game.env 失败: {0}", e.getMessage())));
             }
         }
-        return ResponseEntity.ok(Map.of(
-                "name", g.getName(),
-                "width", g.getWidth(),
-                "height", g.getHeight(),
-                "description", g.getDescription() == null ? "" : g.getDescription(),
-                "tags", meta.ofGame(id).stream().map(t -> t.getName()).toList(),
-                "companies", companyService.ofGame(id).stream().map(c -> Map.of(
-                        "id", c.getId(),
-                        "name", c.getName(),
-                        "alias", c.getAlias() == null ? "" : c.getAlias(),
-                        "website", c.getWebsite() == null ? "" : c.getWebsite(),
-                        "description", c.getDescription() == null ? "" : c.getDescription())).toList(),
-                "localizations", localizationService.ofGame(id).stream().map(c -> Map.of(
-                        "id", c.getId(),
-                        "name", c.getName(),
-                        "alias", c.getAlias() == null ? "" : c.getAlias(),
-                        "website", c.getWebsite() == null ? "" : c.getWebsite(),
-                        "description", c.getDescription() == null ? "" : c.getDescription())).toList(),
-                "restartRequired", resolutionChanged || exeChanged,
-                "exe", g.getExe() == null ? "" : g.getExe(),
-                "exeAlt", g.getExeAlt() == null ? "" : g.getExeAlt()));
+        // Map.of 最多 10 对，字段多了改用 LinkedHashMap
+        Map<String, Object> ok = new java.util.LinkedHashMap<>();
+        ok.put("name", g.getName());
+        ok.put("width", g.getWidth());
+        ok.put("height", g.getHeight());
+        ok.put("description", g.getDescription() == null ? "" : g.getDescription());
+        ok.put("tags", meta.ofGame(id).stream().map(t -> t.getName()).toList());
+        ok.put("companies", companyService.ofGame(id).stream().map(c -> Map.of(
+                "id", c.getId(),
+                "name", c.getName(),
+                "alias", c.getAlias() == null ? "" : c.getAlias(),
+                "website", c.getWebsite() == null ? "" : c.getWebsite(),
+                "description", c.getDescription() == null ? "" : c.getDescription())).toList());
+        ok.put("localizations", localizationService.ofGame(id).stream().map(c -> Map.of(
+                "id", c.getId(),
+                "name", c.getName(),
+                "alias", c.getAlias() == null ? "" : c.getAlias(),
+                "website", c.getWebsite() == null ? "" : c.getWebsite(),
+                "description", c.getDescription() == null ? "" : c.getDescription())).toList());
+        // 画质参数不重启就生效（下次开流时读 game.env），所以不进 restartRequired
+        ok.put("restartRequired", resolutionChanged || exeChanged);
+        ok.put("exe", g.getExe() == null ? "" : g.getExe());
+        ok.put("exeAlt", g.getExeAlt() == null ? "" : g.getExeAlt());
+        ok.put("videoCrf", g.getVideoCrf());
+        ok.put("videoPaintoverCrf", g.getVideoPaintoverCrf());
+        ok.put("rateControlMode", g.getRateControlMode());
+        ok.put("videoBitrate", g.getVideoBitrate());
+        ok.put("keyframeInterval", g.getKeyframeInterval());
+        return ResponseEntity.ok(ok);
     }
 
     @org.springframework.web.bind.annotation.ExceptionHandler(IllegalArgumentException.class)

@@ -22,6 +22,7 @@ import { confirmAction, notify } from '../feedback'
 import { companyChip } from '../company-chip'
 import { sortByMaintenanceOrder } from '../org-select'
 import { recommendedCanvas } from '../canvas-hint'
+import { qualityForm, qualityPatch } from '../game-quality.js'
 import { companyEnabled, localizationEnabled } from '../feature-flags'
 import HoverPreview from '../components/HoverPreview.vue'
 import MediaLightbox from '../components/MediaLightbox.vue'
@@ -42,6 +43,12 @@ const form = ref({
   name: '', width: 1280, height: 720, description: '',
   tags: [], companies: [], localizations: [],
 })
+/**
+ * 画质参数：空字符串表示「门户不管理这个键」，保存时不提交，
+ * game.env 里人工写的值原样保留。后端用可空类型存同样的语义。
+ * 取值与补丁构造在 game-quality.js（有单测）。
+ */
+const quality = ref(qualityForm({}))
 // 启动程序：exeInfo.exes 是目录内候选（相对路径），exeCurrent/exeAlt 也存相对路径
 const exeInfo = ref({ dir: '', exes: [], current: '', alt: '' })
 const exeCurrent = ref('')
@@ -268,6 +275,8 @@ function applyEdit(d) {
     companies: (d.companies || []).map(companyChip),
     localizations: (d.localizations || []).map(companyChip),
   }
+  // null / 缺省 = 门户不管理这个键，界面上留空
+  quality.value = qualityForm(d)
   coverList.value = (d.covers || []).map((m) => ({
     key: 'c' + m.id,
     id: m.id,
@@ -317,6 +326,7 @@ function flashProgress(label, pct) {
   uploadPct.value = pct
 }
 
+
 async function save() {  if (saving.value) return
   if (uploadBusy.value.cover || uploadBusy.value.cg) {
     notify.warning(t('上传仍在进行，完成后再保存更稳妥'))
@@ -337,6 +347,8 @@ async function save() {  if (saving.value) return
       // 空字符串表示「清掉备用」；未选到候选时保持不动，避免把 EXE 写坏
       exe: exeCurrent.value || null,
       exeAlt: exeAlt.value || '',
+      // 画质参数：留空的项不下发，避免把 game.env 里人工写的值覆盖成空
+      ...qualityPatch(quality.value),
     }
     // 封面 / CG 轮换规则分开保存
     if (followGlobal.value) {
@@ -718,6 +730,46 @@ onBeforeUnmount(() => {
             {{ t("实测游戏窗口 {0}×{1}。 画布比窗口大只会多出黑边，甚至让画面显得更小；选「推荐」可让窗口占比最大。 保存后需要重启会话生效，游玩页右上角「校准分辨率」可直接完成测量与重启。", winRect.width, winRect.height) }}</p>
           <p v-else class="muted-sm" style="margin-top:6px">
             {{ t("游戏未运行，无法测量实际窗口。启动后可在游玩页右上角点「校准分辨率」， 或在全局设置选择自动校准。") }}</p>
+        </div>
+
+        <div class="field">
+          <label class="res-label">
+            <span>{{ t("画质") }}</span>
+            <span class="res-note">
+              {{ t("留空表示沿用 game.env 里手写的值；填了就由门户管理。下次开流生效，不用重启会话。") }}</span>
+          </label>
+          <div class="quality-grid">
+            <label>
+              <span>{{ t("画面质量 CRF") }}</span>
+              <input v-model="quality.videoCrf" class="input" type="number" min="5" max="50"
+                     :placeholder="t('默认 12')">
+            </label>
+            <label>
+              <span>{{ t("静止画面 CRF") }}</span>
+              <input v-model="quality.videoPaintoverCrf" class="input" type="number" min="5" max="50"
+                     :placeholder="t('默认 8')">
+            </label>
+            <label>
+              <span>{{ t("码率控制") }}</span>
+              <select v-model="quality.rateControlMode" class="input">
+                <option value="">{{ t("跟随 game.env") }}</option>
+                <option value="crf">crf（恒定质量）</option>
+                <option value="cbr">cbr（恒定码率）</option>
+              </select>
+            </label>
+            <label v-if="quality.rateControlMode === 'cbr'">
+              <span>{{ t("码率") }}</span>
+              <input v-model="quality.videoBitrate" class="input"
+                     :placeholder="t('如 8000 或 40000,5000-80000')">
+            </label>
+            <label>
+              <span>{{ t("关键帧间隔（秒）") }}</span>
+              <input v-model="quality.keyframeInterval" class="input" type="number" min="0" max="300"
+                     :placeholder="t('默认 60，0 = 不限')">
+            </label>
+          </div>
+          <p class="muted-sm" style="margin-top:6px">
+            {{ t("CRF 越小画质越好、码率和 CPU 占用越高；码率只在 cbr 模式下生效。") }}</p>
         </div>
 
         <div class="field">

@@ -22,18 +22,18 @@ set -euo pipefail
 # 窗口要不要放大、放大到多少。命中时打印「宽 高」并返回 0，否则返回 1。
 #
 # 抽成独立函数是为了能单测（GameScriptsTest 用 --source-only 直接调）：
-# 判定逻辑里那个「一半」阈值和 24px 边距都是经验值，改错了没有别的地方能发现。
+# 判定逻辑里那个「85%」阈值和 24px 边距都是经验值，改错了没有别的地方能发现。
 #
 # 规则：
-#   - 窗口面积不足画布一半才动。真正常见的「窗口略小于画布」是 85% 以上，
-#     那种情况调大反而可能触发布局变化。
+#   - 窗口面积不足画布 85% 才动，与 CanvasPlanner 的收敛阈值一致；超过 85%
+#     再放大为几十像素不值得，也可能触发布局变化。
 #   - 目标 = 画布 - 24（与 CanvasPlanner 的 PAD 一致）。
 #   - 目标不比当前窗口大就返回 1：避免对本来就够大的窗口做无意义重启。
 resize_target() {
   local ww="$1" wh="$2" cw="$3" ch="$4"
   [[ "$ww" =~ ^[0-9]+$ && "$wh" =~ ^[0-9]+$ ]] || return 1
   [[ "$cw" =~ ^[0-9]+$ && "$ch" =~ ^[0-9]+$ ]] || return 1
-  (( ww * wh * 2 < cw * ch )) || return 1
+  (( ww * wh * 100 < cw * ch * 85 )) || return 1
   local tw=$(( cw - 24 )) th=$(( ch - 24 ))
   (( tw > ww || th > wh )) || return 1
   printf '%s %s' "$tw" "$th"
@@ -68,10 +68,22 @@ ENVFILE="$DIR/game.env"
 set -a; . "$ENVFILE"; set +a
 
 : "${DISPLAY_NUM:?}" "${PORT:?}" "${EXE:?}" "${WORKDIR:?}" "${WINEPREFIX:?}"
-: "${WIDTH:=1280}" "${HEIGHT:=720}" "${LOOPBACK_SLOT:=0}" "${LOOPBACK_CARD:=0}" "${FRAMERATE:=30-30}"
+# 帧率语法是「初始值,范围」：初始 60 让首帧就是高帧率，范围让客户端在转场 / OP
+# 自己升到 60、画面静止时自己降下来。以前锁 30-30，客户端想降帧会被钳回去。
+: "${WIDTH:=1280}" "${HEIGHT:=720}" "${LOOPBACK_SLOT:=0}" "${LOOPBACK_CARD:=0}" "${FRAMERATE:=60,30-60}"
 # 早期手工注册的 game.env 可能没有 EXTRA_ENV；set -u 下缺键会让整个脚本退出
 : "${EXTRA_ENV:=}"
-: "${VIDEO_CRF:=12}" "${VIDEO_BITRATE:=40000,5000-80000}" "${KEYFRAME_INTERVAL:=60}" "${VIDEO_PAINTOVER_CRF:=12}"
+# paintover 决定静止画面的质量：galgame 绝大多数时间画面是静止的，paintover 直接
+# 决定观感，比 video_crf 影响更大，所以比 VIDEO_CRF 更值得压低（12 → 8）。
+# 静止时只发一帧，平均码率几乎不变。
+# KEYFRAME_INTERVAL 的单位是**秒**，不是帧（Selkies settings.py 原文：
+# "Seconds between scheduled video recovery keyframes"）。
+#
+# 60 秒是兜底：正常丢失帧时客户端会发 REQUEST_KEYFRAME、Selkies 按需补 IDR，
+# 走的是按需路径；定时 IDR 只在客户端没能自己恢复时起作用。Selkies 默认是 0
+# （无限 GOP，码率更稳），这里保留 60 秒换取「坏了也能自愈」，一帧 IDR 的成本
+# 摊到 60 秒可以忽略。要完全按 Selkies 默认，在 game.env 写 KEYFRAME_INTERVAL=0。
+: "${VIDEO_CRF:=12}" "${VIDEO_BITRATE:=40000,5000-80000}" "${KEYFRAME_INTERVAL:=60}" "${VIDEO_PAINTOVER_CRF:=8}"
 # 码率控制模式：crf（恒定质量，画面越好越费带宽）或 cbr（恒定码率）。
 #
 # CRF 在快速跳过对话这类全屏高速变化时会把瞬时帧撑到 50 KB 以上，帧越大发送
@@ -80,6 +92,16 @@ set -a; . "$ENVFILE"; set +a
 # 默认仍是 crf，保持既有画质行为；需要的游戏在 game.env 里写 RATE_CONTROL_MODE=cbr
 # 并配合 VIDEO_BITRATE 使用。
 : "${RATE_CONTROL_MODE:=crf}"
+
+# 音频码率：Selkies 默认 128 kbps（Opus）。galgame 的 BGM 与语音细节多，
+# 提到 192 kbps 带宽只多约 0.06 Mbps，局域网无压力。上限 510 kbps。
+: "${AUDIO_BITRATE:=192000}"
+
+# 4:4:4 全色度：细线、彩色文字边缘不再有 4:2:0 的色度溢出。galgame 静态画面多，
+# 这项对文字锐度影响明显。默认开；浏览器解码器不支持 High 4:4:4 profile 时
+# Selkies 会为该客户端自动降回 4:2:0（源码 settings.py 的 video_fullcolor 说明），
+# 不会黑屏。要回退在 game.env 里写 VIDEO_FULLCOLOR=0。
+: "${VIDEO_FULLCOLOR:=1}"
 
 # ---- wine 选择（必须在 source game.env 之后）----
 # 顺序：game.env 的 WINE_HOME → 部署包解压的 <root>/.local/wine → 系统 PATH 里的 wine。
@@ -350,6 +372,13 @@ fi
 # 新会话会附着到这个旧 server（带着旧的 locale / 字体状态），
 # 表现为一启动就弹全是 ? 的错误框然后退出（2026-11-05 demo-game 实测）。
 WINEPREFIX="$WINEPREFIX" wineserver -k >/dev/null 2>&1 || true
+# 去掉 Wine 自绘标题栏。注释里记录的实测结论（本文件上方「小屏 1280x720 +
+# Decorated=N → 窗口 1228x720 完整可见」）一直没落到代码里，实际每个窗口顶部
+# 多 30px 标题栏：既占像素（同画布下游戏占比变小），又让居中计算对不上
+# （docs/WINE-RUNTIME-NOTES.md §3.2 的窗口尺寸漂移有它一份）。
+# /f 强制覆盖，幂等；失败不阻塞启动（老 prefix 可能只读）。
+WINEPREFIX="$WINEPREFIX" WINEDEBUG=-all wine reg add \
+  'HKCU\Software\Wine\X11 Driver' /v Decorated /t REG_SZ /d N /f >/dev/null 2>&1 || true
 # 字体兜底：Wine 找不到 Tahoma/System 这类 Windows family 时会回退到只有拉丁
 # 字形的内置字体，中文变方框。wine-fonts.sh 幂等补齐（第二次起约 10ms）。
 FONT_FIX="$(dirname "$0")/wine-fonts.sh"
@@ -464,7 +493,7 @@ if command -v xdotool >/dev/null 2>&1; then
           if [[ "${neww:-0}" != "$ww" || "${newh:-0}" != "$wh" ]]; then
             ww="$neww"; wh="$newh"
             RESIZED_FROM="$resize_key"
-            echo "[$(date '+%T')] window $bestid resized $resize_key -> ${ww}x${wh}（原窗口不足画布一半，按画布放大）"
+            echo "[$(date '+%T')] window $bestid resized $resize_key -> ${ww}x${wh}（原窗口不足画布 85%，按画布放大）"
           else
             # 窗口刚创建时 windowsize 常被忽略（实测：同一会话第一次无效、
             # 等窗口尺寸稳定后再试才成功）。这里不记 RESIZED_FROM，
@@ -503,6 +532,11 @@ SELKIES="$GALROOT/venv/bin/selkies"
 CERT="$GALROOT/data/certs/server.crt"
 KEY="$GALROOT/data/certs/server.key"
 
+# 4:4:4 开关拼成数组：空数组在 set -u 下展开要写成 ${A[@]+"${A[@]}"}，
+# 否则老 bash 会报 unbound variable（bash 4.4+ 才安全）。
+FULLCOLOR_ARGS=()
+[[ "$VIDEO_FULLCOLOR" == "1" ]] && FULLCOLOR_ARGS=(--video-fullcolor)
+
 # 串流只对本机开放，由门户反向代理对外提供。
 #
 # 背景：Selkies 原本用 HTTP Basic 认证，但门户把串流页放在 iframe 里，
@@ -523,12 +557,14 @@ KEY="$GALROOT/data/certs/server.key"
   --enable-basic-auth=false \
   --subfolder "/stream/$ID" \
   --framerate "$FRAMERATE" \
+  ${FULLCOLOR_ARGS[@]+"${FULLCOLOR_ARGS[@]}"} \
   --manual-resolution --manual-width "$WIDTH" --manual-height "$HEIGHT" \
   --rate-control-mode "$RATE_CONTROL_MODE" --video-crf "${VIDEO_CRF:-12}" \
-  --video-paintover-crf "${VIDEO_PAINTOVER_CRF:-12}" \
+  --video-paintover-crf "${VIDEO_PAINTOVER_CRF:-8}" \
   --paint-over-jpeg-quality 95 \
   --video-bitrate "${VIDEO_BITRATE:-40000,5000-80000}" \
   --keyframe-interval "${KEYFRAME_INTERVAL:-60}" \
+  --audio-bitrate "${AUDIO_BITRATE:-192000}" \
   "${AUDIO_ARGS[@]}" \
   --audio-on-start true \
   --ui-title "$GAME_NAME" \

@@ -251,6 +251,20 @@ public class StreamWsBridge {
     }
 
 
+    /**
+     * 单条 WS 消息的缓冲上限。
+     *
+     * 这个值是**单帧**上限，不是队列预算（队列另见 DOWN_MAX_VIDEO_BYTES）。
+     * 1080p + CRF 8 + 4:4:4 的一帧远超 1 MB：Selkies 在 1920×1080 下实测会被
+     * 门户以 `code 1009 Message Too Big` 断开，随后拆除采集管线，重连再断，
+     * 表现为「流传输卡住」。
+     *
+     * 取 Selkies 自己的上限（`settings.py` 的 `WS_MAX_MESSAGE_BYTES` =
+     * min(8 MB, 32 MB)）。两边必须对齐：门户低于上游就会单方面断链。
+     * 浏览器侧同理——浏览器解码后的帧也是原样透传，同样按这个值放宽。
+     */
+    private static final int WS_MAX_MESSAGE_BYTES = 8 << 20;
+
     public StreamWsBridge() {
     }
 
@@ -258,8 +272,8 @@ public class StreamWsBridge {
     public void onOpen(Session browser) {
         // 浏览器→上游方向也会传较大的控制帧（编码参数、剪贴板），
         // Tomcat 服务端默认缓冲同样是 8KB，一并放大。
-        browser.setMaxTextMessageBufferSize(1 << 20);
-        browser.setMaxBinaryMessageBufferSize(1 << 20);
+        browser.setMaxTextMessageBufferSize(WS_MAX_MESSAGE_BYTES);
+        browser.setMaxBinaryMessageBufferSize(WS_MAX_MESSAGE_BYTES);
         String gameId = gameIdOf(browser);
         int port = portOf(gameId);
         if (port <= 0) {
@@ -313,9 +327,10 @@ public class StreamWsBridge {
                     .build();
             Session up = container.connectToServer(new UpstreamEndpoint(browser), cfg, target);
             // Tomcat 默认文本缓冲 8KB，Selkies 首帧（显示器配置 + 编码参数）远超，
-            // 超限时容器直接以 1009 TOO_BIG 关闭连接。
-            up.setMaxTextMessageBufferSize(1 << 20);
-            up.setMaxBinaryMessageBufferSize(1 << 20);
+            // 超限时容器直接以 1009 TOO_BIG 关闭连接。视频帧同理，见
+            // WS_MAX_MESSAGE_BYTES 的说明。
+            up.setMaxTextMessageBufferSize(WS_MAX_MESSAGE_BYTES);
+            up.setMaxBinaryMessageBufferSize(WS_MAX_MESSAGE_BYTES);
             if (!browser.isOpen()) {
                 // 浏览器在连上游期间断开了，别把上游留着
                 closeQuietly(up);
