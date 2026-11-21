@@ -144,35 +144,7 @@ if [[ "$DRY" == "0" ]]; then
   fi
 fi
 
-# Gitee API 没有删除 tag 的端点（DELETE /git/refs/tags/<tag> 与 /tags/<tag> 都是 404，
-# DELETE /releases/tags/<tag> 是 405），镜像又不跟随 GitHub 的 tag 移动。同名 tag 已指向
-# 别的提交时，重发 Release 会静默挂到旧提交上——这里提前失败，让「网页删 tag」显式发生。
-if [[ "$PUBLISH_GITEE" == "1" ]]; then
-say "检查 Gitee 侧 tag 与 Release"
-TAGS_RESP="$(auth_curl -fsS --connect-timeout 10 --max-time 60 \
-  -H 'Accept: application/json' "$API/tags?per_page=100")" \
-  || die "读取 Gitee tag 列表失败"
-EXISTING_TAG_SHA="$(printf '%s' "$TAGS_RESP" | jq -r --arg t "$TAG" \
-  '.[] | select(.name == $t) | .commit.sha // empty' | head -n1)"
-if [[ -n "$EXISTING_TAG_SHA" && "$EXISTING_TAG_SHA" != "$COMMIT" ]]; then
-  cat >&2 <<EOF
-Gitee 已存在 tag $TAG，指向 $EXISTING_TAG_SHA，本次发布的提交是 $COMMIT。
-Gitee 镜像不跟随 tag 移动，重建 Release 会把它挂到旧提交上；Gitee API 无法删除 tag，
-请先在网页删除后重跑本脚本：
-  https://gitee.com/$OWNER/$REPO/tags
-EOF
-  exit 1
-fi
-if [[ -n "$EXISTING_TAG_SHA" ]]; then
-  EXISTING_REL_ID="$(auth_curl -fsS --connect-timeout 10 --max-time 30 \
-    -H 'Accept: application/json' "$API/releases/tags/$TAG" 2>/dev/null \
-    | jq -r '.id // empty')" || EXISTING_REL_ID=""
-  if [[ "$EXISTING_REL_ID" =~ ^[0-9]+$ ]]; then
-    die "Gitee 已存在 $TAG 的 Release（id=$EXISTING_REL_ID），不能重复创建。先删除后重跑：
-  printf 'header = \"Authorization: token %s\"\\n' \"\$GITEE_TOKEN\" | curl -K - -fsS -X DELETE \"$API/releases/$EXISTING_REL_ID\""
-  fi
-fi
-
+# 构建与打包两个渠道共用：先出 dist/，再各自上传，保证 jar 的 sha256 一致。
 say "构建前端与 jar"
 cd "$PORTAL/frontend"; npm run build
 cd "$PORTAL"; JAVA_HOME="$JAVA_HOME_LOCAL" mvn -q -o -B -DskipTests package
@@ -205,6 +177,35 @@ EMBEDDED_VERSION="$(unzip -p "$DIST/$JAR" BOOT-INF/classes/application.yml \
 
 # 构建不应改动受版本控制的文件；创建 Release 前再确认一次。
 require_clean_tree
+
+# Gitee API 没有删除 tag 的端点（DELETE /git/refs/tags/<tag> 与 /tags/<tag> 都是 404，
+# DELETE /releases/tags/<tag> 是 405），镜像又不跟随 GitHub 的 tag 移动。同名 tag 已指向
+# 别的提交时，重发 Release 会静默挂到旧提交上——这里提前失败，让「网页删 tag」显式发生。
+if [[ "$PUBLISH_GITEE" == "1" ]]; then
+say "检查 Gitee 侧 tag 与 Release"
+TAGS_RESP="$(auth_curl -fsS --connect-timeout 10 --max-time 60 \
+  -H 'Accept: application/json' "$API/tags?per_page=100")" \
+  || die "读取 Gitee tag 列表失败"
+EXISTING_TAG_SHA="$(printf '%s' "$TAGS_RESP" | jq -r --arg t "$TAG" \
+  '.[] | select(.name == $t) | .commit.sha // empty' | head -n1)"
+if [[ -n "$EXISTING_TAG_SHA" && "$EXISTING_TAG_SHA" != "$COMMIT" ]]; then
+  cat >&2 <<EOF
+Gitee 已存在 tag $TAG，指向 $EXISTING_TAG_SHA，本次发布的提交是 $COMMIT。
+Gitee 镜像不跟随 tag 移动，重建 Release 会把它挂到旧提交上；Gitee API 无法删除 tag，
+请先在网页删除后重跑本脚本：
+  https://gitee.com/$OWNER/$REPO/tags
+EOF
+  exit 1
+fi
+if [[ -n "$EXISTING_TAG_SHA" ]]; then
+  EXISTING_REL_ID="$(auth_curl -fsS --connect-timeout 10 --max-time 30 \
+    -H 'Accept: application/json' "$API/releases/tags/$TAG" 2>/dev/null \
+    | jq -r '.id // empty')" || EXISTING_REL_ID=""
+  if [[ "$EXISTING_REL_ID" =~ ^[0-9]+$ ]]; then
+    die "Gitee 已存在 $TAG 的 Release（id=$EXISTING_REL_ID），不能重复创建。先删除后重跑：
+  printf 'header = \"Authorization: token %s\"\\n' \"\$GITEE_TOKEN\" | curl -K - -fsS -X DELETE \"$API/releases/$EXISTING_REL_ID\""
+  fi
+fi
 
 say "创建 Release $TAG"
 # body 里的中文必须走文件：Git Bash 把 argv 传给原生 curl.exe 时会按系统 ANSI
