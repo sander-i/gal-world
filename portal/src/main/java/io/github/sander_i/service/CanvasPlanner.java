@@ -28,6 +28,25 @@ public final class CanvasPlanner {
     private static final int MAX_W = 3840;
     private static final int MAX_H = 2160;
 
+    /**
+     * 画布下限：低于这个尺寸时无条件先加到这里。
+     *
+     * <p>校准的收敛条件与 {@code run-game.sh} 的放大目标用的是同一个 PAD：脚本把
+     * 窗口放大到「画布 − 24」，planner 又认为「画布 ≈ 窗口 + 24」最优，于是
+     * {@code round8(窗口 + 24) == 画布} 恒成立，任何画布都会判 converged。这个
+     * 不动点本身没问题，问题在于它只认「现状」——画布一旦因为别的原因掉下去，
+     * 校准永远不会把它拉回来。
+     *
+     * <p>实测 tenshi-reboot：老版 {@code fit-window} 把画布从 1920×1080 缩到
+     * 520×352，之后 {@code run-game.sh} 把窗口放大到画布 −24，planner 算回
+     * 1008×616 判定收敛，画布就永久停在 1008×616，画面比原来糊得多。
+     *
+     * <p>1280×720 是软编码（llvmpipe + x264）能稳定承受的下限，也覆盖绝大多数
+     * galgame 的原生分辨率。低于它说明画布被压过，不是真实需要。
+     */
+    private static final int MIN_W = 1280;
+    private static final int MIN_H = 720;
+
     private CanvasPlanner() {
     }
 
@@ -58,6 +77,25 @@ public final class CanvasPlanner {
         boolean clampH = winH == canvasH - CLAMP_MARGIN;
         long winArea = (long) winW * winH;
         long canvasArea = (long) canvasW * canvasH;
+
+        // 画布低于下限：先抬到下限，与窗口大小无关。
+        //
+        // 必须排在 keep-large 之前。tenshi-reboot 这类固定分辨率引擎有两种坏状态：
+        //   - 画布 1008×616、窗口 984×592（占 93.8%）：keep-large 不触发，
+        //     走 fit-window 算回 1008×616 判 converged；
+        //   - 画布 1008×616、窗口 496×328（占 26%）：keep-large 直接返回，
+        //     连算都不算。
+        // 两种都不会把画布拉回来，所以下限要在它们之前。
+        //
+        // 只会抬一次：抬到 1280×720 后下一轮已不低于下限，不再命中。
+        if (canvasW < MIN_W || canvasH < MIN_H) {
+            int floorW = Math.min(MAX_W, Math.max(round8(canvasW), MIN_W));
+            int floorH = Math.min(MAX_H, Math.max(round8(canvasH), MIN_H));
+            if (floorW != canvasW || floorH != canvasH) {
+                return new Plan(floorW, floorH, true, "raise-floor");
+            }
+        }
+
         if (!clampW && !clampH && winArea * 2 < canvasArea) {
             return keep(canvasW, canvasH, "keep-large");
         }
