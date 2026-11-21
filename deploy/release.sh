@@ -2,7 +2,20 @@
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2026 sander
 
-# 构建并发布 Gitee Release。不会在本地创建 git tag；tag 由 Gitee Release 绑定。
+# 构建并发布 Release。不会在本地创建 git tag；tag 由 Release 绑定。
+#
+# 默认同时发 Gitee 与 GitHub，共用同一份 dist/ 产物：
+#   - Gitee  正文用 docs/release-notes/<version>.zh.md（中文）
+#   - GitHub 正文用 docs/release-notes/<version>.en.md（英文）
+# 这条语言约定与 .github/workflows/release.yml 一致，两边各写各的。
+#
+# 用法：
+#   ./deploy/release.sh               # Gitee + GitHub
+#   ./deploy/release.sh --gitee-only  # 只发 Gitee
+#   ./deploy/release.sh --github-only # 只发 GitHub
+#   ./deploy/release.sh --dry-run     # 只构建，不发
+#
+# 预发布：GALWORLD_RELEASE_TAG=v0.1.0-rc.1（tag 不等于 v<version> 时自动标 prerelease）
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -10,9 +23,21 @@ PORTAL="$REPO_ROOT/portal"
 OWNER="${GITEE_OWNER:-sander-o}"
 REPO="${GITEE_REPO:-gal-world}"
 API="https://gitee.com/api/v5/repos/$OWNER/$REPO"
+GH_OWNER="${GITHUB_OWNER:-sander-i}"
+GH_REPO="${GITHUB_REPO:-gal-world}"
+GH_API="https://api.github.com/repos/$GH_OWNER/$GH_REPO"
 JAVA_HOME_LOCAL="${JAVA_HOME_LOCAL:-/g/Program Files/Java/corretto-17.0.14}"
 DRY=0
-[[ "${1:-}" == "--dry-run" ]] && DRY=1
+PUBLISH_GITEE=1
+PUBLISH_GITHUB=1
+for arg in "$@"; do
+  case "$arg" in
+    --dry-run) DRY=1 ;;
+    --gitee-only) PUBLISH_GITHUB=0 ;;
+    --github-only) PUBLISH_GITEE=0 ;;
+    *) die "未知参数: $arg（可用：--dry-run / --gitee-only / --github-only）" ;;
+  esac
+done
 
 say() { printf '\n== %s\n' "$*"; }
 die() { echo "$*" >&2; exit 1; }
@@ -99,18 +124,30 @@ if [[ "$DRY" == "0" ]]; then
   # 发布前解析令牌并确认构建对应 HEAD，避免构建树与 tag 不一致。
   require_clean_tree
   COMMIT="$(git rev-parse HEAD)" || die "无法读取当前 HEAD"
-  TOKEN="${GITEE_TOKEN:-}"
-  if [[ -z "$TOKEN" ]]; then
-    cred="$(printf 'protocol=https\nhost=gitee.com\n\n' | git credential fill)" \
-      || die "无法从 git credential 读取 Gitee 令牌，请设置 GITEE_TOKEN"
-    TOKEN="$(printf '%s\n' "$cred" | sed -n 's/^password=//p')"
+  if [[ "$PUBLISH_GITEE" == "1" ]]; then
+    TOKEN="${GITEE_TOKEN:-}"
+    if [[ -z "$TOKEN" ]]; then
+      cred="$(printf 'protocol=https\nhost=gitee.com\n\n' | git credential fill)" \
+        || die "无法从 git credential 读取 Gitee 令牌，请设置 GITEE_TOKEN"
+      TOKEN="$(printf '%s\n' "$cred" | sed -n 's/^password=//p')"
+    fi
+    [[ -n "$TOKEN" ]] || die "缺少 GITEE_TOKEN"
   fi
-  [[ -n "$TOKEN" ]] || die "缺少 GITEE_TOKEN"
+  if [[ "$PUBLISH_GITHUB" == "1" ]]; then
+    GH_TOKEN="${GITHUB_TOKEN:-}"
+    if [[ -z "$GH_TOKEN" ]]; then
+      cred="$(printf 'protocol=https\nhost=github.com\n\n' | git credential fill)" \
+        || die "无法从 git credential 读取 GitHub 令牌，请设置 GITHUB_TOKEN"
+      GH_TOKEN="$(printf '%s\n' "$cred" | sed -n 's/^password=//p')"
+    fi
+    [[ -n "$GH_TOKEN" ]] || die "缺少 GITHUB_TOKEN"
+  fi
 fi
 
 # Gitee API 没有删除 tag 的端点（DELETE /git/refs/tags/<tag> 与 /tags/<tag> 都是 404，
 # DELETE /releases/tags/<tag> 是 405），镜像又不跟随 GitHub 的 tag 移动。同名 tag 已指向
 # 别的提交时，重发 Release 会静默挂到旧提交上——这里提前失败，让「网页删 tag」显式发生。
+if [[ "$PUBLISH_GITEE" == "1" ]]; then
 say "检查 Gitee 侧 tag 与 Release"
 TAGS_RESP="$(auth_curl -fsS --connect-timeout 10 --max-time 60 \
   -H 'Accept: application/json' "$API/tags?per_page=100")" \
@@ -241,3 +278,98 @@ if [[ -n "$MISSING" ]]; then
 fi
 
 say "完成：https://gitee.com/$OWNER/$REPO/releases/tag/$TAG"
+fi
+
+# ---- GitHub Release ----
+#
+# 与 .github/workflows/release.yml 保持同一套约定：
+#   - 正文用 docs/release-notes/<version>.en.md（Gitee 用 .zh.md）
+#   - 资产与 Gitee 完全一致，更新器只认 manifest 里的 artifact.name
+#   - prerelease 标记与 Gitee 同步（GALWORLD_RELEASE_TAG 不是 v<version> 时为 true）
+#
+# 端点差异：创建/查询在 api.github.com，上传资产必须在 uploads.github.com，
+# 且上传 URL 要用 Release 响应里的 upload_url（去掉 {?name,label} 模板）。
+# 用 api.github.com/.../assets 会返回 404。
+if [[ "$PUBLISH_GITHUB" == "1" ]]; then
+  say "检查 GitHub 侧 tag 与 Release"
+  gh_curl() {
+    printf 'header = "Authorization: Bearer %s"\n' "$GH_TOKEN" | curl -K - "$@"
+  }
+  # GitHub 的 tag 可以删除，但同名 tag 指向别的提交时仍然提前失败：
+  # 静默复用旧 tag 会让 Release 挂错提交，排查起来比直接报错贵得多。
+  GH_TAG_RESP="$(gh_curl -fsS --connect-timeout 10 --max-time 60 \
+    -H 'Accept: application/vnd.github+json' \
+    "$GH_API/git/ref/tags/$TAG" 2>/dev/null || true)"
+  GH_EXISTING_SHA="$(printf '%s' "$GH_TAG_RESP" | jq -r '.object.sha // empty' 2>/dev/null)"
+  if [[ -n "$GH_EXISTING_SHA" && "$GH_EXISTING_SHA" != "$COMMIT" ]]; then
+    cat >&2 <<EOF
+GitHub 已存在 tag $TAG，指向 $GH_EXISTING_SHA，本次发布的提交是 $COMMIT。
+先删除该 tag 与对应 Release 后重跑：
+  git push --delete github $TAG
+  gh api -X DELETE "repos/$GH_OWNER/$GH_REPO/releases/tags/$TAG"
+EOF
+    exit 1
+  fi
+
+  # 正文：GitHub 用英文，缺英文说明时退回一行摘要（与 workflow 的兜底一致）
+  NOTES_EN="$REPO_ROOT/docs/release-notes/$VERSION.en.md"
+  GH_BODY_FILE="$DIST/release-body.en.txt"
+  if [[ -f "$NOTES_EN" ]]; then
+    cp "$NOTES_EN" "$GH_BODY_FILE"
+  else
+    echo "警告: 缺 docs/release-notes/$VERSION.en.md，GitHub 正文退回一行摘要" >&2
+    printf 'Release %s\n' "$TAG" >"$GH_BODY_FILE"
+  fi
+  GH_BODY_ARG="$GH_BODY_FILE"
+  if command -v cygpath >/dev/null 2>&1; then
+    GH_BODY_ARG="$(cygpath -w "$GH_BODY_ARG")"
+  fi
+
+  say "创建 GitHub Release $TAG"
+  # 用 jq 组 payload：正文含换行与引号，直接拼 shell 字符串会坏
+  GH_PAYLOAD="$DIST/.gh-release.json"
+  jq -n --arg tag "$TAG" --arg commit "$COMMIT" --arg body "$(cat "$GH_BODY_FILE")" \
+        --argjson pre "$PRERELEASE" \
+    '{tag_name:$tag, target_commitish:$commit, name:$tag, body:$body, prerelease:$pre, draft:false}' \
+    >"$GH_PAYLOAD" || die "生成 GitHub Release payload 失败"
+  GH_RESP="$(gh_curl -fsS -X POST --connect-timeout 10 --max-time 120 \
+    -H 'Accept: application/vnd.github+json' \
+    -H 'Content-Type: application/json' \
+    --data-binary @"$GH_PAYLOAD" \
+    "$GH_API/releases")" || die "创建 GitHub Release $TAG 失败"
+  GH_REL_ID="$(printf '%s' "$GH_RESP" | jq -r '.id // empty')"
+  [[ "$GH_REL_ID" =~ ^[0-9]+$ ]] || { printf '%s\n' "$GH_RESP" >&2; die "创建 Release 响应缺少 id"; }
+  GH_UPLOAD_URL="$(printf '%s' "$GH_RESP" | jq -r '.upload_url // empty' \
+    | sed 's/{.*}$//')"
+  [[ -n "$GH_UPLOAD_URL" ]] || die "Release 响应缺少 upload_url"
+  rm -f "$GH_PAYLOAD"
+
+  for f in "${MANIFEST_FILES[@]}"; do
+    say "上传到 GitHub $f"
+    gh_curl -fsS -X POST --connect-timeout 10 --max-time 1200 \
+      -H 'Accept: application/vnd.github+json' \
+      -H 'Content-Type: application/octet-stream' \
+      --data-binary @"$DIST/$f" \
+      "$GH_UPLOAD_URL?name=$f" >/dev/null \
+      || die "上传 $f 到 GitHub 失败（Release id=$GH_REL_ID）。
+如需重发，先删除：
+  gh api -X DELETE \"repos/$GH_OWNER/$GH_REPO/releases/$GH_REL_ID\"
+  git push --delete github $TAG"
+  done
+
+  say "校验 GitHub Release 资产"
+  GH_VERIFY="$(gh_curl -fsS --connect-timeout 10 --max-time 120 \
+    -H 'Accept: application/vnd.github+json' \
+    "$GH_API/releases/$GH_REL_ID")" || die "读取 GitHub Release $GH_REL_ID 失败"
+  GH_MISSING=""
+  for f in "${MANIFEST_FILES[@]}"; do
+    printf '%s' "$GH_VERIFY" \
+      | jq -e --arg n "$f" '.assets | any(.name == $n)' >/dev/null 2>&1 \
+      || GH_MISSING="$GH_MISSING $f"
+  done
+  if [[ -n "$GH_MISSING" ]]; then
+    die "GitHub Release 资产不完整，缺少:$GH_MISSING"
+  fi
+
+  say "完成：https://github.com/$GH_OWNER/$GH_REPO/releases/tag/$TAG"
+fi
